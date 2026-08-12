@@ -581,7 +581,12 @@ class Component extends DCLogic {
   /* ---------- cloud sync (Supabase accounts + per-record sync) ---------- */
   zoneCat(lv,zoneMk){
     if(!this._zoneCat){ this._zoneCat={}; this.DATA.order.forEach(l=>this.DATA.levels[l].zones.forEach(z=>{this._zoneCat[l+'||'+this.zid(z)]=z.cat||'NB';})); }
-    let c=this._zoneCat[lv+'||'+zoneMk]; if(c==null)c=this._zoneCat[lv+'||_'+zoneMk]; return c;
+    let c=this._zoneCat[lv+'||'+zoneMk]; if(c==null)c=this._zoneCat[lv+'||_'+zoneMk];
+    if(c==null){   /* marine 细分(C/P/ZC/...)键形如 L1|P1, 不是真实分区, 但都属 Marine(MA) */
+      const lab=String(zoneMk).replace(/^L1\|/,''); const SL=this.SUBZONES&&this.SUBZONES.L1;
+      if(SL&&['C','P','ZC','CZ','L2'].some(k=>(SL[k]||[]).some(en=>en.label===lab))) return 'MA';
+    }
+    return c;
   }
   // admin: everything. normal user: only zones whose area (EB/NB/MA) is in allowed_scopes.
   rwsScopeOk(lv,zoneMk){
@@ -1342,7 +1347,8 @@ class Component extends DCLogic {
       const ps=(L.l2p||{})[e.label]||[]; if(ps.length)rows.push(['Pour groups (P)',ps.join(', ')]); }
     const t={'C':'Marine sub-division','CZ':'Casting zone','P':'Pour group','L2':'L2 zone (above)'}[kind];
     const lv=this.curLevel, admin=this.rwsIsAdmin();
-    const editable=(kind==='C'||kind==='P')&&admin;   // C/P 细分可录入(仅管理员); 数据独立记在细分自己的键上
+    const _subScope=admin||this.rwsScopeOk(lv,lv+'|'+e.label);   // 有本区(MA)编辑权限的非管理员也算
+    const editable=(kind==='C'||kind==='P')&&_subScope;   // C/P 细分可录入(管理员或有 MA 权限的用户); 数据独立记在细分自己的键上
     if(editable){
       // 直接复用 ZC 的完整分区面板(含 ACTIVITIES/月份切换/STATUS/日期/锁), 合成一个只属于此细分的分区
       const _mcols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?this._marineCol[e.label].map(c=>({id:c.id,sz:c.sz||'',c:c.c?1:0})):[];
