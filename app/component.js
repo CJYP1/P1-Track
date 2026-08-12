@@ -1891,7 +1891,16 @@ class Component extends DCLogic {
       {id:'mep_bms',label:'BMS',unit:'',total:this.actTotal(lv,zmk,'mep_bms',this.actAutoTotal(lv,zmk,'mep_bms'))},
     ];
     (this._actDefs||[]).forEach(d=>acts.push({id:d.id,label:d.label,unit:d.unit||'',custom:true,total:this.actTotal(lv,zmk,d.id,this.actAutoTotal(lv,zmk,d.id))}));
-    return acts;
+    const _mset=this._marineActSet(lv,z);
+    return _mset?acts.filter(a=>_mset.has(a.id)):acts;
+  }
+  /* L1 marine 各 slab 层只显示各自相关的活动(卡片+顶部总量框同一来源 _actList) */
+  _marineActSet(lv,z){
+    if(lv!=='L1')return null;
+    if(z._pod)   return new Set(['act_colcorbel','col','ls','mbeam','cbeam']);            // Podium
+    if(z._mslab) return new Set(['pcbeam','rc','act_cyclical']);                          // Bottom slab (C)
+    if(z.cat==='MA') return new Set(['piling','slab_top','mep_acmv','mep_fps','mep_elec','mep_bms']); // Top slab (ZC 真实分区)
+    return null;
   }
   zpSection(z){
     const lv=this.curLevel, zmk=z.mk||z.lid;
