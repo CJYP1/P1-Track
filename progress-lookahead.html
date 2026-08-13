@@ -135,14 +135,16 @@ const PLAN={"0": {"Jun'26": 2, "Jul'26": 4, "Aug'26": 2}, "1": {"Oct'26": 1}, "2
 const GROUPS=[["NB","NB"],["EB","EB"],["MAR","Marine"]];
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");}
 function fmt(v,u){v=Math.round(v);return (u==='nos'?v:v.toLocaleString())+(u?' '+u:'');}
-let DONE={};   // key "lv||zmk||aid||mon" -> number (from live app data)
-function doneOf(m,mon){const k=m.lv+'||'+m.zmk+'||'+m.aid+'||'+mon;const v=DONE[k];return (typeof v==='number')?v:(v!=null&&!isNaN(parseFloat(v))?parseFloat(v):0);}
-function planOf(i,mon){const pm=PLAN[i]||{};return pm[mon]||0;}
-// cumulative behind for item i up to (and including) month index mi
-function behindOf(m,mi){let cp=0,cd=0;for(let j=0;j<=mi;j++){const mon=MONTHS[j][0];cp+=planOf(m.i,mon);cd+=doneOf(m,mon);}return Math.max(0,cp-cd);}
+let DONE={};      // key "lv||zmk||aid||mon" -> number (live done from app backend)
+let PLAN_OV={};   // key "lv||zmk||aid||mon" -> number (live plan overrides admin edited in the app)
+function numOf(v){return (typeof v==='number')?v:(v!=null&&!isNaN(parseFloat(v))?parseFloat(v):0);}
+function doneOf(m,mon){return numOf(DONE[m.lv+'||'+m.zmk+'||'+m.aid+'||'+mon]);}
+function planOf(m,mon){const k=m.lv+'||'+m.zmk+'||'+m.aid+'||'+mon;if(k in PLAN_OV)return numOf(PLAN_OV[k]);const pm=PLAN[m.i]||{};return pm[mon]||0;}
+// cumulative behind for item up to (and including) month index mi
+function behindOf(m,mi){let cp=0,cd=0;for(let j=0;j<=mi;j++){const mon=MONTHS[j][0];cp+=planOf(m,mon);cd+=doneOf(m,mon);}return Math.max(0,cp-cd);}
 function renderItems(list,mon,mi){
   return "<ul>"+list.map(m=>{
-    const p=planOf(m.i,mon),d=doneOf(m,mon),b=behindOf(m,mi),u=m.unit;
+    const p=planOf(m,mon),d=doneOf(m,mon),b=behindOf(m,mi),u=m.unit;
     const parts=['<span class="qty">plan '+esc(fmt(p,u))+'</span>'];
     if(d>0) parts.push('<span class="act ok">done '+esc(fmt(d,u))+'</span>');
     if(b>0) parts.push('<span class="rem" style="color:#c0392b;font-weight:700">behind '+esc(fmt(b,u))+'</span>');
@@ -152,7 +154,7 @@ function renderItems(list,mon,mi){
 function renderPathCol(mon,mi,path){
   let html='<div class="path-col '+(path==='cp'?'cp':'nc')+'">';let hasAny=false;
   for(const[key,]of GROUPS){
-    const list=META.filter(m=>m.path===path&&m.g===key&&(planOf(m.i,mon)>0||doneOf(m,mon)>0));
+    const list=META.filter(m=>m.path===path&&m.g===key&&(planOf(m,mon)>0||doneOf(m,mon)>0));
     if(!list.length) continue; hasAny=true;
     html+='<div class="grp grp-'+key+'">'+(key==='NB'?'NB':key==='EB'?'EB':'Marine')+'</div>';
     // group by section preserving META order
@@ -190,8 +192,9 @@ async function loadLive(){
     const {data,error}=await sb.rpc('rws_get_state',{p_token:sess.token});
     if(error){banner.className='lb warn';banner.textContent='Could not load live data ('+(error.message||'error')+') — showing plan only.';return;}
     DONE=(data&&data.act_done_m)?data.act_done_m:{};
-    const n=Object.keys(DONE).length;
-    banner.className='lb ok';banner.textContent='Live Done loaded from app backend: '+n+' monthly entries. Reload to refresh.';
+    PLAN_OV=(data&&data.act_plan)?data.act_plan:{};
+    const nd=Object.keys(DONE).length, np=Object.keys(PLAN_OV).length;
+    banner.className='lb ok';banner.textContent='Live from app backend — Done: '+nd+' entries, Plan edits: '+np+' entries. Reload to refresh.';
     renderAll();
   }catch(e){banner.className='lb warn';banner.textContent='Live data error — showing plan only. '+(e&&e.message||'');}
 }
