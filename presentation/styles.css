@@ -419,3 +419,14 @@ table.reg tr:hover td{background:var(--panel2)}
 table.reg .num{text-align:right;font-variant-numeric:tabular-nums}
 table.reg .mrk td{border-left:2px solid var(--accent)}
 table.reg .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+
+/* Construction Schedule — non-admin read-only monthly detail (plan/done/behind) */
+.schd-mb{margin-top:6px}
+.schd-mlab{font-size:9.5px;font-weight:800;color:#5a6b82;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.schd-now{color:#218a5c}
+.schd-rows{display:flex;flex-direction:column;gap:3px}
+.schd-row{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:#40506a;background:#ffffffb3;border:.5px solid #d3dbe6;border-radius:6px;padding:3px 9px}
+.schd-a{font-weight:700;color:#2e3a59;white-space:nowrap}
+.schd-v{font-family:'IBM Plex Mono',monospace;text-align:right}
+.schd-done{color:#218a5c;font-weight:700}
+.schd-owe{color:#c0392b;font-weight:700}

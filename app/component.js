@@ -614,15 +614,17 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn');
-    const adminOnly=['#openSched','#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn'].map(s=>this.root.querySelector(s)).filter(Boolean);
+    const adminOnly=['#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn'].map(s=>this.root.querySelector(s)).filter(Boolean);
+    const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
     try{if(this.DATA&&this.root.querySelector('#rail'))this.buildRail();}catch(_e){}
     if(hb)hb.style.display=(u&&this.rwsCanSnapshot())?'':'none';   /* 历史快照: admin 或有 HIST 权限才看得到 */
-    if(!u){info.textContent='';lo.style.display='none';ab.style.display='none';adminOnly.forEach(b=>b.style.display='none');return;}
+    if(!u){info.textContent='';lo.style.display='none';ab.style.display='none';adminOnly.forEach(b=>b.style.display='none');if(sched)sched.style.display='none';return;}
     info.textContent='👤 '+(u.display_name||u.username);   /* 只显示用户名(权限区域不再列在这里) */
     lo.style.display='';
     ab.style.display=(u.role==='admin')?'':'none';
     adminOnly.forEach(b=>b.style.display=(u.role==='admin')?'':'none');
+    if(sched)sched.style.display='';
   }
   async rwsBoot(){
     window.__rwsApp=this;
@@ -2233,6 +2235,27 @@ class Component extends DCLogic {
     const more=items.length>shown.length?`<span style="font-size:9px;color:#8a94a6;align-self:center">+${items.length-shown.length}</span>`:'';
     return `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:7px">${chips}${more}</div>`;
   }
+  /* 非 admin 排程视图: 选中月份 → 前/当/后三个月窗口; 每条活动显示 plan/done/behind(欠) */
+  _schWindowMonths(center){ const M=this.ACT_MONTHS; if(center==='__total')return null; const i=M.indexOf(center); if(i<0)return [center]; const out=[]; for(let j=i-1;j<=i+1;j++){ if(j>=0&&j<M.length)out.push(M[j]); } return out; }
+  _schZoneActs(lv,z){ const zmk=z.mk||z.lid; return this._actList(lv,z).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)); }
+  _schWindowHas(lv,z,center){ const zmk=z.mk||z.lid, acts=this._schZoneActs(lv,z);
+    if(center==='__total')return acts.some(a=>{const t=this.actTotal(lv,zmk,a.id,a.total);return t!=null&&t>0;});
+    const W=this._schWindowMonths(center)||[];
+    return acts.some(a=>W.some(m=>{const p=this.actPlan(lv,zmk,a.id,m),d=this.actDoneMonth(lv,zmk,a.id,m);return (p!=null&&p>0)||(d!=null&&d>0);})); }
+  _schWindowDetail(lv,z,center){ const zmk=z.mk||z.lid, acts=this._schZoneActs(lv,z), curL=this.actCurLabel(), M=this.ACT_MONTHS;
+    if(center==='__total'){ const rows=acts.map(a=>{const t=this.actTotal(lv,zmk,a.id,a.total);if(t==null||t<=0)return '';return `<div class="schd-row"><span class="schd-a">${this.esc(a.label)}</span><span class="schd-v">total <b>${this.fmt(t)}</b>${a.unit?' '+this.esc(a.unit):''}</span></div>`;}).join('');
+      return rows?`<div class="schd-mb"><div class="schd-rows">${rows}</div></div>`:''; }
+    const W=this._schWindowMonths(center)||[]; let out='';
+    W.forEach(m=>{ const mi=M.indexOf(m);
+      const rows=acts.map(a=>{ const p=this.actPlan(lv,zmk,a.id,m), d=this.actDoneMonth(lv,zmk,a.id,m);
+        if(!((p!=null&&p>0)||(d!=null&&d>0)))return '';
+        const cg=this.actCarry(lv,zmk,a.id,mi), owe=cg.balance>0?cg.balance:0, u=a.unit?' '+this.esc(a.unit):'';
+        let v=`plan <b>${p!=null?this.fmt(p):'—'}</b>${u}`;
+        if(d!=null&&d>0)v+=` · <span class="schd-done">done ${this.fmt(d)}${u}</span>`;
+        if(owe>0)v+=` · <span class="schd-owe">behind ${this.fmt(owe)}${u}</span>`;
+        return `<div class="schd-row"><span class="schd-a">${this.esc(a.label)}</span><span class="schd-v">${v}</span></div>`; }).join('');
+      if(rows)out+=`<div class="schd-mb"><div class="schd-mlab">${this.esc(m)}${m===curL?' <span class="schd-now">now</span>':''}</div><div class="schd-rows">${rows}</div></div>`; });
+    return out; }
   buildSchedule(){
     const host=this.root.querySelector('#schedbody');
     if(!this.ZP){ host.innerHTML='<div style="padding:44px;text-align:center;color:#8a94a6">No schedule data.</div>'; return; }
@@ -2249,7 +2272,7 @@ class Component extends DCLogic {
     // ---- geo-zone listing: one card per MAP zone (combined "+" pour-groups are naturally split) ----
     // top bar = Total / month switcher; drives what the zone drawer shows & edits
     { const _ms=this.root.querySelector('#schedMonths');
-      if(_ms){ const MM=this.rwsIsAdmin()?this.ACT_MONTHS:this.visMonths(); const curL=this.actCurLabel();
+      if(_ms){ const MM=this.ACT_MONTHS; const curL=this.actCurLabel();   /* 排程视图: 非 admin 也能看全部月份(含未来) */
         if(!this._schMode||(this._schMode!=='__total'&&MM.indexOf(this._schMode)<0))this._schMode=(MM.indexOf(curL)>=0?curL:'__total');
         const mbtn=(val,label,on)=>`<button data-mode="${this.esc(val)}" style="white-space:nowrap;border:none;cursor:pointer;font-family:Archivo,sans-serif;font-weight:700;border-radius:8px;padding:6px 11px;font-size:11.5px;color:#2e3a59;${on?'background:#f5a623;box-shadow:inset 2px 2px 5px #c88b1e,inset -2px -2px 5px #ffc24d':'background:#eef2f7;box-shadow:0 0 0 1px #b6c3d5,2px 2px 6px #aebccf,-2px -2px 6px #ffffff'}">${label}</button>`;
         _ms.innerHTML='<span style="font-size:10.5px;font-weight:800;color:#8a94a6;text-transform:uppercase;letter-spacing:.6px;margin-right:2px">Enter / view</span>'+mbtn('__total','Total',this._schMode==='__total')+MM.map(m=>mbtn(m,this.esc(m)+(m===curL?' •':''),this._schMode===m)).join('');
@@ -2281,14 +2304,31 @@ class Component extends DCLogic {
         </div>`;
       this.DATA.order.filter(lv=>byLev[lv]).forEach(lv=>{ const cards=byLev[lv]; if(!_schIsTotal)cards.sort((a,b)=>(b.has?1:0)-(a.has?1:0)); const lk=aK+'|'+lv; const lopen=!(this._schLevClosed&&this._schLevClosed[lk]);
         outHtml+=`<div class="zs-levhd" data-lk="${lk}" style="padding:11px 16px 4px;display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none"><span style="font-size:10px;color:#8a94a6;width:12px;text-align:center">${lopen?'▾':'▸'}</span><span style="font-size:12.5px;font-weight:800;color:#2e3a59">${this.esc(lv)}</span><span style="font-size:10px;color:#8a94a6;font-weight:600">${cards.length} zones</span><span style="flex:1;height:1px;background:#dbe2ec"></span></div>`;
-        if(lopen){ outHtml+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:9px;padding:6px 16px 14px">`;
-          cards.forEach(o=>{ const isC=o.crit; const pct=o.pct; const badge=pct==null?'—':pct+'%'; const bcol=pct==null?'#aab4c2':(pct>=99?'#218a5c':(pct>0?'#d98a2a':'#aab4c2'));
-            const sel=this._schEdit&&this._schEdit.lv===o.lv&&this._schEdit.mk===o.mk;
-            const _dim=(!_schIsTotal&&!o.has); const _dimSty=_dim?'opacity:.28;filter:grayscale(.5);':'';
-            outHtml+=`<div data-lv="${this.esc(o.lv)}" data-mk="${this.esc(o.mk)}" class="zsc-card" title="${_dim?'本月无计划工作':''}" style="${_dimSty}background:${this.zoneTint(o.label)};border-radius:13px;box-shadow:${isC?'0 0 0 3px #ef2d55,':''}${sel?'0 0 0 1px #b6c3d5,4px 4px 10px #aebccf,-3px -3px 8px #ffffff,inset 0 0 0 1.5px #4a90e2':'0 0 0 1px #c6d1de,3px 3px 8px #b3c1d3,-3px -3px 7px #ffffff'};padding:10px 12px;cursor:pointer">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:7px"><span style="display:flex;align-items:center;gap:5px;min-width:0">${isC?'<span style="font-size:8px;font-weight:800;color:#fff;background:#ef2d55;border-radius:4px;padding:1px 5px;flex:0 0 auto;letter-spacing:.4px">CRIT</span>':''}<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:#2e3a59;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this.esc(o.label)}</span></span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:800;color:${bcol}">${badge}</span></div>
-              <div style="height:7px;border-radius:5px;background:#e4e9f1;box-shadow:inset 0 0 0 1px #bccadb;overflow:hidden"><div style="height:100%;border-radius:5px;width:${Math.min(pct||0,100)}%;background:${bcol}"></div></div>${this.zoneMonthChips(o.lv,o.z,_schMode,_schIsTotal)}</div>`; });
-          outHtml+=`</div>`; } });
+        if(lopen){ const _admin=this.rwsIsAdmin();
+          if(_admin){ outHtml+=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:9px;padding:6px 16px 14px">`;
+            cards.forEach(o=>{ const isC=o.crit; const pct=o.pct; const badge=pct==null?'—':pct+'%'; const bcol=pct==null?'#aab4c2':(pct>=99?'#218a5c':(pct>0?'#d98a2a':'#aab4c2'));
+              const sel=this._schEdit&&this._schEdit.lv===o.lv&&this._schEdit.mk===o.mk;
+              const _dim=(!_schIsTotal&&!o.has); const _dimSty=_dim?'opacity:.28;filter:grayscale(.5);':'';
+              outHtml+=`<div data-lv="${this.esc(o.lv)}" data-mk="${this.esc(o.mk)}" class="zsc-card" style="${_dimSty}background:${this.zoneTint(o.label)};border-radius:13px;box-shadow:${isC?'0 0 0 3px #ef2d55,':''}${sel?'0 0 0 1px #b6c3d5,4px 4px 10px #aebccf,-3px -3px 8px #ffffff,inset 0 0 0 1.5px #4a90e2':'0 0 0 1px #c6d1de,3px 3px 8px #b3c1d3,-3px -3px 7px #ffffff'};padding:10px 12px;cursor:pointer">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:7px"><span style="display:flex;align-items:center;gap:5px;min-width:0">${isC?'<span style="font-size:8px;font-weight:800;color:#fff;background:#ef2d55;border-radius:4px;padding:1px 5px;flex:0 0 auto;letter-spacing:.4px">CRIT</span>':''}<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:700;color:#2e3a59;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${this.esc(o.label)}</span></span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:800;color:${bcol}">${badge}</span></div>
+                <div style="height:7px;border-radius:5px;background:#e4e9f1;box-shadow:inset 0 0 0 1px #bccadb;overflow:hidden"><div style="height:100%;border-radius:5px;width:${Math.min(pct||0,100)}%;background:${bcol}"></div></div>${this.zoneMonthChips(o.lv,o.z,_schMode,_schIsTotal)}</div>`; });
+            outHtml+=`</div>`;
+          } else { /* 非 admin: 只读明细 — 只列有内容的区; 名字+进度条一行, 下面前/当/后三个月的 plan/done/behind */
+            let any=false; let body='';
+            cards.forEach(o=>{ if(!this._schWindowHas(o.lv,o.z,_schMode))return; any=true;
+              const isC=o.crit, pct=o.pct, badge=pct==null?'—':pct+'%', bcol=pct==null?'#aab4c2':(pct>=99?'#218a5c':(pct>0?'#d98a2a':'#aab4c2'));
+              const detail=this._schWindowDetail(o.lv,o.z,_schMode);
+              body+=`<div class="zsc-view" style="background:${this.zoneTint(o.label)};border-radius:13px;box-shadow:${isC?'0 0 0 2px #ef2d55,':''}0 0 0 1px #c6d1de,3px 3px 8px #b3c1d3,-3px -3px 7px #ffffff;padding:11px 14px">
+                <div style="display:flex;align-items:center;gap:11px">
+                  ${isC?'<span style="font-size:8px;font-weight:800;color:#fff;background:#ef2d55;border-radius:4px;padding:1px 5px;flex:0 0 auto;letter-spacing:.4px">CRIT</span>':''}
+                  <span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:700;color:#2e3a59;flex:0 0 auto;white-space:nowrap">${this.esc(o.label)}</span>
+                  <span style="flex:1;height:8px;border-radius:5px;background:#e4e9f1;box-shadow:inset 0 0 0 1px #bccadb;overflow:hidden;min-width:60px"><span style="display:block;height:100%;border-radius:5px;width:${Math.min(pct||0,100)}%;background:${bcol}"></span></span>
+                  <span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:800;color:${bcol};flex:0 0 auto">${badge}</span>
+                </div>
+                ${detail?`<div style="margin-top:9px">${detail}</div>`:''}
+              </div>`; });
+            if(any)outHtml+=`<div style="display:flex;flex-direction:column;gap:9px;padding:6px 16px 14px">${body}</div>`;
+          } } });
       outHtml+=`</section>`; });
     if(!outHtml)outHtml='<div style="padding:44px;text-align:center;color:#8a94a6;font-weight:600">No zones match this filter.</div>';
     host.innerHTML=`<div style="max-width:1180px;margin:0 auto;padding-top:14px">${outHtml}</div>`+this.schedDrawer();
