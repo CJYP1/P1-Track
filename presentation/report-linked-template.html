@@ -110,7 +110,8 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
         var mpTxt=m.mp!=null?("MP "+m.mp):"MP —";
         var bits=areaSeries.map(function(a){
           var abd=(a.doneMonth&&a.doneMonth[k])||0;
-          var abp=a.planned?Math.round(((a.cum&&a.cum[k])||0)/a.planned*100):0;
+          var apm=(a.planMonth&&a.planMonth[k])||0;              /* 本月口径: 本月该区完成 ÷ 本月该区计划 */
+          var abp=apm>0?Math.round(abd/apm*100):0;
           return '<div style="display:flex;align-items:center;gap:8px;padding:2px 0">'
             +'<div style="width:58px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding-left:12px"><span style="width:8px;height:8px;border-radius:2px;background:'+a.col+';flex:0 0 auto"></span><span style="font-size:11px;font-weight:800;color:#7a8194">'+a.key+'</span></div>'
             +'<div style="flex:1"></div><div style="text-align:center;min-width:46px"></div>'
@@ -123,7 +124,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
           +'<div style="flex:1"></div>'
           +'<div style="text-align:center;min-width:52px"><div style="font-size:19px;font-weight:800;color:'+pillCol+';line-height:1">+'+m.target+'<small style="font-size:10px;font-weight:700">d</small></div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">PLAN d</div>'+((k<=CUR)?('<div style="font-size:11px;font-weight:800;line-height:1.1;margin-top:2px;color:'+(m.earnedMo>=m.target?'#0f7a52':'#c0392b')+'">act '+(m.earnedMo>=0?'+':'')+m.earnedMo+'d</div>'):'')+'</div>'
           +'<div style="text-align:center;min-width:44px"><div style="font-size:19px;font-weight:800;color:#1b1e26;line-height:1">'+m.doneEl+'</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">DONE</div></div>'
-          +'<div style="text-align:center;min-width:54px"><div style="font-size:19px;font-weight:800;color:#16a06b;line-height:1">'+m.pct+'%</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">COMPLETE</div></div>'
+          +'<div style="text-align:center;min-width:54px"><div style="font-size:19px;font-weight:800;color:#16a06b;line-height:1">'+(m.planMo>0?Math.round(m.doneEl/m.planMo*100):0)+'%</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">THIS MO</div></div>'
           +'<div style="width:60px;text-align:right;flex:0 0 auto;font-size:10px;font-weight:700;color:#98a0ad">'+mpTxt+'</div></div>'
           +'<div style="margin-top:4px">'+bits+'</div></div>';
       }).join('');
@@ -155,6 +156,30 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
       +'<div style="font-size:12px;color:#5b6271;font-weight:500;margin-top:1px">Progress tracks the critical-path work on the map · each 100% earns that month’s programme days · April 2026 → May 2027</div>'
       +'</div></div>';
     html+='<div style="display:flex;align-items:center;gap:9px;background:'+liveBg+';border:1px solid '+liveBd+';color:'+liveFg+';border-radius:10px;padding:8px 13px;font-size:11.5px;font-weight:700;margin-bottom:16px"><span style="width:8px;height:8px;border-radius:50%;background:'+liveDot+';flex:0 0 auto"></span>'+liveMsg+'</div>';
+    /* ── 每区欠天数(基线 Apr + 每月按完成度赚回) + 总延迟取最差区 ── */
+    (function(){
+      var CALD=[30,31,30,31,31,30,31,30,31,31,28,31,30,31];
+      var aseries=(R&&R.byArea)?R.byArea:[];
+      var owedArrs=aseries.map(function(a){
+        var owed=(a.baseOwe!=null?a.baseOwe:0),arr=[];
+        for(var i=0;i<14;i++){
+          var ratio=null;
+          if(i<3)ratio=1;                                  /* Apr-Jun 锁定 100% */
+          else if(i<=CUR){var pm=(a.planMonth&&a.planMonth[i])||0,dm=(a.doneMonth&&a.doneMonth[i])||0;ratio=pm>0?Math.max(0,Math.min(1,dm/pm)):1;}
+          if(ratio!=null)owed+=ratio*(CALD[i]+base[i][2])-CALD[i];   /* 100%→+该月天数, 0%→−日历月 */
+          arr.push(Math.round(owed));
+        }
+        return {key:a.key,label:a.label,col:a.col,arr:arr,now:arr[CUR]};
+      });
+      if(owedArrs.length){
+        var worst=owedArrs[0];owedArrs.forEach(function(o){if(o.now<worst.now)worst=o;});
+        var cards=owedArrs.map(function(o){var neg=o.now<0;return '<div style="flex:1;min-width:120px;border:1px solid #e6e9ef;border-top:3px solid '+o.col+';border-radius:12px;padding:11px 14px'+(o===worst?';box-shadow:0 0 0 2px #c0392b':'')+'"><div style="font-size:12.5px;font-weight:800">'+o.label+(o===worst?' <span style="font-size:9px;color:#c0392b">◆ drives total</span>':'')+'</div><div style="font-size:28px;font-weight:800;color:'+(neg?"#c0392b":"#0f7a52")+';line-height:1.1;margin-top:3px">'+(o.now>0?"+":"")+o.now+'<span style="font-size:13px"> d</span></div><div style="font-size:10px;color:#98a0ad;font-weight:700">'+(neg?"behind":"ahead")+' · as of '+asOfL+'</div></div>';}).join('');
+        html+='<div style="background:#fff;border:1px solid #e6e9ef;border-radius:16px;padding:18px 22px;box-shadow:0 6px 22px rgba(20,30,50,.06);margin-bottom:18px">'
+          +'<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div style="font-size:14px;font-weight:800">Schedule position (days) · by area</div><div style="font-size:11px;color:#5b6271">Baseline Apr 2026 → each month earns days by actual completion; total follows the worst (most-behind) area</div><div style="flex:1"></div>'
+          +'<div style="font-size:13px;font-weight:800;color:'+(worst.now<0?"#c0392b":"#0f7a52")+'">Overall '+(worst.now>0?"+":"")+worst.now+' d ('+worst.label+')</div></div>'
+          +'<div style="display:flex;gap:12px;flex-wrap:wrap">'+cards+'</div></div>';
+      }
+    })();
     html+='<div style="display:flex;align-items:stretch;gap:26px;background:#fff;border:1px solid #e6e9ef;border-radius:16px;padding:26px 30px;box-shadow:0 6px 22px rgba(20,30,50,.06);margin-bottom:18px;flex-wrap:wrap;animation:fadein .5s ease both">'
       +'<div style="display:flex;align-items:flex-end;gap:16px;padding-right:26px"><div style="font-size:82px;font-weight:800;color:#16a06b;line-height:.86;letter-spacing:-2px">'+totalDays+'</div>'
       +'<div style="padding-bottom:8px"><div style="font-size:20px;font-weight:800;color:#1b1e26;line-height:1">days saved</div><div style="font-size:12px;color:#5b6271;font-weight:600;margin-top:3px">programme target · May 2027</div></div></div>'
