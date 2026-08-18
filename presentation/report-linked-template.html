@@ -28,11 +28,14 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
     for(var i=0;i<14;i++){
       var target=base[i][2]; cumDays+=target;
       var doneEl=R&&R.critDoneMonth?(R.critDoneMonth[i]||0):0;
+      var planMo=R&&R.planMonth?(R.planMonth[i]||0):0;
       var cumEl=R&&R.critCum?(R.critCum[i]||0):0;
       var planned=R?R.critPlanned:0;
       var pct=(R&&planned)?Math.round(cumEl/planned*100):0;
       var daysEarned=Math.round(target*pct/100);
-      M.push({i:i,mo:base[i][0],yr:base[i][1],target:target,cumDays:cumDays,doneEl:doneEl,cumEl:cumEl,pct:pct,daysEarned:daysEarned,mp:mp[i]});
+      /* 实际赚到的天数(仅对照, 不改 +target 计划基线): 本月做到计划的比例 × 该月计划天数 */
+      var earnedMo=planMo>0?Math.round(target*Math.max(0,Math.min(1,doneEl/planMo))):0;
+      M.push({i:i,mo:base[i][0],yr:base[i][1],target:target,cumDays:cumDays,doneEl:doneEl,planMo:planMo,earnedMo:earnedMo,cumEl:cumEl,pct:pct,daysEarned:daysEarned,mp:mp[i]});
     }
     return M;
   }
@@ -114,7 +117,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
         return '<div style="border-top:1px solid #f0f2f6;padding:9px 0 8px"><div style="display:flex;align-items:center;gap:8px">'
           +'<div style="width:58px;flex:0 0 auto"><div style="font-size:12.5px;font-weight:800;color:#1b1e26">'+m.mo+' <span style="color:#98a0ad;font-weight:700">'+m.yr+'</span></div><div style="font-size:9px;font-weight:800;color:'+tagCol+';margin-top:1px">'+tag+'</div></div>'
           +'<div style="flex:1"></div>'
-          +'<div style="text-align:center;min-width:46px"><div style="font-size:19px;font-weight:800;color:'+pillCol+';line-height:1">+'+m.target+'<small style="font-size:10px;font-weight:700">d</small></div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">GAINED</div></div>'
+          +'<div style="text-align:center;min-width:52px"><div style="font-size:19px;font-weight:800;color:'+pillCol+';line-height:1">+'+m.target+'<small style="font-size:10px;font-weight:700">d</small></div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">PLAN d</div>'+((k<=CUR)?('<div style="font-size:11px;font-weight:800;line-height:1.1;margin-top:2px;color:'+(m.earnedMo>=m.target?'#0f7a52':'#c0392b')+'">act +'+m.earnedMo+'d</div>'):'')+'</div>'
           +'<div style="text-align:center;min-width:44px"><div style="font-size:19px;font-weight:800;color:#1b1e26;line-height:1">'+m.doneEl+'</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">DONE</div></div>'
           +'<div style="text-align:center;min-width:54px"><div style="font-size:19px;font-weight:800;color:#16a06b;line-height:1">'+m.pct+'%</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">COMPLETE</div></div>'
           +'<div style="width:60px;text-align:right;flex:0 0 auto;font-size:10px;font-weight:700;color:#98a0ad">'+mpTxt+'</div></div>'
