@@ -39,7 +39,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
       var earnedMo;
       if(i<3){ earnedMo=target; }
       else{ var _r=planMo>0?Math.max(0,Math.min(1,doneEl/planMo)):1; earnedMo=Math.round(_r*(CALD[i]+target)-CALD[i]); }
-      M.push({i:i,mo:base[i][0],yr:base[i][1],target:target,cumDays:cumDays,doneEl:doneEl,planMo:planMo,earnedMo:earnedMo,cumEl:cumEl,pct:pct,daysEarned:daysEarned,mp:mp[i]});
+      M.push({i:i,mo:base[i][0],yr:base[i][1],target:target,cumDays:cumDays,doneEl:doneEl,planMo:planMo,earnedMo:earnedMo,cumEl:cumEl,pct:pct,daysEarned:daysEarned,mp:(planMo>0?planMo:null)});   /* MP 接真实每月计划量(R.planMonth), 不再用写死的 mp[] */
     }
     return M;
   }

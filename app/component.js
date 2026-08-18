@@ -2282,10 +2282,11 @@ class Component extends DCLogic {
     const liFor=(o,aid,mon,u)=>{ const zmk=o.z.mk||o.z.lid;
       const p=this.actPlan(o.lv,zmk,aid,mon), d=this.actDoneMonth(o.lv,zmk,aid,mon);
       if(!((p!=null&&p>0)||(d!=null&&d>0)))return '';
-      const left=(p!=null?p:0)-(d!=null?d:0);
+      const mi=this.ACT_MONTHS.indexOf(mon); const cg=this.actCarry(o.lv,zmk,aid,mi);   // 累计口径: balance(欠)已把别的月做的算进去
       let v=`<span class="qty">plan ${p!=null?this.fmt(p):'—'}${u}</span>`;
       if(d!=null&&d>0)v+=` · <span class="act ok">done ${this.fmt(d)}${u}</span>`;
-      if(left>0&&p!=null&&p>0)v+=` · <span class="rem">left ${this.fmt(left)}${u}</span>`;
+      if(cg.balance>0)v+=` · <span class="rem">behind ${this.fmt(cg.balance)}${u}</span>`;
+      else v+=` · <span class="act ok">&#10003; on track</span>`;
       return `<li><span class="mk">&bull;</span><span style="display:flex;align-items:baseline;flex-wrap:wrap">${catDot(o.cat)}<b style="margin-right:4px">${this.esc(o.label)}</b>${v}</span></li>`; };
     const pathCol=(mon,isCrit)=>{ let html=`<div class="path-col ${isCrit?'cp':'nc'}">`; let any=false;
       orderedIds.forEach(aid=>{ const meta=actMeta[aid]; const u=meta.unit?' '+this.esc(meta.unit):'';
