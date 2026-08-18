@@ -463,3 +463,5 @@ table.reg .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margi
 .mlb .rem{color:#c4351c;font-weight:700}
 .mlb .no-act{padding:10px;font-size:10.5px;color:var(--mlb-muted);opacity:.55}
 @media(max-width:900px){.mlb .months-row,.mlb .panel-head,.mlb .subhead-row{flex-direction:column}.mlb .month-block,.mlb .month-subheads{border-left:none;border-top:2px solid var(--mlb-line)}.mlb .month-hdr{border-left:none;border-top:2px solid rgba(255,255,255,.2)}}
+.mlb .grp-act{background:#efe9da;color:#3a3226;border-top:2px solid #b9a98a}
+.mlb li b{color:var(--mlb-ink)}

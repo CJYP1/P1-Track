@@ -2262,7 +2262,6 @@ class Component extends DCLogic {
     const filt=this._schFilter||'all', q=(this._schQ||'').trim().toLowerCase(), critOnly=!!this._schCrit;
     const center=(this._schMode&&this._schMode!=='__total')?this._schMode:this.actCurLabel();
     const W=this._schWindowMonths(center); const months=(W&&W.length)?W:[center];
-    const GROUPS=[['NB','NB'],['EB','EB'],['MA','Marine']];
     // 收集分区(真实分区 + L1 marine 细分 C/P)
     const zones=[]; const seen={};
     this.DATA.order.forEach(lv=>((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).forEach(z=>{
@@ -2274,21 +2273,25 @@ class Component extends DCLogic {
       ['C','P'].forEach(kind=>((this.SUBZONES.L1[kind])||[]).forEach(e=>{ const label=e.label; if(q&&label.toLowerCase().indexOf(q)<0)return;
         const z={mk:'L1|'+label,label,cat:'MA',counts:{},cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],cores:[],_pod:(kind==='P'),_mslab:(kind==='C')};
         zones.push({lv:'L1',z,label,cat:'MA',crit:false}); })); }
-    const itemsHtml=(lv,z,mon)=>{ const zmk=z.mk||z.lid; const acts=this._schZoneActs(lv,z);
-      const lis=acts.map(a=>{ const p=this.actPlan(lv,zmk,a.id,mon), d=this.actDoneMonth(lv,zmk,a.id,mon);
-        if(!((p!=null&&p>0)||(d!=null&&d>0)))return '';
-        const u=a.unit?' '+this.esc(a.unit):''; const left=(p!=null?p:0)-(d!=null?d:0);
-        let v=`<span class="qty">plan ${p!=null?this.fmt(p):'—'}${u}</span>`;
-        if(d!=null&&d>0)v+=` · <span class="act ok">done ${this.fmt(d)}${u}</span>`;
-        if(left>0&&p!=null&&p>0)v+=` · <span class="rem">left ${this.fmt(left)}${u}</span>`;
-        return `<li><span class="mk">&bull;</span><span>${this.esc(a.label)} &mdash; ${v}</span></li>`; }).filter(Boolean).join('');
-      return lis?`<ul>${lis}</ul>`:''; };
+    // 按活动分组: 活动顺序(Excavation 在前) + 标签/单位
+    const ACTORDER=['earth','exc','piling','demo_wall','demo','slab_pile','pile','col','ls','mbeam','cbeam','slab','act_wall','act_colcorbel','slab_top','rc','pcbeam','temp_stair','act_cyclical','mep_acmv','mep_fps','mep_elec','mep_bms'];
+    const actMeta={};
+    zones.forEach(o=>this._schZoneActs(o.lv,o.z).forEach(a=>{if(!actMeta[a.id])actMeta[a.id]={label:a.label,unit:a.unit};}));
+    const orderedIds=ACTORDER.filter(id=>actMeta[id]).concat(Object.keys(actMeta).filter(id=>ACTORDER.indexOf(id)<0));
+    const catDot=cat=>`<span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${(this.CAT[cat]||this.CAT.NB).c};margin-right:5px;flex:0 0 auto"></span>`;
     const pathCol=(mon,isCrit)=>{ let html=`<div class="path-col ${isCrit?'cp':'nc'}">`; let any=false;
-      GROUPS.forEach(([gk,glab])=>{ const g=(gk==='MA')?'MAR':gk;
-        const zs=zones.filter(o=>o.cat===gk&&o.crit===isCrit);
-        const secs=zs.map(o=>{const it=itemsHtml(o.lv,o.z,mon);return it?`<div class="sec"><div class="sec-title">${this.esc(o.lv)} · ${this.esc(o.label)}</div>${it}</div>`:'';}).filter(Boolean);
-        if(!secs.length)return; any=true;
-        html+=`<div class="grp grp-${g}">${glab}</div><div class="grp-content">${secs.join('')}</div>`; });
+      orderedIds.forEach(aid=>{ const meta=actMeta[aid]; const u=meta.unit?' '+this.esc(meta.unit):'';
+        const rows=zones.filter(o=>o.crit===isCrit).map(o=>{ const zmk=o.z.mk||o.z.lid;
+          const p=this.actPlan(o.lv,zmk,aid,mon), d=this.actDoneMonth(o.lv,zmk,aid,mon);
+          if(!((p!=null&&p>0)||(d!=null&&d>0)))return '';
+          const left=(p!=null?p:0)-(d!=null?d:0);
+          let v=`<span class="qty">plan ${p!=null?this.fmt(p):'—'}${u}</span>`;
+          if(d!=null&&d>0)v+=` · <span class="act ok">done ${this.fmt(d)}${u}</span>`;
+          if(left>0&&p!=null&&p>0)v+=` · <span class="rem">left ${this.fmt(left)}${u}</span>`;
+          return `<li><span class="mk">&bull;</span><span style="display:flex;align-items:baseline;flex-wrap:wrap">${catDot(o.cat)}<b style="margin-right:4px">${this.esc(o.label)}</b>${v}</span></li>`;
+        }).filter(Boolean).join('');
+        if(!rows)return; any=true;
+        html+=`<div class="grp grp-act">${this.esc(meta.label)}</div><div class="grp-content"><ul>${rows}</ul></div>`; });
       if(!any)html+=`<div class="no-act">&mdash;</div>`; return html+`</div>`; };
     let head='<div class="panel-head">'; months.forEach(m=>head+=`<div class="month-hdr">${this.esc(m)}</div>`); head+='</div>';
     let sub='<div class="subhead-row">'; months.forEach(()=>sub+='<div class="month-subheads"><div class="path-lbl critical">&#9650; Critical Path</div><div class="path-lbl noncritical">&#9651; Non-Critical</div></div>'); sub+='</div>';
