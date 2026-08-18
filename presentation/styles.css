@@ -430,3 +430,36 @@ table.reg .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margi
 .schd-v{font-family:'IBM Plex Mono',monospace;text-align:right}
 .schd-done{color:#218a5c;font-weight:700}
 .schd-owe{color:#c0392b;font-weight:700}
+
+/* Construction Schedule — monthly look-ahead board (non-admin), namespaced under .mlb */
+.mlb{--mlb-beige:#e8e2d2;--mlb-ink:#1c1c1c;--mlb-green:#1f9c52;--mlb-line:#c9c1ab;--mlb-muted:#5a5446;--mlb-cp:#6b1226;--mlb-nc:#1a5e38;--mlb-head:#2c2418;color:var(--mlb-ink);font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+.mlb .panel{margin-bottom:18px;border:1px solid var(--mlb-line);border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.mlb .panel-head{display:flex;background:var(--mlb-head)}
+.mlb .month-hdr{flex:1;color:#fff;font-weight:700;font-size:15px;padding:11px 14px;border-left:3px solid rgba(255,255,255,.25)}
+.mlb .month-hdr:first-child{border-left:none}
+.mlb .subhead-row{display:flex;background:var(--mlb-head)}
+.mlb .month-subheads{flex:1;display:flex;border-left:3px solid rgba(255,255,255,.25)}
+.mlb .month-subheads:first-child{border-left:none}
+.mlb .path-lbl{flex:1;font-weight:700;font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;padding:4px 8px;color:rgba(255,255,255,.9)}
+.mlb .path-lbl.critical{background:var(--mlb-cp)}
+.mlb .path-lbl.noncritical{background:var(--mlb-nc);border-left:1px solid rgba(255,255,255,.15)}
+.mlb .months-row{display:flex;background:var(--mlb-beige)}
+.mlb .month-block{flex:1;display:flex;border-left:3px solid var(--mlb-line);min-width:0}
+.mlb .month-block:first-child{border-left:none}
+.mlb .path-col{flex:1;min-width:0;display:flex;flex-direction:column}
+.mlb .path-col.cp{border-right:2px solid rgba(107,18,38,.35)}
+.mlb .grp{font-weight:700;font-size:11px;padding:4px 10px;letter-spacing:.15px}
+.mlb .grp-NB{background:#f7c6e6;color:#5e1146;border-top:2px solid #c23a90}
+.mlb .grp-EB{background:#fbdfc0;color:#6b3a12;border-top:2px solid #d98a3a}
+.mlb .grp-MAR{background:#d6e4fb;color:#173a6b;border-top:2px solid #3a72d9}
+.mlb .grp-content{padding:8px 10px 10px;display:flex;flex-direction:column;gap:8px;background:var(--mlb-beige)}
+.mlb .sec-title{font-weight:700;font-size:10.5px;text-decoration:underline;text-underline-offset:2px;margin-bottom:4px;line-height:1.3;color:var(--mlb-ink)}
+.mlb ul{list-style:none;margin:0;padding:0}
+.mlb li{display:flex;gap:6px;font-size:10.5px;line-height:1.4;margin:2px 0;color:var(--mlb-ink)}
+.mlb li .mk{flex:0 0 auto;width:12px;text-align:center;color:var(--mlb-muted)}
+.mlb .qty{color:var(--mlb-muted);font-weight:400}
+.mlb .act{font-size:9.5px;font-weight:800}
+.mlb .act.ok{color:var(--mlb-green)}
+.mlb .rem{color:#c4351c;font-weight:700}
+.mlb .no-act{padding:10px;font-size:10.5px;color:var(--mlb-muted);opacity:.55}
+@media(max-width:900px){.mlb .months-row,.mlb .panel-head,.mlb .subhead-row{flex-direction:column}.mlb .month-block,.mlb .month-subheads{border-left:none;border-top:2px solid var(--mlb-line)}.mlb .month-hdr{border-left:none;border-top:2px solid rgba(255,255,255,.2)}}

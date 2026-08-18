@@ -2256,6 +2256,45 @@ class Component extends DCLogic {
         return `<div class="schd-row"><span class="schd-a">${this.esc(a.label)}</span><span class="schd-v">${v}</span></div>`; }).join('');
       if(rows)out+=`<div class="schd-mb"><div class="schd-mlab">${this.esc(m)}${m===curL?' <span class="schd-now">now</span>':''}</div><div class="schd-rows">${rows}</div></div>`; });
     return out; }
+  /* 非 admin 排程看板: 参考月度前瞻格式 — 前/当/后三个月, 每月拆 Critical | Non-Critical,
+     按 NB/EB/Marine 分组, 每条活动列 plan/done/left。数据实时来自应用。 */
+  _schedBoard(){
+    const filt=this._schFilter||'all', q=(this._schQ||'').trim().toLowerCase(), critOnly=!!this._schCrit;
+    const center=(this._schMode&&this._schMode!=='__total')?this._schMode:this.actCurLabel();
+    const W=this._schWindowMonths(center); const months=(W&&W.length)?W:[center];
+    const GROUPS=[['NB','NB'],['EB','EB'],['MA','Marine']];
+    // 收集分区(真实分区 + L1 marine 细分 C/P)
+    const zones=[]; const seen={};
+    this.DATA.order.forEach(lv=>((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).forEach(z=>{
+      const cat=z.cat||'NB'; if(filt!=='all'&&cat!==filt)return;
+      const mk=z.mk||z.lid, dk=lv+'||'+mk; if(seen[dk])return; seen[dk]=1;
+      const label=z.label||mk; if(q&&label.toLowerCase().indexOf(q)<0)return; if(critOnly&&!z.crit)return;
+      zones.push({lv,z,label,cat,crit:!!z.crit}); }));
+    if((filt==='all'||filt==='MA')&&!critOnly&&this.SUBZONES&&this.SUBZONES.L1){   // marine 细分
+      ['C','P'].forEach(kind=>((this.SUBZONES.L1[kind])||[]).forEach(e=>{ const label=e.label; if(q&&label.toLowerCase().indexOf(q)<0)return;
+        const z={mk:'L1|'+label,label,cat:'MA',counts:{},cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],cores:[],_pod:(kind==='P'),_mslab:(kind==='C')};
+        zones.push({lv:'L1',z,label,cat:'MA',crit:false}); })); }
+    const itemsHtml=(lv,z,mon)=>{ const zmk=z.mk||z.lid; const acts=this._schZoneActs(lv,z);
+      const lis=acts.map(a=>{ const p=this.actPlan(lv,zmk,a.id,mon), d=this.actDoneMonth(lv,zmk,a.id,mon);
+        if(!((p!=null&&p>0)||(d!=null&&d>0)))return '';
+        const u=a.unit?' '+this.esc(a.unit):''; const left=(p!=null?p:0)-(d!=null?d:0);
+        let v=`<span class="qty">plan ${p!=null?this.fmt(p):'—'}${u}</span>`;
+        if(d!=null&&d>0)v+=` · <span class="act ok">done ${this.fmt(d)}${u}</span>`;
+        if(left>0&&p!=null&&p>0)v+=` · <span class="rem">left ${this.fmt(left)}${u}</span>`;
+        return `<li><span class="mk">&bull;</span><span>${this.esc(a.label)} &mdash; ${v}</span></li>`; }).filter(Boolean).join('');
+      return lis?`<ul>${lis}</ul>`:''; };
+    const pathCol=(mon,isCrit)=>{ let html=`<div class="path-col ${isCrit?'cp':'nc'}">`; let any=false;
+      GROUPS.forEach(([gk,glab])=>{ const g=(gk==='MA')?'MAR':gk;
+        const zs=zones.filter(o=>o.cat===gk&&o.crit===isCrit);
+        const secs=zs.map(o=>{const it=itemsHtml(o.lv,o.z,mon);return it?`<div class="sec"><div class="sec-title">${this.esc(o.lv)} · ${this.esc(o.label)}</div>${it}</div>`:'';}).filter(Boolean);
+        if(!secs.length)return; any=true;
+        html+=`<div class="grp grp-${g}">${glab}</div><div class="grp-content">${secs.join('')}</div>`; });
+      if(!any)html+=`<div class="no-act">&mdash;</div>`; return html+`</div>`; };
+    let head='<div class="panel-head">'; months.forEach(m=>head+=`<div class="month-hdr">${this.esc(m)}</div>`); head+='</div>';
+    let sub='<div class="subhead-row">'; months.forEach(()=>sub+='<div class="month-subheads"><div class="path-lbl critical">&#9650; Critical Path</div><div class="path-lbl noncritical">&#9651; Non-Critical</div></div>'); sub+='</div>';
+    let body='<div class="months-row">'; months.forEach(m=>{body+=`<div class="month-block">${pathCol(m,true)}${pathCol(m,false)}</div>`;}); body+='</div>';
+    return `<div class="mlb" style="max-width:1600px;margin:0 auto;padding:12px 4px 20px"><div class="panel">${head}${sub}${body}</div></div>`;
+  }
   buildSchedule(){
     const host=this.root.querySelector('#schedbody');
     if(!this.ZP){ host.innerHTML='<div style="padding:44px;text-align:center;color:#8a94a6">No schedule data.</div>'; return; }
@@ -2281,6 +2320,10 @@ class Component extends DCLogic {
     { const _lg=this.root.querySelector('#schedlegend'); if(_lg)_lg.innerHTML='<div class="sl-item"><span class="sl-fill"></span>Solid bar = % done</div><div class="sl-item" style="color:#8a94a6">Pick <b>Total</b> or a month above, then click a zone to enter quantities &amp; dates.</div>'; }
     /* 选中月份时: 该月有计划工作的 zone 正常显示并排在前; 没工作的浅色淡出、排到最后。Total 模式不淡化。 */
     const _schMode=this._schMode, _schIsTotal=(_schMode==='__total');
+    if(!this.rwsIsAdmin()){   // 非 admin: 只读月度看板(前/当/后三个月, CP|NC, plan/done/left)
+      const _lg=this.root.querySelector('#schedlegend');
+      if(_lg)_lg.innerHTML='<div class="sl-item"><span class="key" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#6b1226;margin-right:4px"></span>Critical Path</div><div class="sl-item"><span class="key" style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1a5e38;margin-right:4px"></span>Non-Critical</div><div class="sl-item" style="color:#8a94a6">Pick a month above — shows that month plus the month before &amp; after · plan / done / left per activity.</div>';
+      host.innerHTML=this._schedBoard(); return; }
     const areas=(filt==='all'?['NB','EB','MA']:[filt]); let outHtml='';
     areas.forEach(aK=>{ const cc=this.CAT[aK]; if(!cc)return;
       const byLev={},seen={}; let zN=0,crit=0,pctSum=0,pctN=0;
