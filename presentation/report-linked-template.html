@@ -111,7 +111,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
         var bits=areaSeries.map(function(a){
           var abd=(a.doneMonth&&a.doneMonth[k])||0;
           var apm=(a.planMonth&&a.planMonth[k])||0;              /* 本月口径: 本月该区完成 ÷ 本月该区计划 */
-          var abp=apm>0?Math.round(abd/apm*100):0;
+          var abp=apm>0?Math.min(100,Math.round(abd/apm*100)):0;
           return '<div style="display:flex;align-items:center;gap:8px;padding:2px 0">'
             +'<div style="width:58px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding-left:12px"><span style="width:8px;height:8px;border-radius:2px;background:'+a.col+';flex:0 0 auto"></span><span style="font-size:11px;font-weight:800;color:#7a8194">'+a.key+'</span></div>'
             +'<div style="flex:1"></div><div style="text-align:center;min-width:46px"></div>'
@@ -124,7 +124,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
           +'<div style="flex:1"></div>'
           +'<div style="text-align:center;min-width:52px"><div style="font-size:19px;font-weight:800;color:'+pillCol+';line-height:1">+'+m.target+'<small style="font-size:10px;font-weight:700">d</small></div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">PLAN d</div>'+((k<=CUR)?('<div style="font-size:11px;font-weight:800;line-height:1.1;margin-top:2px;color:'+(m.earnedMo>=m.target?'#0f7a52':'#c0392b')+'">act '+(m.earnedMo>=0?'+':'')+m.earnedMo+'d</div>'):'')+'</div>'
           +'<div style="text-align:center;min-width:44px"><div style="font-size:19px;font-weight:800;color:#1b1e26;line-height:1">'+m.doneEl+'</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">DONE</div></div>'
-          +'<div style="text-align:center;min-width:54px"><div style="font-size:19px;font-weight:800;color:#16a06b;line-height:1">'+(m.planMo>0?Math.round(m.doneEl/m.planMo*100):0)+'%</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">THIS MO</div></div>'
+          +'<div style="text-align:center;min-width:54px"><div style="font-size:19px;font-weight:800;color:#16a06b;line-height:1">'+(m.planMo>0?Math.min(100,Math.round(m.doneEl/m.planMo*100)):0)+'%</div><div style="font-size:8px;font-weight:800;color:#98a0ad;letter-spacing:.3px">THIS MO</div></div>'
           +'<div style="width:60px;text-align:right;flex:0 0 auto;font-size:10px;font-weight:700;color:#98a0ad">'+mpTxt+'</div></div>'
           +'<div style="margin-top:4px">'+bits+'</div></div>';
       }).join('');
