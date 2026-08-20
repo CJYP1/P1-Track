@@ -1123,10 +1123,11 @@ class Component extends DCLogic {
       const z=lb.z,cx=lb.fx,cy=lb.fy,fs=lb.fs;
       if(this.curLevel==='L1'&&z.cat==='MA')return;   // L1 Marine 父区名字由 ZC 叠加层提供(自身标签不画, 避免重叠; ZC 关时只留边界线)
       const isCrit=z.crit&&this.showCrit;
-      s+=`<text class="zname${isCrit?' crit':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
+      const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,this.planMonth());   /* 延误: 标签变红粗边(替代原红点) */
+      s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
       if(this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}   /* 角标: 填了 done 却缺总量/计划的区 */
       if(this.colorMode==='plan'&&this.zoneHasPlan(this.curLevel,z,this.planMonth())&&this.zonePlanStarted(this.curLevel,z,this.planMonth())&&!this.zoneDelayed(this.curLevel,z,this.planMonth())){const _r=Math.max(fs*0.7,220),_bx=cx,_by=cy+fs*0.65+_r*1.35;s+=`<circle class="planprog" cx="${_bx.toFixed(0)}" cy="${_by.toFixed(0)}" r="${(_r*1.15).toFixed(0)}" fill="#f5a623" fill-opacity="0.25"/><circle class="planprog" cx="${_bx.toFixed(0)}" cy="${_by.toFixed(0)}" r="${_r.toFixed(0)}" fill="#f5a623" stroke="#fff" stroke-width="${(_r*0.3).toFixed(0)}"/><circle class="planprog" cx="${_bx.toFixed(0)}" cy="${_by.toFixed(0)}" r="${(_r*0.34).toFixed(0)}" fill="#fff"/>`;}   /* delay 时不画 start(delay 优先) */
-      if(this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,this.planMonth())){const _r=Math.max(fs*0.7,220),_dx=cx,_dy=cy+fs*0.65+_r*1.35;s+=`<circle class="planprog" cx="${_dx.toFixed(0)}" cy="${_dy.toFixed(0)}" r="${(_r*1.15).toFixed(0)}" fill="#e11d2a" fill-opacity="0.25"/><circle class="planprog" cx="${_dx.toFixed(0)}" cy="${_dy.toFixed(0)}" r="${_r.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_r*0.3).toFixed(0)}"/><circle class="planprog" cx="${_dx.toFixed(0)}" cy="${_dy.toFixed(0)}" r="${(_r*0.34).toFixed(0)}" fill="#fff"/>`;}   /* delay marker(红): 到本月累计计划>累计完成 = 延误 */
+      /* 延误标记改为标签变红(见上方 zdelay), 不再画红点 */
       const sub=fs*0.62;
       if(this.colorMode==='progress' && z._p){
         const d=this.zoneDisplayPct(z);const col=this.progColor(d.pct);
@@ -2283,7 +2284,7 @@ class Component extends DCLogic {
       const p=this.actPlan(o.lv,zmk,aid,mon), d=this.actDoneMonth(o.lv,zmk,aid,mon);
       if(!((p!=null&&p>0)||(d!=null&&d>0)))return '';
       const mi=this.ACT_MONTHS.indexOf(mon); const cg=this.actCarry(o.lv,zmk,aid,mi);   // 累计口径: balance(欠)已把别的月做的算进去
-      let v=`<span class="qty">plan ${p!=null?this.fmt(p):'—'}${u}</span>`;
+      let v=`<span class="qty">plan <b style="color:#1c1c1c;font-size:11.5px">${p!=null?this.fmt(p):'—'}${u}</b></span>`;
       if(d!=null&&d>0)v+=` · <span class="act ok">done ${this.fmt(d)}${u}</span>`;
       if(cg.balance>0)v+=` · <span class="rem">behind ${this.fmt(cg.balance)}${u}</span>`;
       else v+=` · <span class="act ok">&#10003; on track</span>`;
