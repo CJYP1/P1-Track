@@ -1073,13 +1073,14 @@ class Component extends DCLogic {
     {const _hk=['podcis','podium','transfer'].filter(k=>this.showOvl[k]);
      const _HS={podium:{rot:45,sp:2800,sw:300,op:0.22,cross:false},transfer:{rot:-45,sp:1700,sw:300,op:0.26,cross:false},podcis:{rot:0,sp:2400,sw:260,op:0.20,cross:true}};
      if(_hk.length){s+=`<defs>${_hk.map(k=>{const o=this.OVL[k],h=_HS[k];return `<pattern id="hz_${k}" patternUnits="userSpaceOnUse" width="${h.sp}" height="${h.sp}" patternTransform="rotate(${h.rot})"><rect width="${h.sp}" height="${h.sp}" fill="${o.c}" fill-opacity="0.065"/><line x1="0" y1="0" x2="0" y2="${h.sp}" stroke="${o.c}" stroke-width="${h.sw}" stroke-opacity="${h.op}"/>${h.cross?`<line x1="0" y1="0" x2="${h.sp}" y2="0" stroke="${o.c}" stroke-width="${h.sw}" stroke-opacity="${h.op}"/>`:''}</pattern>`;}).join('')}</defs>`;}}
+    let _ovlLines='';   /* overlay 虚线(Podium outline / L5 transfer / Podium CIS)延后到 C/P 子区之后再画, 保证在最上层 */
     ['podcis','podium','transfer'].forEach(k=>{
       if(!this.showOvl[k])return;const o=this.OVL[k];
       (this.DATA.overlays[k]||[]).forEach(seg=>{
         const p=seg.pts.map(pt=>{const q=this.proj(pt,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
         const tag=seg.closed?'polygon':'polyline';
-        s+=`<${tag} class="ovl" points="${p}" stroke="#ffffff" stroke-width="${(o.w*1.05+0.8).toFixed(1)}" stroke-opacity="0.9"/>`;
-        s+=`<${tag} class="ovl" points="${p}" ${seg.closed?`style="fill:url(#hz_${k})"`:''} stroke="${o.c}" stroke-width="${(o.w*1.05).toFixed(1)}" stroke-dasharray="6 4.5" stroke-opacity="0.95"/>`;
+        _ovlLines+=`<${tag} class="ovl" points="${p}" stroke="#ffffff" stroke-width="${(o.w*1.05+0.8).toFixed(1)}" stroke-opacity="0.9"/>`;
+        _ovlLines+=`<${tag} class="ovl" points="${p}" ${seg.closed?`style="fill:url(#hz_${k})"`:''} stroke="${o.c}" stroke-width="${(o.w*1.05).toFixed(1)}" stroke-dasharray="6 4.5" stroke-opacity="0.95"/>`;
       });
     });
     if(this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
@@ -1208,6 +1209,7 @@ class Component extends DCLogic {
      _dr(_subL.ZC,'subZC','#1d4ed8',false,this.showSubZC);
      _dr(_subL.C,'subC','#b35a1f',false,this.showSubC,true);   /* Bottom slab: 白底 + 按进度上色 */
      _dr(_subL.P,'subP','#7c3aed',true,this.showSubP,true);}   /* Podium: 同样 白底 + 按进度上色 */
+    s+=_ovlLines;   /* overlay 三条线画在 C/P 子区之上, 不再被白底盖住 */
     /* Core Wall 多边形(admin 画的) + 正在画的临时轮廓 */
     if(this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
