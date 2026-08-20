@@ -1195,7 +1195,7 @@ class Component extends DCLogic {
       if(useProg){
         base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;   /* 白色衬底(跟主 zone 一样) */
         if(this.colorMode==='plan'){ /* Planned: 白底 + 有进展按 status 上色 */
-          const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{}};
+          const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:(cls==='subP'),_mslab:(cls==='subC')};
           const _st=this._zoneMonthState(this.curLevel,_z,this.planMonth());
           fill=this.PLAN_COLORS()[_st.state]||'#ffffff'; fo=_st.colored?0.62:0;
         } else { /* Area 等: 白底 + 按该细分完成度上色(绿=完成/黄=在做/灰=未开始) */
@@ -1333,7 +1333,8 @@ class Component extends DCLogic {
   _subActPct(label){
     const lv=this.curLevel, zmk=lv+'|'+label;
     try{
-      const z={mk:zmk,label:label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:/^P\d/i.test(label)};
+      const _isPod=/^P\d/i.test(label);
+      const z={mk:zmk,label:label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:_isPod,_mslab:(/^C/i.test(label)&&!_isPod)};
       const acts=(this._actList?this._actList(lv,z):[]).filter(a=>a.custom||this._actApplies(a.id,lv,z));
       const M=this.ACT_MONTHS||[]; const ratios=[]; let anyDone=false;
       acts.forEach(a=>{const tot=a.total; if(tot==null||tot<=0)return; let done=0,plan=0; M.forEach(m=>{const v=this.actDoneMonth(lv,zmk,a.id,m); if(v!=null)done+=(+v||0); const p=this.actPlan(lv,zmk,a.id,m); if(p!=null)plan+=(+p||0);}); if(plan<=0&&done<=0)return; /* 这个区没这项工作(既没排计划也没做过)→ 不参与计算 */ if(done>0)anyDone=true; ratios.push(Math.max(0,Math.min(1,done/tot)));});
