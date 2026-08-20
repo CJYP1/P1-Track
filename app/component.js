@@ -1191,21 +1191,23 @@ class Component extends DCLogic {
     if(_subL){const _dr=(arr,cls,col,dash,show,useProg)=>{if(!show||!arr)return;arr.forEach((e,i)=>{
       const pts=e.pts.map(pp=>{const q=this.proj(pp,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
       const lq=this.proj(e.lp,H);
-      let fill=col, fo=0;   /* 默认: 透明填充, 只描边 */
+      let fill=col, fo=0, base='';   /* 默认: 透明填充, 只描边 */
       if(useProg){
-        if(this.colorMode==='plan'){ /* Planned: 白色底 + 有进展的地方按 status 上色(与 Bottom slab 同一逻辑) */
+        base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;   /* 白色衬底(跟主 zone 一样) */
+        if(this.colorMode==='plan'){ /* Planned: 白底 + 有进展按 status 上色 */
           const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{}};
           const _st=this._zoneMonthState(this.curLevel,_z,this.planMonth());
-          fill=this.PLAN_COLORS()[_st.state]||'#ffffff'; fo=_st.colored?0.6:0.9;
-        } else { /* Area(及其它): 整个 Marine 区域统一色 */
-          fill=(this.CAT&&this.CAT.MA?this.CAT.MA.c:'#3E7CC4'); fo=0.42;
+          fill=this.PLAN_COLORS()[_st.state]||'#ffffff'; fo=_st.colored?0.62:0;
+        } else { /* Area 等: 白底 + 按该细分完成度上色(绿=完成/黄=在做/灰=未开始) */
+          const _p=this._subZoneProg(e.label);
+          fill=(_p==null)?'#ffffff':this.progColor(_p); fo=(_p==null)?0:0.6;
         }
       }
-      s+=`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${col}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
+      s+=base+`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${col}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${col}">${this.esc(e.label)}</text>`;});};
      _dr(_subL.ZC,'subZC','#1d4ed8',false,this.showSubZC);
-     _dr(_subL.C,'subC','#b35a1f',false,this.showSubC,true);   /* C 按各区进度填色: 绿=完成, 黄=在做, 空=未开始; 只有点了 Bottom slab 才显示, 整体视图默认空白 */
-     _dr(_subL.P,'subP','#7c3aed',true,this.showSubP);}
+     _dr(_subL.C,'subC','#b35a1f',false,this.showSubC,true);   /* Bottom slab: 白底 + 按进度上色 */
+     _dr(_subL.P,'subP','#7c3aed',true,this.showSubP,true);}   /* Podium: 同样 白底 + 按进度上色 */
     /* Core Wall 多边形(admin 画的) + 正在画的临时轮廓 */
     if(this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
