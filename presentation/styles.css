@@ -101,6 +101,7 @@ svg.collabels .collbl{display:block}
 .zname{font-weight:700;fill:var(--txt);text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:var(--stage);stroke-width:600px}
 .zname.crit{fill:var(--crit)}
 .zname.zdelay{fill:#e11d2a;font-weight:900;stroke:#ffffff;stroke-width:1000px}   /* 延误区: 红字 + 白色粗描边, 替代原红点 */
+.zname.zstart{fill:#f5a623;font-weight:900;stroke:#ffffff;stroke-width:1000px}   /* 开工区: 橘字 + 白色粗描边, 替代原橘点 */
 .zarea{fill:var(--faint);text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:var(--stage);stroke-width:300px}
 .zpct{font-weight:800;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:var(--stage);stroke-width:420px}
 .zseq{font-weight:700;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:var(--stage);stroke-width:360px}
