@@ -263,6 +263,13 @@ class Component extends DCLogic {
   actVisState(lv,zmk,a){const v=(this._actHidden||{})[lv+'||'+zmk+'||'+a];return (v==='hide')?'hide':(v==='show'?'show':'auto');}
   actHidden(lv,zmk,a){return this.actVisState(lv,zmk,a)==='hide';}
   saveAct(){try{localStorage.setItem('rws_act_total',JSON.stringify(this._actTotal||{}));localStorage.setItem('rws_act_plan',JSON.stringify(this._actPlan||{}));localStorage.setItem('rws_act_donem',JSON.stringify(this._actDoneM||{}));localStorage.setItem('rws_act_hidden',JSON.stringify(this._actHidden||{}));localStorage.setItem('rws_act_defs',JSON.stringify(this._actDefs||[]));}catch(e){}}
+  /* 每个活动的资源(工人数): C=木工, R=铁工。借用 manpower store, 键 lv||zmk||aid||c / ||r(4段, 与每区人数2段键不冲突) */
+  actRes(lv,zmk,aid,which){const v=(this._manpower||{})[lv+'||'+zmk+'||'+aid+'||'+which];return (v==null?null:v);}
+  setActRes(lv,zmk,aid,which,raw){if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny&&this.rwsDeny('Outside your assigned zones.');return;}
+    const k=lv+'||'+zmk+'||'+aid+'||'+which; const s=String(raw==null?'':raw).trim(); const v=s===''?null:Math.max(0,Math.round(+s||0));
+    this._manpower=this._manpower||{}; if(v==null)delete this._manpower[k]; else this._manpower[k]=v;
+    try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);}
   saveEdited(){try{localStorage.setItem('rws_edited_keys',JSON.stringify(this._editedKeys||{}));}catch(e){}}
   saveActUpd(){try{localStorage.setItem('rws_act_upd',JSON.stringify(this._actUpd||{}));}catch(e){}}
   _updUser(){const u=this._rwsUser||{};return u.display_name||u.displayName||u.username||u.name||'someone';}
@@ -1956,9 +1963,13 @@ class Component extends DCLogic {
       /* Core Wall activity card: embed the existing Core Walls element checklist (same list,
          same saved status — just moved here from the old standalone bottom-of-page section) */
       const _coreListHtml='';  /* Core/Lift/Stair 已统一到 ls 活动清单(见 _actElemSec) */
+      const _rc=this.actRes(lv,zmk,a.id,'c'), _rr=this.actRes(lv,zmk,a.id,'r');   /* 资源: C=木工, R=铁工 */
+      const _resRow=admin
+        ? `<div class="actsub actres"><span class="am2" title="Workers this activity needs">👷 Workers</span> <span class="am2" title="Carpenter · 木工">C</span> <input class="actres-in" data-a="${a.id}" data-w="c" value="${_rc==null?'':_rc}" placeholder="—" title="Carpenters (木工)" style="width:42px;text-align:center;background:var(--panel);border:1px dashed var(--accent);border-radius:5px;padding:1px 4px;font-size:13px;font-weight:700;color:var(--accent);font-family:inherit"> <span class="asep">|</span> <span class="am2" title="Ironworker · 铁工">R</span> <input class="actres-in" data-a="${a.id}" data-w="r" value="${_rr==null?'':_rr}" placeholder="—" title="Ironworkers (铁工)" style="width:42px;text-align:center;background:var(--panel);border:1px dashed var(--accent);border-radius:5px;padding:1px 4px;font-size:13px;font-weight:700;color:var(--accent);font-family:inherit"></div>`
+        : ((_rc!=null||_rr!=null)?`<div class="actsub actres"><span class="am2">👷 Workers</span> <span class="am2">C</span> <b>${_rc==null?'—':this.fmt(_rc)}</b> <span class="asep">|</span> <span class="am2">R</span> <b>${_rr==null?'—':this.fmt(_rr)}</b></div>`:'');
       return `<div class="actcard ${hidden?'act-off':''}${_noWorkThisMonth?' act-nowork':''}"><div class="actrow">${chk}<span class="actlbl">${a.label}${(admin&&(total==null||total<=0)&&cumThrough>0)?' <span class="needscopetag" title="填了 Done, 但这个活动没有总量、也没有任何月份的计划 → 算不出百分比。请补一个总量(Total)或计划量(Plan)。" style="background:#fdecec;color:#c8102e;border:1px solid #f3b5b5;border-radius:6px;padding:1px 6px;font-size:9px;font-weight:800;margin-left:4px">⚠ 缺总量/计划</span>':''}${_noWorkThisMonth?' <span class="noworktag" title="No planned or done quantity for '+this.esc(sm)+' — this activity isn\'t scheduled for this zone this month">— no work this month</span>':''}${(admin&&hidden)?' <span class="hiddentag">hidden from users</span>':''}${(a.custom&&admin)?' <span class="lnk actdel" data-a="'+a.id+'" style="color:var(--crit);cursor:pointer" title="Delete custom activity">✕</span>':''}</span><span class="actbar"><i style="width:${Math.min(pct||0,100)}%;background:${bc}"></i></span><span class="actpct" style="color:${bc}">${pct==null?'—':pct+'%'}</span>${this._cmtBtn(lv,zmk,a.id)}${this._updBadge(lv,zmk,a.id)}</div>`+
         (a.info?`<div class="actinfotext">&#9432; ${this.esc(a.info)}</div>`:``)+
-        `<div class="actsub"><span class="am">${sm}</span><span class="am2">Plan</span>${planCell}${_editBadge(_planEdited)}${this._lockIco('act_plan',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="asep">|</span><span class="am2">Done</span>${doneCell}${_editBadge(_doneEdited)}${this._lockIco('act_done_m',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="acum">${sm}: ${this.fmt(cg.done)}${plan==null?'':' / '+this.fmt(plan)} ${a.unit}</span></div>`+actDateLine+carryLine+mn+this._cmtPanel(lv,zmk,a.id)+_coreListHtml+this._actElemSecFull(lv,z,a.id)+'</div>';
+        `<div class="actsub"><span class="am">${sm}</span><span class="am2">Plan</span>${planCell}${_editBadge(_planEdited)}${this._lockIco('act_plan',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="asep">|</span><span class="am2">Done</span>${doneCell}${_editBadge(_doneEdited)}${this._lockIco('act_done_m',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="acum">${sm}: ${this.fmt(cg.done)}${plan==null?'':' / '+this.fmt(plan)} ${a.unit}</span></div>`+_resRow+actDateLine+carryLine+mn+this._cmtPanel(lv,zmk,a.id)+_coreListHtml+this._actElemSecFull(lv,z,a.id)+'</div>';
     }).join('');
     const opts=M.map(mm=>`<option value="${mm}" ${mm===sm?'selected':''}>${mm}${mm===curL?' (now)':''}</option>`).join('');
     const nav=`<div style="display:flex;align-items:center;gap:5px">
@@ -2100,6 +2111,7 @@ class Component extends DCLogic {
     sb.querySelectorAll('.zp-plan-in').forEach(el=>{el.addEventListener('focus',()=>{const b=sb.querySelector('#zpSaveBtn');if(b)b.style.display='flex';});el.addEventListener('input',()=>{el.dataset.dirty='1';this._zpDirty=true;const b=sb.querySelector('#zpSaveBtn');if(b)b.style.display='flex';});});
     {const _zk=[this.curLevel,z.mk||z.lid];
      sb.querySelectorAll('.act-plan').forEach(el=>{el.addEventListener('change',()=>{this._flashSel='.act-plan[data-a="'+el.dataset.a+'"]';this.setActPlan(_zk[0],_zk[1],el.dataset.a,this._actMonth,el.value,z);});el.addEventListener('keydown',e=>{if(e.key==='Enter')el.blur();});});
+     sb.querySelectorAll('.actres-in').forEach(el=>{el.addEventListener('change',()=>{this.setActRes(_zk[0],_zk[1],el.dataset.a,el.dataset.w,el.value);});el.addEventListener('keydown',e=>{if(e.key==='Enter')el.blur();});});
      sb.querySelectorAll('.actcmt-btn').forEach(el=>el.addEventListener('click',ev=>{ev.stopPropagation();const key=_zk[0]+'||'+_zk[1]+'||'+el.dataset.a;this._cmtOpen=(this._cmtOpen===key)?null:key;this._actRerender(z);}));
      sb.querySelectorAll('.cmt-send').forEach(el=>el.addEventListener('click',()=>{const inp=sb.querySelector('.cmt-in[data-a="'+el.dataset.a+'"]');if(inp){this.addActCmt(_zk[0],_zk[1],el.dataset.a,inp.value);}}));
      sb.querySelectorAll('.cmt-in').forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter'){this.addActCmt(_zk[0],_zk[1],el.dataset.a,el.value);}}));
