@@ -270,6 +270,17 @@ class Component extends DCLogic {
     this._manpower=this._manpower||{}; if(v==null)delete this._manpower[k]; else this._manpower[k]=v;
     try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);}
+  /* 每区每日工人数: 各活动 C/R 人数 × 该活动工期(actDate 起止), 按天汇总 */
+  _zoneDailyManpower(lv,z){ const zmk=z.mk||z.lid; const acts=this._actList(lv,z); const days={};
+    acts.forEach(a=>{ const c=this.actRes(lv,zmk,a.id,'c')||0, r=this.actRes(lv,zmk,a.id,'r')||0; if(c<=0&&r<=0)return;
+      const d=(this._actDate||{})[lv+'||'+zmk+'||'+a.id]||{}; if(!d.start||!d.end)return;
+      const s=new Date(d.start+'T00:00:00'), e=new Date(d.end+'T00:00:00'); if(isNaN(s)||isNaN(e)||e<s)return;
+      for(let t=new Date(s); t<=e; t.setDate(t.getDate()+1)){ const key=t.toISOString().slice(0,10); const o=days[key]||{c:0,r:0}; o.c+=c; o.r+=r; days[key]=o; } });
+    return Object.keys(days).sort().map(k=>({date:k,c:days[k].c,r:days[k].r})); }
+  _dailyManpowerSec(lv,z){ const rows=this._zoneDailyManpower(lv,z); if(!rows.length)return '';
+    const peak=rows.reduce((m,d)=>Math.max(m,d.c+d.r),0);
+    const body=rows.map(d=>`<tr><td style="padding:2px 9px">${this._fmtD(d.date)}</td><td style="padding:2px 9px;text-align:right;font-family:'IBM Plex Mono',monospace">${d.c||'—'}</td><td style="padding:2px 9px;text-align:right;font-family:'IBM Plex Mono',monospace">${d.r||'—'}</td><td style="padding:2px 9px;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:800">${d.c+d.r}</td></tr>`).join('');
+    return `<details class="sec" style="margin-top:10px"><summary style="cursor:pointer;font-weight:800;font-size:14px">👷 Daily manpower <span style="font-weight:600;color:var(--faint);font-size:10.5px">· ${rows.length} days · peak ${peak} · C=木工 R=铁工</span></summary><div style="max-height:300px;overflow:auto;margin-top:8px;border:1px solid var(--line);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr style="position:sticky;top:0;background:var(--panel);color:var(--faint);font-size:9.5px;text-transform:uppercase"><th style="text-align:left;padding:4px 9px">Date</th><th style="text-align:right;padding:4px 9px">C 木工</th><th style="text-align:right;padding:4px 9px">R 铁工</th><th style="text-align:right;padding:4px 9px">Total</th></tr></thead><tbody>${body}</tbody></table></div></details>`; }
   saveEdited(){try{localStorage.setItem('rws_edited_keys',JSON.stringify(this._editedKeys||{}));}catch(e){}}
   saveActUpd(){try{localStorage.setItem('rws_act_upd',JSON.stringify(this._actUpd||{}));}catch(e){}}
   _updUser(){const u=this._rwsUser||{};return u.display_name||u.displayName||u.username||u.name||'someone';}
@@ -2058,6 +2069,7 @@ class Component extends DCLogic {
       ${this.rwsIsAdmin()?'<div style="font-size:9.5px;color:var(--faint);margin:-6px 0 9px">Dashed boxes above are editable (admin) — press Enter or click away to save. Lift/Stair count isn\'t editable here.</div>':''}
       ${(()=>{const k=lv+'||'+(z.mk||z.lid);const v=(this._manpower||{})[k];const e=this.rwsIsAdmin()||this.rwsScopeOk(lv,z.mk||z.lid);return `<div style="display:flex;align-items:center;gap:9px;margin:0 0 11px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)"><span style="font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.4px">👷 Manpower</span>${e?`<input class="mp-in" type="number" min="0" value="${v==null?'':v}" placeholder="—" style="width:100px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:15px;font-weight:700;color:var(--txt)"><span style="font-size:10px;color:var(--faint)">workers</span>`:`<b style="font-size:16px">${v==null?'—':this.fmt(v)}</b><span style="font-size:10px;color:var(--faint)">workers</span>`}</div>`;})()}
       ${this.zpSection(z)}
+      ${this._dailyManpowerSec(lv,z)}
       ${this._custSecHtml(lv,z,this.rwsIsAdmin())}
       </div>`;
     this.setSummaryVis();
