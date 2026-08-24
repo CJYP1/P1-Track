@@ -1095,7 +1095,7 @@ class Component extends DCLogic {
   _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; let aid='slab'; ['slab','slab_top','slab_pile'].some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
     const d=this._actDateOf(lv,zmk,aid); const tot=this.actTotal(lv,zmk,aid,null); const done=(tot!=null&&tot>0&&this._actCumDone(lv,zmk,aid)>=tot);
     const dt=d.end||d.start||null; return {aid,done,date:dt,month:this._dateToActMonth(dt)}; }
-  _zoneCastColor(z){ const info=this._zoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
+  _zoneCastColor(z){ if(this._castLayer==='col')return '#efeaec'; const info=this._zoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
   _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.start||d.end); return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
   _fmtDShort(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m)return String(iso); return m[3]+" "+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+" '"+m[1].slice(2); }
   /* ── Look ahead 表: 各区(EB/NB/MA)各活动 目标%(累计计划到今月)/完成日期 vs 实际%(done/total) ── */
@@ -1105,22 +1105,29 @@ class Component extends DCLogic {
       this.DATA.order.forEach(lv=>((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).forEach(z=>{ if((z.cat||'NB')!==cat)return; const zmk=z.mk||z.lid;
         (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{ const tot=this.actTotal(lv,zmk,a.id,a.total); let done=0,ptd=0;
           for(let i=0;i<AM.length;i++){ const d=this.actDoneMonth(lv,zmk,a.id,AM[i]); if(d)done+=(+d||0); if(i<=asOfIdx){const p=this.actPlan(lv,zmk,a.id,AM[i]); if(p)ptd+=(+p||0);} }
-          if((tot==null||tot<=0)&&done<=0)return;
-          const key=lv+''+a.id; const o=acts[key]=acts[key]||{lv,label:a.label,unit:a.unit||'',total:0,done:0,ptd:0,end:null};
-          o.total+=(tot||0); o.done+=done; o.ptd+=ptd;
+          const mp=(+this.actPlan(lv,zmk,a.id,curL)||0), md=(+this.actDoneMonth(lv,zmk,a.id,curL)||0);
+          if((tot==null||tot<=0)&&done<=0&&mp<=0&&md<=0)return;
+          const key=lv+''+a.id; const o=acts[key]=acts[key]||{lv,label:a.label,unit:a.unit||'',total:0,done:0,ptd:0,mp:0,md:0,end:null};
+          o.total+=(tot||0); o.done+=done; o.ptd+=ptd; o.mp+=mp; o.md+=md;
           const dd=(this._actDate||{})[lv+'||'+zmk+'||'+a.id]; if(dd&&dd.end&&(!o.end||dd.end>o.end))o.end=dd.end; }); }));
       const lvOrder=this.DATA.order;
-      const rows=Object.keys(acts).map(k=>{const o=acts[k];return {lv:o.lv,label:o.lv+' · '+o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),end:o.end};}).filter(r=>r.total>0).sort((a,b)=>(lvOrder.indexOf(a.lv)-lvOrder.indexOf(b.lv))||a.label.localeCompare(b.label));
+      const rows=Object.keys(acts).map(k=>{const o=acts[k];return {lv:o.lv,label:o.lv+' · '+o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),mplan:Math.round(o.mp),mdone:Math.round(o.md),mpct:o.mp>0?Math.min(100,Math.round(o.md/o.mp*100)):(o.md>0?100:0),end:o.end};}).filter(r=>this._laMonth?(r.mplan>0||r.mdone>0):r.total>0).sort((a,b)=>(lvOrder.indexOf(a.lv)-lvOrder.indexOf(b.lv))||a.label.localeCompare(b.label));
       if(rows.length)out.push({cat,label,rows}); });
     return out; }
-  openLookAhead(){ const data=this._lookAheadData(); const AC={EB:'#c98a3a',NB:'#c85a86',MA:'#3e7cc4'};
+  openLookAhead(){ const data=this._lookAheadData(); const AC={EB:'#c98a3a',NB:'#c85a86',MA:'#3e7cc4'}; const mo=!!this._laMonth; const curL=this.actCurLabel();
     const sect=data.map(g=>{ const col=AC[g.cat]||'#7a1f2b';
-      const rows=g.rows.map(r=>`<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6;color:#1a1a1a;font-weight:700">${r.target}%${r.end?`<div style="font-size:10px;color:#4a6a1a;font-weight:600">(complete by ${this._fmtDShort(r.end)})</div>`:''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0;color:#1a1a1a"><b>${r.actual}%</b><div style="font-size:10px;color:#2f7d4a;font-weight:600">(${r.done}/${r.total}${r.unit?' '+this.esc(r.unit):''})</div></td></tr>`).join('');
-      return `<div style="margin-bottom:22px"><div style="font-size:14px;font-weight:800;color:${col};margin-bottom:6px">${g.label} (${g.cat})</div><table style="width:100%;border-collapse:separate;border-spacing:3px;font-size:12.5px"><thead><tr><th style="padding:8px 12px;background:${col};color:#fff;text-align:left;border-radius:4px">Activity</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">Target · plan-to-date</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">Actual</th></tr></thead><tbody>${rows}</tbody></table></div>`; }).join('')||'<div style="padding:30px;text-align:center;color:var(--faint)">还没有可汇总的数据。</div>';
+      const rows=g.rows.map(r=> mo
+        ? `<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6;color:#1a1a1a;font-weight:700">${r.mplan}${r.unit?' '+this.esc(r.unit):''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0;color:#1a1a1a"><b>${r.mdone}${r.unit?' '+this.esc(r.unit):''}</b><div style="font-size:10px;color:#2f7d4a;font-weight:600">(${r.mpct}% of plan)</div></td></tr>`
+        : `<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6;color:#1a1a1a;font-weight:700">${r.target}%${r.end?`<div style="font-size:10px;color:#4a6a1a;font-weight:600">(complete by ${this._fmtDShort(r.end)})</div>`:''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0;color:#1a1a1a"><b>${r.actual}%</b><div style="font-size:10px;color:#2f7d4a;font-weight:600">(${r.done}/${r.total}${r.unit?' '+this.esc(r.unit):''})</div></td></tr>`).join('');
+      const th2=mo?`Planned · ${this.esc(curL)}`:'Target · plan-to-date'; const th3=mo?`Done · ${this.esc(curL)}`:'Actual';
+      return `<div style="margin-bottom:22px"><div style="font-size:14px;font-weight:800;color:${col};margin-bottom:6px">${g.label} (${g.cat})</div><table style="width:100%;border-collapse:separate;border-spacing:3px;font-size:12.5px"><thead><tr><th style="padding:8px 12px;background:${col};color:#fff;text-align:left;border-radius:4px">Activity</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">${th2}</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">${th3}</th></tr></thead><tbody>${rows}</tbody></table></div>`; }).join('')||`<div style="padding:30px;text-align:center;color:var(--faint)">${mo?'本月('+this.esc(curL)+')还没有计划/完成数据。':'还没有可汇总的数据。'}</div>`;
     let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
     ov.style.cssText='position:fixed;inset:0;z-index:210;background:var(--bg);overflow:auto;padding:22px 26px 60px';
-    ov.innerHTML=`<div style="max-width:960px;margin:0 auto"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><div style="font-size:22px;font-weight:800;color:#7a1f2b">Look ahead</div><div style="flex:1"></div><button class="hbtn" id="laClose">Close ✕</button></div><div style="font-size:12px;color:var(--dim);margin-bottom:18px">各区各活动 · Target = 到本月为止累计计划% + 计划完成日 · Actual = 实际完成 done/total · as of ${this.esc(this.actCurLabel())}</div>${sect}</div>`;
-    ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=()=>{ov.style.display='none';}; }
+    const seg=`<div class="seg" id="laSeg" style="margin:0"><button data-m="cum" class="${mo?'':'on'}">Cumulative</button><button data-m="mo" class="${mo?'on':''}">This month</button></div>`;
+    const sub=mo?`各区各活动 · 只看本月(${this.esc(curL)})· Planned = 本月计划量 · Done = 本月实际完成量(% of plan)`:`各区各活动 · Target = 到本月为止累计计划% + 计划完成日 · Actual = 实际完成 done/total · as of ${this.esc(curL)}`;
+    ov.innerHTML=`<div style="max-width:960px;margin:0 auto"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><div style="font-size:22px;font-weight:800;color:#7a1f2b">Look ahead</div>${seg}<div style="flex:1"></div><button class="hbtn" id="laClose">Close ✕</button></div><div style="font-size:12px;color:var(--dim);margin-bottom:18px">${sub}</div>${sect}</div>`;
+    ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=()=>{ov.style.display='none';};
+    ov.querySelectorAll('#laSeg button').forEach(b=>b.onclick=()=>{ this._laMonth=(b.dataset.m==='mo'); this.openLookAhead(); }); }
   zoneFill(z){
     if(this.colorMode==='castdate') return this._zoneCastColor(z);
     if(this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); return this.PLAN_COLORS()[st.state]||'#ffffff'; }
@@ -1152,7 +1159,7 @@ class Component extends DCLogic {
       let op=vis?(this.colorMode==='area'?0.5:0.72):0.05;
       let planst='';
       if(vis&&this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); op=st.colored?0.62:0.92; }
-      if(vis&&this.colorMode==='castdate'){ const _ci=this._zoneCastInfo(this.curLevel,z); if(_ci.done)op=0.5; }   /* 浇筑完成的板: 半透明黑, 跟按月上色的板区分 */
+      if(vis&&this.colorMode==='castdate'){ if(this._castLayer==='col'){op=0.28;} else {const _ci=this._zoneCastInfo(this.curLevel,z); if(_ci.done)op=0.5;} }   /* 浇筑完成的板: 半透明黑, 跟按月上色的板区分 */
       const _maL1=(this.curLevel==='L1'&&z.cat==='MA');   // L1 Marine 父区(ZC): ZC 层关只留边界线; 开则保持正常蓝色填充
       if(_maL1&&!this.showSubZC)op=0;
       s+=`<polygon class="zone${vis?'':' dim'}${crit}${planst}" data-i="${i}" points="${pts}" fill="${this.zoneFill(z)}" fill-opacity="${op}"/>`;
@@ -1215,7 +1222,7 @@ class Component extends DCLogic {
       const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,_pm);   /* 延误: 标签变红粗边(替代原红点) */
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
       s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}${_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
-      if(this.colorMode==='castdate'||this.showDates){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _lc=(this.colorMode==='castdate'&&_ci.done)?'#ffffff':(_ci.date?'#111111':'#c0392b'); s+=`<text class="zname" style="font-size:${(fs*0.62).toFixed(0)}px;font-weight:800;fill:${_lc};stroke:var(--stage);stroke-width:400px" x="${cx.toFixed(0)}" y="${(cy+fs*0.62).toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* 浇筑日期/Completed/TBA — castdate 或 Dates 开关 */
+      if((this.colorMode==='castdate'&&this._castLayer!=='col')||this.showDates){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _lc=(this.colorMode==='castdate'&&_ci.done)?'#ffffff':(_ci.date?'#111111':'#c0392b'); s+=`<text class="zname" style="font-size:${(fs*0.62).toFixed(0)}px;font-weight:800;fill:${_lc};stroke:var(--stage);stroke-width:400px" x="${cx.toFixed(0)}" y="${(cy+fs*0.62).toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* 浇筑日期/Completed/TBA — castdate 或 Dates 开关 */
       if(this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}   /* 角标: 填了 done 却缺总量/计划的区 */
       /* 开工标记改为标签变橘(见上方 zstart), 不再画橘点 */
       /* 延误标记改为标签变红(见上方 zdelay), 不再画红点 */
@@ -1244,7 +1251,7 @@ class Component extends DCLogic {
         const sy=H-c.y;
         const zz=zoneByLabel[c.zone];
         const st=zz?this.elemStatus(this.ekey(this.curLevel,zz,'col',c.id)):'todo';
-        const fill=this.colorMode==='castdate'?(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3')):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=完成黑,其余按 Column 活动月上色 */
+        const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'))):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=完成黑,其余按 Column 活动月上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=_uT||_crit;
@@ -2611,6 +2618,12 @@ class Component extends DCLogic {
     const seg=document.createElement('div');seg.className='modeseg';
     modes.forEach(([k,lab,dot])=>{const btn=document.createElement('button');btn.className=k===this.colorMode?'on':'';btn.innerHTML=`<span class="dt" style="background:${dot}"></span>${lab}`;btn.addEventListener('click',()=>{this.colorMode=k;this.buildMetrics();this.render();});seg.appendChild(btn);});
     mc.appendChild(seg);
+    if(this.colorMode==='castdate'){ if(!this._castLayer)this._castLayer='slab';
+      const dvc=document.createElement('span');dvc.className='divv';mc.appendChild(dvc);
+      mc.appendChild(mkLbl('Cast:'));
+      const cseg=document.createElement('div');cseg.className='modeseg';
+      [['slab','🗓 Slabs'],['col','⬤ Columns']].forEach(([k,lab])=>{const b=document.createElement('button');b.className=k===this._castLayer?'on':'';b.innerHTML=lab;b.addEventListener('click',()=>{this._castLayer=k;this.buildMetrics();this.render();});cseg.appendChild(b);});
+      mc.appendChild(cseg); }
     const dv2=document.createElement('span');dv2.className='divv';mc.appendChild(dv2);
     mc.appendChild(mkLbl('Overlays:'));
     const mkToggle=(on,inner,fn)=>{const c=document.createElement('div');c.className='tchip '+(on?'on':'off');c.innerHTML=inner;c.addEventListener('click',fn);mc.appendChild(c);};
