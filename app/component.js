@@ -1087,7 +1087,41 @@ class Component extends DCLogic {
   }
   _zoneCum(lv,z){const zmk=z.mk||z.lid;let done=0,plan=0;this._actMeta().forEach(a=>{this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,a.id,m);if(d)done+=d;const pl=this.actPlan(lv,zmk,a.id,m);if(pl)plan+=pl;});});return {done,plan};}
   zoneRollIn(lv,z,m){const zmk=z.mk||z.lid;const mi=this.ACT_MONTHS.indexOf(m);if(mi<=0)return false;return this._actMeta().some(a=>{if(this.actHidden(lv,zmk,a.id))return false;const c=this.actCarry(lv,zmk,a.id,mi);return c&&c.carryIn>0;});}
+  /* ── Cast date/month 展示模式 ── */
+  _castPal(){ return {"Before Apr'26":"#6b6b6b","Apr'26":"#1f7a4d","May'26":"#3aa06a","Jun'26":"#6cc39a","Jul'26":"#3a72d9","Aug'26":"#7c5cd6","Sep'26":"#e0912b","Oct'26":"#b5470f","Nov'26":"#37b6c9","Dec'26":"#2f4fd0","Jan'27":"#1f6b5a","Feb'27":"#8a6d3b","Mar'27":"#c04a86","Apr'27":"#7a8194","May'27":"#c0392b"}; }
+  _dateToActMonth(iso){ if(!iso)return null; const m=String(iso).match(/^(\d{4})-(\d{2})/); if(!m)return null; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+"'"+m[1].slice(2); }
+  _actDateOf(lv,zmk,aid){ return (this._actDate||{})[lv+'||'+zmk+'||'+aid]||{}; }
+  _actCumDone(lv,zmk,aid){ let s=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m);if(d)s+=d;}); return s; }
+  _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; let aid='slab'; ['slab','slab_top','slab_pile'].some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
+    const d=this._actDateOf(lv,zmk,aid); const tot=this.actTotal(lv,zmk,aid,null); const done=(tot!=null&&tot>0&&this._actCumDone(lv,zmk,aid)>=tot);
+    const dt=d.end||d.start||null; return {aid,done,date:dt,month:this._dateToActMonth(dt)}; }
+  _zoneCastColor(z){ const info=this._zoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
+  _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.start||d.end); return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
+  _fmtDShort(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m)return String(iso); return m[3]+" "+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+" '"+m[1].slice(2); }
+  /* ── Look ahead 表: 各区(EB/NB/MA)各活动 目标%(累计计划到今月)/完成日期 vs 实际%(done/total) ── */
+  _lookAheadData(){ const AM=this.ACT_MONTHS, curL=this.actCurLabel(), asOfIdx=Math.max(0,AM.indexOf(curL));
+    const cats=[['EB','Existing Basement'],['NB','New Basement'],['MA','Marine']]; const out=[];
+    cats.forEach(([cat,label])=>{ const acts={};
+      this.DATA.order.forEach(lv=>((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).forEach(z=>{ if((z.cat||'NB')!==cat)return; const zmk=z.mk||z.lid;
+        (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{ const tot=this.actTotal(lv,zmk,a.id,a.total); let done=0,ptd=0;
+          for(let i=0;i<AM.length;i++){ const d=this.actDoneMonth(lv,zmk,a.id,AM[i]); if(d)done+=(+d||0); if(i<=asOfIdx){const p=this.actPlan(lv,zmk,a.id,AM[i]); if(p)ptd+=(+p||0);} }
+          if((tot==null||tot<=0)&&done<=0)return;
+          const o=acts[a.id]=acts[a.id]||{label:a.label,unit:a.unit||'',total:0,done:0,ptd:0,end:null};
+          o.total+=(tot||0); o.done+=done; o.ptd+=ptd;
+          const dd=(this._actDate||{})[lv+'||'+zmk+'||'+a.id]; if(dd&&dd.end&&(!o.end||dd.end>o.end))o.end=dd.end; }); }));
+      const rows=Object.keys(acts).map(aid=>{const o=acts[aid];return {label:o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),end:o.end};}).filter(r=>r.total>0);
+      if(rows.length)out.push({cat,label,rows}); });
+    return out; }
+  openLookAhead(){ const data=this._lookAheadData(); const AC={EB:'#c98a3a',NB:'#c85a86',MA:'#3e7cc4'};
+    const sect=data.map(g=>{ const col=AC[g.cat]||'#7a1f2b';
+      const rows=g.rows.map(r=>`<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6">${r.target}%${r.end?`<div style="font-size:10px;color:#8a5">(complete by ${this._fmtDShort(r.end)})</div>`:''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0"><b>${r.actual}%</b><div style="font-size:10px;color:#7d6">(${r.done}/${r.total}${r.unit?' '+this.esc(r.unit):''})</div></td></tr>`).join('');
+      return `<div style="margin-bottom:22px"><div style="font-size:14px;font-weight:800;color:${col};margin-bottom:6px">${g.label} (${g.cat})</div><table style="width:100%;border-collapse:separate;border-spacing:3px;font-size:12.5px"><thead><tr><th style="padding:8px 12px;background:${col};color:#fff;text-align:left;border-radius:4px">Activity</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">Target · plan-to-date</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">Actual</th></tr></thead><tbody>${rows}</tbody></table></div>`; }).join('')||'<div style="padding:30px;text-align:center;color:var(--faint)">还没有可汇总的数据。</div>';
+    let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
+    ov.style.cssText='position:fixed;inset:0;z-index:210;background:var(--bg);overflow:auto;padding:22px 26px 60px';
+    ov.innerHTML=`<div style="max-width:960px;margin:0 auto"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><div style="font-size:22px;font-weight:800;color:#7a1f2b">Look ahead</div><div style="flex:1"></div><button class="hbtn" id="laClose">Close ✕</button></div><div style="font-size:12px;color:var(--dim);margin-bottom:18px">各区各活动 · Target = 到本月为止累计计划% + 计划完成日 · Actual = 实际完成 done/total · as of ${this.esc(this.actCurLabel())}</div>${sect}</div>`;
+    ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=()=>{ov.style.display='none';}; }
   zoneFill(z){
+    if(this.colorMode==='castdate') return this._zoneCastColor(z);
     if(this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); return this.PLAN_COLORS()[st.state]||'#ffffff'; }
     if(this.colorMode==='area') return (this.CAT[z.cat]||this.CAT.NB).c;
     if(this.colorMode==='progress') return this.progColor(this.zoneDisplayPct(z).pct);
@@ -1179,6 +1213,7 @@ class Component extends DCLogic {
       const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,_pm);   /* 延误: 标签变红粗边(替代原红点) */
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
       s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}${_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
+      if(this.colorMode==='castdate'){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _lc=_ci.done?'#ffffff':(_ci.date?'#111111':'#c0392b'); s+=`<text class="zname" style="font-size:${(fs*0.66).toFixed(0)}px;font-weight:800;fill:${_lc};stroke:none" x="${cx.toFixed(0)}" y="${(cy+fs*0.62).toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* castdate: 标浇筑日期/Completed/TBA */
       if(this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}   /* 角标: 填了 done 却缺总量/计划的区 */
       /* 开工标记改为标签变橘(见上方 zstart), 不再画橘点 */
       /* 延误标记改为标签变红(见上方 zdelay), 不再画红点 */
@@ -1207,7 +1242,7 @@ class Component extends DCLogic {
         const sy=H-c.y;
         const zz=zoneByLabel[c.zone];
         const st=zz?this.elemStatus(this.ekey(this.curLevel,zz,'col',c.id)):'todo';
-        const fill=st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3';   /* 完成=黑(绿/蓝配红边难分辨) */
+        const fill=this.colorMode==='castdate'?(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=按 Column 活动月上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=_uT||_crit;
@@ -1489,7 +1524,14 @@ class Component extends DCLogic {
 
   drawLegend(){
     const lg=this.root.querySelector('#legend');let s='';
-    if(this.colorMode==='area'){
+    if(this.colorMode==='castdate'){
+      s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Cast date / month</div>';
+      s+='<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Slabs by cast date · columns by month · from activity DATES</div>';
+      const _pal=this._castPal();
+      this.ACT_MONTHS.forEach(m=>{ if(m==="Before Apr'26")return; s+=`<div class="lr"><span class="sw" style="background:${_pal[m]}"></span>${m}</div>`; });
+      s+=`<div class="lr"><span class="sw" style="background:#111111"></span>Completed</div>`;
+      s+=`<div class="lr"><span class="sw" style="background:#efe7e7;box-shadow:inset 0 0 0 1px #ccc"></span>TBA (no date)</div>`;
+    } else if(this.colorMode==='area'){
       s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Construction area</div>';
       Object.values(this.CAT).forEach(v=>s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(v.c,0.5)}"></span>${v.label}</div>`);
     } else if(this.colorMode==='progress'){
@@ -2608,6 +2650,8 @@ class Component extends DCLogic {
     this.root.querySelector('#openTable').addEventListener('click',()=>this.openTable());
     {const _m28=this.root.querySelector('#openM28');if(_m28)_m28.addEventListener('click',()=>window.open('m28-dashboard.html','_blank'));}
     {const _mpw=this.root.querySelector('#openManpower');if(_mpw)_mpw.addEventListener('click',()=>this.openManpower());}
+    {const _cv=this.root.querySelector('#openCastView');if(_cv)_cv.addEventListener('click',()=>{this.colorMode=(this.colorMode==='castdate')?'area':'castdate';this.buildMetrics();this.render();});}
+    {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>this.openLookAhead());}
     const _zfi=this.root.querySelector('#zoneFind')||document.getElementById('zoneFind');const _zfr=document.getElementById('zoneFindRes');if(_zfi&&_zfr){const _run=()=>{const hits=this._zxSearch(_zfi.value);if(!hits.length){_zfr.style.display='none';return;}_zfr.innerHTML=hits.map((h,ix)=>`<div class="zfrow" data-ix="${ix}" style="padding:7px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px">`+`<span style="font-size:9px;font-weight:800;color:#fff;background:${({EB:'#e8590c',NB:'#c2255c',MA:'#1c7ed6'})[h.area]||'#888'};padding:1px 6px;border-radius:20px">${h.lv}</span>`+`<b style="color:var(--txt)">${this.esc(h.label)}</b>${h.via?`<span style="color:var(--dim);font-size:10px">← ${this.esc(h.via)}</span>`:''}</div>`).join('');_zfr.style.display='block';this._zfHits=hits;};_zfi.addEventListener('input',_run);_zfi.addEventListener('focus',_run);_zfi.addEventListener('keydown',e=>{if(e.key==='Enter'){const h=(this._zfHits||[])[0];if(h)this.gotoZone(h.lv,h.mk);}else if(e.key==='Escape'){_zfr.style.display='none';_zfi.blur();}});_zfr.addEventListener('click',e=>{const r=e.target.closest('.zfrow');if(!r)return;const h=(this._zfHits||[])[+r.dataset.ix];if(h)this.gotoZone(h.lv,h.mk);});_zfr.addEventListener('mouseover',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='var(--panel2)';});_zfr.addEventListener('mouseout',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='';});document.addEventListener('click',e=>{if(!e.target.closest('#zoneFindWrap'))_zfr.style.display='none';});}
     const _zlc=document.getElementById('zlookupClose');if(_zlc)_zlc.addEventListener('click',()=>{const m=document.getElementById('zlookupModal');if(m)m.style.display='none';});
     const _zlm=document.getElementById('zlookupModal');if(_zlm)_zlm.addEventListener('click',e=>{if(e.target===_zlm)_zlm.style.display='none';});
