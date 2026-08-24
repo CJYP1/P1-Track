@@ -1106,15 +1106,16 @@ class Component extends DCLogic {
         (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{ const tot=this.actTotal(lv,zmk,a.id,a.total); let done=0,ptd=0;
           for(let i=0;i<AM.length;i++){ const d=this.actDoneMonth(lv,zmk,a.id,AM[i]); if(d)done+=(+d||0); if(i<=asOfIdx){const p=this.actPlan(lv,zmk,a.id,AM[i]); if(p)ptd+=(+p||0);} }
           if((tot==null||tot<=0)&&done<=0)return;
-          const o=acts[a.id]=acts[a.id]||{label:a.label,unit:a.unit||'',total:0,done:0,ptd:0,end:null};
+          const key=lv+''+a.id; const o=acts[key]=acts[key]||{lv,label:a.label,unit:a.unit||'',total:0,done:0,ptd:0,end:null};
           o.total+=(tot||0); o.done+=done; o.ptd+=ptd;
           const dd=(this._actDate||{})[lv+'||'+zmk+'||'+a.id]; if(dd&&dd.end&&(!o.end||dd.end>o.end))o.end=dd.end; }); }));
-      const rows=Object.keys(acts).map(aid=>{const o=acts[aid];return {label:o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),end:o.end};}).filter(r=>r.total>0);
+      const lvOrder=this.DATA.order;
+      const rows=Object.keys(acts).map(k=>{const o=acts[k];return {lv:o.lv,label:o.lv+' · '+o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),end:o.end};}).filter(r=>r.total>0).sort((a,b)=>(lvOrder.indexOf(a.lv)-lvOrder.indexOf(b.lv))||a.label.localeCompare(b.label));
       if(rows.length)out.push({cat,label,rows}); });
     return out; }
   openLookAhead(){ const data=this._lookAheadData(); const AC={EB:'#c98a3a',NB:'#c85a86',MA:'#3e7cc4'};
     const sect=data.map(g=>{ const col=AC[g.cat]||'#7a1f2b';
-      const rows=g.rows.map(r=>`<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6">${r.target}%${r.end?`<div style="font-size:10px;color:#8a5">(complete by ${this._fmtDShort(r.end)})</div>`:''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0"><b>${r.actual}%</b><div style="font-size:10px;color:#7d6">(${r.done}/${r.total}${r.unit?' '+this.esc(r.unit):''})</div></td></tr>`).join('');
+      const rows=g.rows.map(r=>`<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6;color:#1a1a1a;font-weight:700">${r.target}%${r.end?`<div style="font-size:10px;color:#4a6a1a;font-weight:600">(complete by ${this._fmtDShort(r.end)})</div>`:''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0;color:#1a1a1a"><b>${r.actual}%</b><div style="font-size:10px;color:#2f7d4a;font-weight:600">(${r.done}/${r.total}${r.unit?' '+this.esc(r.unit):''})</div></td></tr>`).join('');
       return `<div style="margin-bottom:22px"><div style="font-size:14px;font-weight:800;color:${col};margin-bottom:6px">${g.label} (${g.cat})</div><table style="width:100%;border-collapse:separate;border-spacing:3px;font-size:12.5px"><thead><tr><th style="padding:8px 12px;background:${col};color:#fff;text-align:left;border-radius:4px">Activity</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">Target · plan-to-date</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">Actual</th></tr></thead><tbody>${rows}</tbody></table></div>`; }).join('')||'<div style="padding:30px;text-align:center;color:var(--faint)">还没有可汇总的数据。</div>';
     let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
     ov.style.cssText='position:fixed;inset:0;z-index:210;background:var(--bg);overflow:auto;padding:22px 26px 60px';
@@ -1151,6 +1152,7 @@ class Component extends DCLogic {
       let op=vis?(this.colorMode==='area'?0.5:0.72):0.05;
       let planst='';
       if(vis&&this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); op=st.colored?0.62:0.92; }
+      if(vis&&this.colorMode==='castdate'){ const _ci=this._zoneCastInfo(this.curLevel,z); if(_ci.done)op=0.5; }   /* 浇筑完成的板: 半透明黑, 跟按月上色的板区分 */
       const _maL1=(this.curLevel==='L1'&&z.cat==='MA');   // L1 Marine 父区(ZC): ZC 层关只留边界线; 开则保持正常蓝色填充
       if(_maL1&&!this.showSubZC)op=0;
       s+=`<polygon class="zone${vis?'':' dim'}${crit}${planst}" data-i="${i}" points="${pts}" fill="${this.zoneFill(z)}" fill-opacity="${op}"/>`;
@@ -1242,7 +1244,7 @@ class Component extends DCLogic {
         const sy=H-c.y;
         const zz=zoneByLabel[c.zone];
         const st=zz?this.elemStatus(this.ekey(this.curLevel,zz,'col',c.id)):'todo';
-        const fill=this.colorMode==='castdate'?(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=按 Column 活动月上色 */
+        const fill=this.colorMode==='castdate'?(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3')):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=完成黑,其余按 Column 活动月上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=_uT||_crit;
