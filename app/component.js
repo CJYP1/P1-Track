@@ -1207,7 +1207,7 @@ class Component extends DCLogic {
         const sy=H-c.y;
         const zz=zoneByLabel[c.zone];
         const st=zz?this.elemStatus(this.ekey(this.curLevel,zz,'col',c.id)):'todo';
-        const fill=st==='done'?this.cssvar('--done'):st==='wip'?this.cssvar('--wip'):'#8a93a3';
+        const fill=st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3';   /* 完成=黑(绿/蓝配红边难分辨) */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=_uT||_crit;
