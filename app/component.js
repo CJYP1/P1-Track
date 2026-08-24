@@ -665,7 +665,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn');
-    const adminOnly=['#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn'].map(s=>this.root.querySelector(s)).filter(Boolean);
+    const adminOnly=['#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower','#openCastView','#openLookAhead'].map(s=>this.root.querySelector(s)).filter(Boolean);
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
     try{if(this.DATA&&this.root.querySelector('#rail'))this.buildRail();}catch(_e){}
@@ -1213,7 +1213,7 @@ class Component extends DCLogic {
       const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,_pm);   /* 延误: 标签变红粗边(替代原红点) */
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
       s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}${_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
-      if(this.colorMode==='castdate'){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _lc=_ci.done?'#ffffff':(_ci.date?'#111111':'#c0392b'); s+=`<text class="zname" style="font-size:${(fs*0.66).toFixed(0)}px;font-weight:800;fill:${_lc};stroke:none" x="${cx.toFixed(0)}" y="${(cy+fs*0.62).toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* castdate: 标浇筑日期/Completed/TBA */
+      if(this.colorMode==='castdate'||this.showDates){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _lc=(this.colorMode==='castdate'&&_ci.done)?'#ffffff':(_ci.date?'#111111':'#c0392b'); s+=`<text class="zname" style="font-size:${(fs*0.62).toFixed(0)}px;font-weight:800;fill:${_lc};stroke:var(--stage);stroke-width:400px" x="${cx.toFixed(0)}" y="${(cy+fs*0.62).toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* 浇筑日期/Completed/TBA — castdate 或 Dates 开关 */
       if(this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}   /* 角标: 填了 done 却缺总量/计划的区 */
       /* 开工标记改为标签变橘(见上方 zstart), 不再画橘点 */
       /* 延误标记改为标签变红(见上方 zdelay), 不再画红点 */
@@ -2615,6 +2615,7 @@ class Component extends DCLogic {
     if(this.rwsIsAdmin())mkToggle(this.showSeq,`<span style="width:14px;height:14px;border-radius:50%;background:var(--dim);color:#fff;font-size:8px;line-height:14px;text-align:center;font-weight:800">#</span>Pour sequence`,()=>{this.showSeq=!this.showSeq;this.buildMetrics();this.render();});
     mkToggle(this.showCrit,`<span style="width:9px;height:9px;border-radius:50%;background:var(--crit)"></span>Critical path`,()=>{this.showCrit=!this.showCrit;this.buildMetrics();this.render();});
     mkToggle(this.showAreaBounds,`<span style="width:16px;border-top:3px solid var(--dim);display:inline-block"></span>Area boundaries`,()=>{this.showAreaBounds=!this.showAreaBounds;this.buildMetrics();this.render();});
+    if(this.rwsIsAdmin())mkToggle(this.showDates,`<span style="font-size:12px">🕓</span>Dates`,()=>{this.showDates=!this.showDates;this.buildMetrics();this.render();});   /* 楼层上显示活动浇筑日期 */
     Object.keys(this.OVL).forEach(k=>{const o=this.OVL[k];mkToggle(this.showOvl[k],`<span class="dash" style="color:${o.c}"></span>${o.label}`,()=>{this.showOvl[k]=!this.showOvl[k];this._ovlByLevel=this._ovlByLevel||{};this._ovlByLevel[this.curLevel]={...this.showOvl};this.buildMetrics();this.render();});});
     if(this.DATA.beamlines && this.DATA.beamlines[this.curLevel])
       mkToggle(this.showBeams,`<span style="width:16px;border-top:2px solid var(--beam);display:inline-block"></span>Steel main beams`,()=>{this.showBeams=!this.showBeams;this.buildMetrics();this.render();});
