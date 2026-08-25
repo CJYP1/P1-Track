@@ -1235,7 +1235,8 @@ class Component extends DCLogic {
       const _pm=this.planMonth();
       const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,_pm);   /* 延误: 标签变红粗边(替代原红点) */
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
-      s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}${_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
+      if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}${_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;   /* Cast 视图可用 Names 开关隐藏区名 */
+      if(this.colorMode==='castdate'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _lc=_ci.done?'#ffffff':(_ci.date?'#111111':'#c0392b'); const _ny=(this.showCastNames===false)?(cy+fs*0.18):(cy+fs*0.62); s+=`<text class="zname" style="font-size:${(fs*0.62).toFixed(0)}px;font-weight:800;fill:${_lc};stroke:var(--stage);stroke-width:400px" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* Cast 视图每块板显示浇筑日期/Completed/TBA — Dates 开关 */
       if(this.showDates&&this.colorMode!=='castdate'){ const _ci=this._zoneCastInfo(this.curLevel,z); const _fz=(fs*0.55).toFixed(0);
         if(_ci.start||_ci.end){ const _s=_ci.start?this._fmtDShort(_ci.start):'—', _e=_ci.end?this._fmtDShort(_ci.end):'—';
             s+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#1b7a3e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*0.58).toFixed(0)}">▶ ${this.esc(_s)}</text>`;
@@ -2643,7 +2644,13 @@ class Component extends DCLogic {
       mc.appendChild(mkLbl('Cast:'));
       const cseg=document.createElement('div');cseg.className='modeseg';
       [['slab','🗓 Slabs'],['col','⬤ Columns']].forEach(([k,lab])=>{const b=document.createElement('button');b.className=k===this._castLayer?'on':'';b.innerHTML=lab;b.addEventListener('click',()=>{this._castLayer=k;this.buildMetrics();this.render();});cseg.appendChild(b);});
-      mc.appendChild(cseg); }
+      mc.appendChild(cseg);
+      mc.appendChild(mkLbl('Show:'));
+      const tseg=document.createElement('div');tseg.className='modeseg';
+      const mkT=(lab,on,fn)=>{const b=document.createElement('button');b.className=on?'on':'';b.innerHTML=lab;b.addEventListener('click',fn);tseg.appendChild(b);};
+      mkT('🕓 Dates',this.showCastDates!==false,()=>{this.showCastDates=!(this.showCastDates!==false);this.buildMetrics();this.render();});
+      mkT('🏷 Names',this.showCastNames!==false,()=>{this.showCastNames=!(this.showCastNames!==false);this.buildMetrics();this.render();});
+      mc.appendChild(tseg); }
     const dv2=document.createElement('span');dv2.className='divv';mc.appendChild(dv2);
     mc.appendChild(mkLbl('Overlays:'));
     const mkToggle=(on,inner,fn)=>{const c=document.createElement('div');c.className='tchip '+(on?'on':'off');c.innerHTML=inner;c.addEventListener('click',fn);mc.appendChild(c);};
