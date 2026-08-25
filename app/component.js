@@ -1277,6 +1277,7 @@ class Component extends DCLogic {
         const _red=_uT||_crit;
         _colHtml+=`<circle class="colmk${_uT?' colmk-t':''}" data-ci="${ci}"${_hid?' opacity="0.28" stroke-dasharray="500,400"':''} cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${fill}" stroke="${_red?'#c8102e':'#ffffff'}" stroke-width="${_uT?560:220}"/>`;
         _colHtml+=`<text class="collbl" ${_red?`style="fill:#c8102e"`:''}${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id.replace('WF-B2','').replace('MK-B2','MK-'))}</text>`;
+        if(this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false&&!_hid){ const _cd=this._actDateOf(this.curLevel,(zz?(zz.mk||zz.lid):''),'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); const _dl=(st==='done')?'Cast':(_mo||'TBA'); _colHtml+=`<text class="collbl" style="fill:#141414;font-weight:900;stroke:#fff;stroke-width:220px;paint-order:stroke" x="${c.x.toFixed(0)}" y="${(sy+3200).toFixed(0)}">${this.esc(_dl)}</text>`; }   /* Columns 模式: 每根柱下方标注浇筑月/Cast/TBA */
       });
     }
     const _realCol=(this.COLUMNS&&this.COLUMNS[this.curLevel])||[];
