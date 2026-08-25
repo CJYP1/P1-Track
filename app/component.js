@@ -1236,7 +1236,7 @@ class Component extends DCLogic {
       const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,_pm);   /* 延误: 标签变红粗边(替代原红点) */
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}${_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;   /* Cast 视图可用 Names 开关隐藏区名 */
-      if(this.colorMode==='castdate'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _lc=_ci.done?'#ffffff':(_ci.date?'#111111':'#c0392b'); const _ny=(this.showCastNames===false)?(cy+fs*0.18):(cy+fs*0.62); s+=`<text class="zname" style="font-size:${(fs*0.62).toFixed(0)}px;font-weight:800;fill:${_lc};stroke:var(--stage);stroke-width:400px" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* Cast 视图每块板显示浇筑日期/Completed/TBA — Dates 开关 */
+      if(this.colorMode==='castdate'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _ci=this._zoneCastInfo(this.curLevel,z); const _lbl=_ci.done?'Completed':(_ci.date?this._fmtDShort(_ci.date):'TBA'); const _hasDt=(_ci.done||_ci.date); const _lc=_hasDt?'#ffffff':'#ffe14d'; const _ny=(this.showCastNames===false)?(cy+fs*0.18):(cy+fs*0.62); s+=`<text class="zname" style="font-size:${(fs*0.66).toFixed(0)}px;font-weight:900;fill:${_lc};stroke:#111111;stroke-width:${(fs*0.09).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_lbl)}</text>`; }   /* Cast 视图每块板显示浇筑日期/Completed/TBA — 白字黑描边, 任何底色都看得见 */
       if(this.showDates&&this.colorMode!=='castdate'){ const _ci=this._zoneCastInfo(this.curLevel,z); const _fz=(fs*0.55).toFixed(0);
         if(_ci.start||_ci.end){ const _s=_ci.start?this._fmtDShort(_ci.start):'—', _e=_ci.end?this._fmtDShort(_ci.end):'—';
             s+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#1b7a3e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*0.58).toFixed(0)}">▶ ${this.esc(_s)}</text>`;
@@ -1262,7 +1262,7 @@ class Component extends DCLogic {
     const _colSeen=new Set();          /* 同一层按柱号去重: 每个柱号只画一次(去空格/忽略大小写), 彻底杜绝"两层字" */
     const _nrm=id=>String(id||'').trim().toUpperCase();
     let _colHtml='';   /* 柱子先攒起来, 等 Marine 子区画完再追加, 让柱子浮在最上层(名字可见/可点选) */
-    if(this.showColumns && this.COLUMNS && this.COLUMNS[this.curLevel]){
+    if(this.showColumns && this.COLUMNS && this.COLUMNS[this.curLevel] && !(this.colorMode==='castdate'&&this._castLayer==='slab')){   /* Cast 的 Slabs 模式: 只 track 板, 不画柱子(名字/点都不出现) */
       const zoneByLabel={};L.zones.forEach(z=>{zoneByLabel[z.label]=z;});
       this.COLUMNS[this.curLevel].forEach((c,ci)=>{
         const _nid=_nrm(c.id); if(_colSeen.has(_nid))return; _colSeen.add(_nid);
