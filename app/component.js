@@ -1622,7 +1622,9 @@ class Component extends DCLogic {
       const ld={EB:'solid',NB:'solid',MA:'solid'};
       Object.keys(this.BCOL).forEach(k=>{const cc=this.CAT[k];s+=`<div class="lr"><span style="width:18px;border-top:3px ${ld[k]||'solid'} ${this.BCOL[k]}"></span>${cc.label}</div>`;});
       s+=`<div class="lr"><span style="width:18px;border-top:3px solid var(--txt)"></span>Solid line = boundary between adjacent areas</div>`;}
-    lg.innerHTML=s;
+    const _col=!!this._legendCollapsed;
+    lg.innerHTML=`<div class="lg-hd" style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;font-weight:800;color:var(--txt);font-size:11px">${_col?'▸':'▾'} Legend</div>`+(_col?'':`<div style="margin-top:5px">${s}</div>`);
+    const _h=lg.querySelector('.lg-hd'); if(_h)_h.addEventListener('click',()=>{this._legendCollapsed=!this._legendCollapsed;this.drawLegend();});
   }
 
   setSummaryVis(){const sel=!!this.selKey;['#sideTitle','#kpis','#progroll'].forEach(id=>{const el=this.root.querySelector(id);if(el)el.style.display=sel?'none':'';});const a=this.root.querySelector('#areastrip');if(a){if(sel)a.style.display='none';else this.buildAreaBreak();}}
