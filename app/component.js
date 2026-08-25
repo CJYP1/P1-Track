@@ -867,7 +867,7 @@ class Component extends DCLogic {
   async rwsRenderAdmin(){
     const body=this.root.querySelector('#rwsAdminBody');
     body.innerHTML='<div class="empty">Loading…</div>';
-    const AL={EB:'Existing Basement',NB:'New Basement',MA:'Marine',CMT:'Comment (main + M28)',M28_OTHER:'M28 · L2/L3/L4/Ramp/TST',HIST:'History (snapshots)'};
+    const AL={EB:'Existing Basement',NB:'New Basement',MA:'Marine',RWS:'RWS · all Reports (view only)',CMT:'Comment (main + M28)',M28_OTHER:'M28 · L2/L3/L4/Ramp/TST',HIST:'History (snapshots)'};
     if(this._rwsAdminTab==='log'){
       try{
         const rows=await rwsAdminActivityLog(500);
@@ -901,7 +901,7 @@ class Component extends DCLogic {
     }
     try{
       const users=await rwsAdminListUsers();
-      const AREAS=[['EB','Existing Basement'],['NB','New Basement'],['MA','Marine'],['CMT','Comment (main map + M28)'],['M28_OTHER','M28 · L2/L3/L4 · Ramp · TST · Hoarding'],['HIST','🕓 History / 历史快照 (view snapshots)']];
+      const AREAS=[['EB','Existing Basement'],['NB','New Basement'],['MA','Marine'],['RWS','RWS · all Reports (view only)'],['CMT','Comment (main map + M28)'],['M28_OTHER','M28 · L2/L3/L4 · Ramp · TST · Hoarding'],['HIST','🕓 History / 历史快照 (view snapshots)']];
       body.innerHTML=`<div style="margin-bottom:14px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel2)">
         <div style="font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Add / update account</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -982,7 +982,7 @@ class Component extends DCLogic {
     return r.action||'';
   }
   rwsLogParts(r){
-    const AL={EB:'Existing Basement',NB:'New Basement',MA:'Marine',CMT:'Comment (main + M28)',M28_OTHER:'M28 · L2/L3/L4/Ramp/TST',HIST:'History (snapshots)'};
+    const AL={EB:'Existing Basement',NB:'New Basement',MA:'Marine',RWS:'RWS · all Reports (view only)',CMT:'Comment (main + M28)',M28_OTHER:'M28 · L2/L3/L4/Ramp/TST',HIST:'History (snapshots)'};
     if(!this._zoneLabel){ this._zoneLabel={}; this.DATA.order.forEach(lv=>this.DATA.levels[lv].zones.forEach(z=>{this._zoneLabel[lv+'||'+this.zid(z)]=z.label;})); }
     const k=r.target_key||''; const p=k.split('||');
     const zlabel=(lv,zmk)=>lv+' · '+((this._zoneLabel[lv+'||'+zmk]||this._zoneLabel[lv+'||_'+zmk])||zmk);
@@ -1149,7 +1149,7 @@ class Component extends DCLogic {
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}if(!any&&!this._actUsesElems(a.id,lv,zmk))return;
         const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:lv+' · '+a.label,levels:[lv],aid:a.id,unit:a.unit||''};}); }); });
     return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat),P=this._catchupPlan(r.levels,r.aid,cat),den=A.total||P.total;r.tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;return r;}).filter(r=>r.actual.total>0||r.actual.done>0||r.plan.total>0).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
-  /* NB/EB/MA 三份 Report: 普通账号按区域权限查看, admin 看全部 */
+  /* NB/EB/MA 三份 Report: 普通账号按区域权限查看; admin / RWS 看全部 */
   _reportDefs(){ return {
     NB:{label:'New Basement', title:'New Basement Zone Superstructure – L1 to L2', scope:'New Basement · L1–L2', rows:[
       {a:'L1 Columns',levels:['L1'],aid:'col',unit:'nos'},
@@ -1158,7 +1158,7 @@ class Component extends DCLogic {
       {a:'L2 Slab CIS',levels:['L2'],aid:'slab',filter:'cis',unit:'m²'} ]},
     EB:{label:'EB Report', title:'Existing Basement Superstructure', scope:'Existing Basement', date:'Live', rows:null},
     MA:{label:'MA Report', title:'Marine Superstructure', scope:'Marine', date:'Live', rows:null} }; }
-  _reportCats(){ const u=this._rwsUser; if(!u)return []; if(u.role==='admin')return ['NB','EB','MA']; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
+  _reportCats(){ const u=this._rwsUser; if(!u)return []; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; const who=String(u.username||u.display_name||'').trim().toUpperCase(); if(u.role==='admin'||a.indexOf('RWS')>=0||who==='RWS')return ['NB','EB','MA']; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
   openLookAhead(){
     const defs=this._reportDefs(); const cats=this._reportCats();
     let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
@@ -2905,7 +2905,7 @@ class Component extends DCLogic {
 
   /* ---------- lock file: persist all markers to a portable file & reload ---------- */
   async buildFullExport(){
-    const AL={EB:'Existing Basement',NB:'New Basement',MA:'Marine',CMT:'Comment (main + M28)',M28_OTHER:'M28 · L2/L3/L4/Ramp/TST',HIST:'History (snapshots)'};
+    const AL={EB:'Existing Basement',NB:'New Basement',MA:'Marine',RWS:'RWS · all Reports (view only)',CMT:'Comment (main + M28)',M28_OTHER:'M28 · L2/L3/L4/Ramp/TST',HIST:'History (snapshots)'};
     const zones=[];
     this.DATA.order.forEach(lv=>{const seen={};this.DATA.levels[lv].zones.forEach(z=>{const zid=this.zid(z);if(seen[zid])return;seen[zid]=1;const c=z.counts||{};const p=z._p||{};
       zones.push({level:lv,zone_mk:zid,label:z.label,area_code:z.cat||'NB',area:AL[z.cat||'NB'],critical:!!z.crit,
