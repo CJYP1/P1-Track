@@ -1117,20 +1117,31 @@ class Component extends DCLogic {
       const rows=Object.keys(acts).map(k=>{const o=acts[k];return {lv:o.lv,label:o.lv+' · '+o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),mplan:Math.round(o.mp),mdone:Math.round(o.md),mpct:o.mp>0?Math.min(100,Math.round(o.md/o.mp*100)):(o.md>0?100:0),end:o.end};}).filter(r=>this._laMonth?(r.mplan>0||r.mdone>0):r.total>0).sort((a,b)=>(lvOrder.indexOf(a.lv)-lvOrder.indexOf(b.lv))||a.label.localeCompare(b.label));
       if(rows.length)out.push({cat,label,rows}); });
     return out; }
-  openLookAhead(){ const data=this._lookAheadData(); const AC={EB:'#c98a3a',NB:'#c85a86',MA:'#3e7cc4'}; const mo=!!this._laMonth; const curL=this.actCurLabel();
-    const sect=data.map(g=>{ const col=AC[g.cat]||'#7a1f2b';
-      const rows=g.rows.map(r=> mo
-        ? `<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6;color:#1a1a1a;font-weight:700">${r.mplan}${r.unit?' '+this.esc(r.unit):''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0;color:#1a1a1a"><b>${r.mdone}${r.unit?' '+this.esc(r.unit):''}</b><div style="font-size:10px;color:#2f7d4a;font-weight:600">(${r.mpct}% of plan)</div></td></tr>`
-        : `<tr><td style="padding:9px 12px;font-weight:800;background:${col};color:#fff">${this.esc(r.label)}</td><td style="padding:9px 12px;text-align:center;background:#f7e3e6;color:#1a1a1a;font-weight:700">${r.target}%${r.end?`<div style="font-size:10px;color:#4a6a1a;font-weight:600">(complete by ${this._fmtDShort(r.end)})</div>`:''}</td><td style="padding:9px 12px;text-align:center;background:#fbeef0;color:#1a1a1a"><b>${r.actual}%</b><div style="font-size:10px;color:#2f7d4a;font-weight:600">(${r.done}/${r.total}${r.unit?' '+this.esc(r.unit):''})</div></td></tr>`).join('');
-      const th2=mo?`Planned · ${this.esc(curL)}`:'Target · plan-to-date'; const th3=mo?`Done · ${this.esc(curL)}`:'Actual';
-      return `<div style="margin-bottom:22px"><div style="font-size:14px;font-weight:800;color:${col};margin-bottom:6px">${g.label} (${g.cat})</div><table style="width:100%;border-collapse:separate;border-spacing:3px;font-size:12.5px"><thead><tr><th style="padding:8px 12px;background:${col};color:#fff;text-align:left;border-radius:4px">Activity</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">${th2}</th><th style="padding:8px 12px;background:${col};color:#fff;border-radius:4px">${th3}</th></tr></thead><tbody>${rows}</tbody></table></div>`; }).join('')||`<div style="padding:30px;text-align:center;color:var(--faint)">${mo?'本月('+this.esc(curL)+')还没有计划/完成数据。':'还没有可汇总的数据。'}</div>`;
+  _catchupActual(levels,aid){ let done=0,total=0; (levels||[]).forEach(lv=>{ const L=this.DATA.levels[lv]; if(!L)return; (L.zones||[]).forEach(z=>{ const zmk=z.mk||z.lid; const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid)); if(t)total+=(+t||0); this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:total>0?Math.min(100,Math.round(done/total*100)):0}; }
+  openLookAhead(){
+    const CU=[
+      {a:'L1 Columns',tgt:85,by:'17 Sep',levels:['L1'],aid:'col',count:true},
+      {a:'L1–L2 Corewall',tgt:65,by:'20 Sep',levels:['L1','L2'],aid:'ls',count:true},
+      {a:'L1–L2 Staircase',tgt:60,by:'30 Sep',levels:['L1','L2'],aid:'temp_stair',count:true},
+      {a:'L2 Beam (steel formwork)',tgt:68,by:'6 Oct',levels:['L2'],aid:'mbeam',count:true},
+      {a:'L2 Slab CIS',tgt:50,by:'21 Oct',levels:['L2'],aid:'slab',count:false},
+    ];
+    const fmtN=n=>{const r=Math.round(n*10)/10;return (r%1===0)?String(r):r.toFixed(1);};
+    const rows=CU.map(r=>{ const A=this._catchupActual(r.levels,r.aid); const actSub=r.count?`(${fmtN(A.done)}/${fmtN(A.total)} completed)`:'';
+      return `<tr>`
+        +`<td style="background:#6d1327;color:#fff;font-weight:800;padding:16px 14px;font-size:14px;vertical-align:middle;width:26%">${this.esc(r.a)}</td>`
+        +`<td style="background:#f4dbdf;color:#2b1114;text-align:center;padding:14px 12px;vertical-align:middle;width:37%"><div style="font-size:16px">${r.tgt}%</div><div style="font-size:12px;color:#6d3b40;margin-top:3px">(Complete by ${this.esc(r.by)})</div></td>`
+        +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:14px 12px;vertical-align:middle;width:37%"><div style="font-size:16px">${A.pct}%</div>${actSub?`<div style="font-size:12px;color:#6d3b40;margin-top:3px">${actSub}</div>`:''}</td>`
+        +`</tr>`; }).join('');
+    const table=`<div style="background:#efe9df;padding:6px;border-radius:4px;width:100%;max-width:760px"><table style="width:100%;border-collapse:separate;border-spacing:6px;font-family:'Segoe UI',Arial,sans-serif"><thead><tr>`
+      +`<th style="background:#6d1327;color:#fff;padding:16px 14px;font-size:14px;font-weight:800;text-align:center">Activity</th>`
+      +`<th style="background:#6d1327;color:#fff;padding:16px 14px;font-size:14px;font-weight:800;text-align:center;line-height:1.3">CJY’s Catch-Up<br>24 June 26</th>`
+      +`<th style="background:#6d1327;color:#fff;padding:16px 14px;font-size:14px;font-weight:800;text-align:center">Actual</th>`
+      +`</tr></thead><tbody>${rows}</tbody></table></div>`;
     let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
     ov.style.cssText='position:fixed;inset:0;z-index:210;background:var(--bg);overflow:auto;padding:22px 26px 60px';
-    const seg=`<div class="seg" id="laSeg" style="margin:0"><button data-m="cum" class="${mo?'':'on'}">Cumulative</button><button data-m="mo" class="${mo?'on':''}">This month</button></div>`;
-    const sub=mo?`各区各活动 · 只看本月(${this.esc(curL)})· Planned = 本月计划量 · Done = 本月实际完成量(% of plan)`:`各区各活动 · Target = 到本月为止累计计划% + 计划完成日 · Actual = 实际完成 done/total · as of ${this.esc(curL)}`;
-    ov.innerHTML=`<div style="max-width:960px;margin:0 auto"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><div style="font-size:22px;font-weight:800;color:#7a1f2b">Look ahead</div>${seg}<div style="flex:1"></div><button class="hbtn" id="laClose">Close ✕</button></div><div style="font-size:12px;color:var(--dim);margin-bottom:18px">${sub}</div>${sect}</div>`;
-    ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=()=>{ov.style.display='none';};
-    ov.querySelectorAll('#laSeg button').forEach(b=>b.onclick=()=>{ this._laMonth=(b.dataset.m==='mo'); this.openLookAhead(); }); }
+    ov.innerHTML=`<div style="max-width:820px;margin:0 auto"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="font-size:22px;font-weight:800;color:#6d1327">Look ahead — CJY’s Catch-Up</div><div style="flex:1"></div><button class="hbtn" id="laClose">Close ✕</button></div><div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">Targets fixed per the catch-up plan; Actual pulled live from current progress (done ÷ total across the listed levels).</div>${table}</div>`;
+    ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=()=>{ov.style.display='none';}; }
   zoneFill(z){
     if(this.colorMode==='castdate') return this._zoneCastColor(z);
     if(this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); return this.PLAN_COLORS()[st.state]||'#ffffff'; }
