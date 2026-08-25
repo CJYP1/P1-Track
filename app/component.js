@@ -1312,7 +1312,12 @@ class Component extends DCLogic {
       const pts=e.pts.map(pp=>{const q=this.proj(pp,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
       const lq=this.proj(e.lp,H);
       let fill=col, fo=0, base='';   /* 默认: 透明填充, 只描边 */
-      if(useProg){
+      if(this.colorMode==='castdate'){   /* Cast: marine 板也参与, 按浇筑时间上色 */
+        const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:(cls==='subP'),_mslab:(cls==='subC')};
+        base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;
+        if(cls==='subP'||this._castLayer==='col'){ fill='#efeaec'; fo=0.30; }   /* Podium 不是板 / Columns 模式下板淡出 */
+        else { const _ci=this._zoneCastInfo(this.curLevel,_z); fill=this._zoneCastColor(_z); fo=_ci.done?0.5:0.72; }
+      } else if(useProg){
         base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;   /* 白色衬底(跟主 zone 一样) */
         if(this.colorMode==='plan'){ /* Planned: 白底 + 有进展按 status 上色 */
           const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:(cls==='subP'),_mslab:(cls==='subC')};
@@ -1324,7 +1329,9 @@ class Component extends DCLogic {
         }
       }
       s+=base+`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${col}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
-      s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${col}">${this.esc(e.label)}</text>`;});};
+      if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${col}">${this.esc(e.label)}</text>`;
+      if(this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=this._zoneCastInfo(this.curLevel,_z2); const _dl=_ci2.done?'Completed':(_ci2.date?this._fmtDShort(_ci2.date):'TBA'); const _hd=(_ci2.done||_ci2.date); const _dy=(this.showCastNames===false)?lq[1]+1200:lq[1]+4200; s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${_dy.toFixed(0)}" font-size="3100" font-weight="900" fill="${_hd?'#ffffff':'#ffe14d'}" stroke="#111111" stroke-width="620" paint-order="stroke">${this.esc(_dl)}</text>`; }
+      });};
      _dr(_subL.ZC,'subZC','#1d4ed8',false,this.showSubZC);
      _dr(_subL.C,'subC','#b35a1f',false,this.showSubC,true);   /* Bottom slab: 白底 + 按进度上色 */
      _dr(_subL.P,'subP','#7c3aed',true,this.showSubP,true);}   /* Podium: 同样 白底 + 按进度上色 */
