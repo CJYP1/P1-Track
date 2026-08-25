@@ -1100,6 +1100,8 @@ class Component extends DCLogic {
     const dt=d.end||d.start||null; return {aid,done,date:dt,start:d.start||null,end:d.end||null,month:this._dateToActMonth(dt)}; }
   _zoneCastColor(z){ if(this._castLayer==='col')return '#efeaec'; const info=this._zoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
   _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.start||d.end); return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
+  /* Marine 柱子归属: 按 marine-col-map.csv 反查这根柱属于哪个 Podium(P) 区 → 用 P 区的 col 活动读取浇筑时间/上色 */
+  _colPodLabel(id){ if(!this._marineCol)return null; if(!this._colPodIdx){ const m={}; Object.keys(this._marineCol).forEach(p=>this._marineCol[p].forEach(c=>{m[String(c.id||'').trim().toUpperCase()]=p;})); this._colPodIdx=m; } return this._colPodIdx[String(id||'').trim().toUpperCase()]||null; }
   _fmtDShort(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m)return String(iso); return m[3]+" "+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+" '"+m[1].slice(2); }
   /* ── Look ahead 表: 各区(EB/NB/MA)各活动 目标%(累计计划到今月)/完成日期 vs 实际%(done/total) ── */
   _lookAheadData(){ const AM=this.ACT_MONTHS, curL=this.actCurLabel(), asOfIdx=Math.max(0,AM.indexOf(curL));
@@ -1270,7 +1272,8 @@ class Component extends DCLogic {
         const _nid=_nrm(c.id); if(_colSeen.has(_nid))return; _colSeen.add(_nid);
         const _hid=this._colHidden(this.curLevel,c.id); if(_hid&&!this._hidingCol)return;   // 隐藏的柱: 平时不画; 隐藏模式下淡显以便恢复
         const sy=H-c.y;
-        const zz=zoneByLabel[c.zone];
+        const _podL=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
+        const zz=_podL?{mk:this.curLevel+'|'+_podL,label:_podL,cat:'MA',_pod:true}:zoneByLabel[c.zone];   /* Marine 柱子归到它的 Podium 区: 状态/浇筑时间都从 P 区读 */
         const st=zz?this.elemStatus(this.ekey(this.curLevel,zz,'col',c.id)):'todo';
         const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'))):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=完成黑,其余按 Column 活动月上色 */
         const _uT=this._colUnderT(c);
@@ -1391,7 +1394,8 @@ class Component extends DCLogic {
     });
     this.svg.querySelectorAll('.colmk[data-ci]').forEach(el=>{
       el.addEventListener('mousemove',ev=>{const c=this.COLUMNS[this.curLevel][+el.dataset.ci];
-        this.tip.innerHTML=`<h4>${this.esc(c.id)}</h4><div class="grp">Column · ${this.esc(c.sz||'')} · zone ${this.esc(c.zone||'')} · click to open</div>`;
+        const _tp=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
+        this.tip.innerHTML=`<h4>${this.esc(c.id)}</h4><div class="grp">Column · ${this.esc(c.sz||'')} · zone ${this.esc(_tp||c.zone||'')} · click to open</div>`;
         const r=this.svg.getBoundingClientRect();let x=ev.clientX-r.left+14,y=ev.clientY-r.top+14;
         if(x>r.width-220)x-=240;if(y>r.height-80)y-=80;
         this.tip.style.left=x+'px';this.tip.style.top=y+'px';this.tip.style.opacity=1;});
@@ -1399,6 +1403,8 @@ class Component extends DCLogic {
       el.addEventListener('click',ev=>{ev.stopPropagation();
         const c=this.COLUMNS[this.curLevel][+el.dataset.ci];
         if(this._hidingCol){this.toggleHideCol(c.id);return;}   // 隐藏模式: 点柱子 = 隐藏/恢复
+        const _clkPod=(this.curLevel==='L1')?this._colPodLabel(c.id):null;   /* 柱子归属 Podium → 点开对应 P 细分区 */
+        if(_clkPod && this.SUBZONES && this.SUBZONES[this.curLevel] && this.SUBZONES[this.curLevel].P){ const _pi=this.SUBZONES[this.curLevel].P.findIndex(e=>String(e.label)===String(_clkPod)); if(_pi>=0){this.selectSubzone('P',_pi);return;} }
         const z=L.zones.find(zz=>zz.label===c.zone);
         if(!z)return;
         this.selKey=this.zid(z);this.selectZone(z);this.paintSel();this.paintTimelineSel();
