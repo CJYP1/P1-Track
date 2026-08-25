@@ -332,6 +332,14 @@ class Component extends DCLogic {
     }
     this._actRerender(this._selZone());}
   _lockIco(store,k){if(!this.rwsIsAdmin())return '';const on=this.isEdited(store,k);return `<span class="act-lock" data-store="${store}" data-k="${this.esc(k)}" title="${on?'Locked — Import will NOT overwrite this value. Click to unlock.':'Click to lock — Import will not overwrite this value (editing still works).'}" style="cursor:pointer;font-size:11px;margin-left:2px">${on?'🔒':'🔓'}</span>`;}
+  _focusColScroll(sb){ const id=this._focusCol; if(!id||!sb)return; this._focusCol=null; try{
+    const norm=s=>String(s||'').trim().toUpperCase().replace(/\s+/g,'');
+    const rows=Array.from(sb.querySelectorAll('.idrow'));
+    const row=rows.find(r=>{const e=r.querySelector('.id');return e&&norm(e.textContent)===norm(id);});
+    if(!row)return;
+    let p=row.parentElement; while(p&&p!==sb){ if(p.tagName==='DETAILS')p.open=true; p=p.parentElement; }
+    setTimeout(()=>{ try{row.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){row.scrollIntoView();} row.classList.add('flash-ok'); setTimeout(()=>row.classList.remove('flash-ok'),1500); },30);
+  }catch(e){} }
   _actRerender(z){this.applyUpdates();if(this.buildRail)this.buildRail();if(this.buildTimeline)this.buildTimeline();this.render();if(this._subOpen){this.selectSubzone(this._subOpen.kind,this._subOpen.i);return;}const zz=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(zz)this.selectZone(zz);else if(z)this.selectZone(z);}
   _numOrNull(raw){const s=String(raw==null?'':raw).replace(/,/g,'').trim();const v=s===''?null:parseFloat(s);if(v!=null&&(isNaN(v)||v<0))return undefined;return v;}
   setActTotal(lv,zmk,a,raw,z){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can set the total.');return;}const v=this._numOrNull(raw);if(v===undefined)return;const k=lv+'||'+zmk+'||'+a;this._actTotal=this._actTotal||{};if(v==null)delete this._actTotal[k];else this._actTotal[k]=v;this.saveAct();this.markEdited('act_total',k);rwsSyncKV('act_total',k,(v==null?null:v),lv,zmk);this._markUpd(lv,zmk,a);this._actRerender(z);}
@@ -1411,6 +1419,7 @@ class Component extends DCLogic {
       el.addEventListener('click',ev=>{ev.stopPropagation();
         const c=this.COLUMNS[this.curLevel][+el.dataset.ci];
         if(this._hidingCol){this.toggleHideCol(c.id);return;}   // 隐藏模式: 点柱子 = 隐藏/恢复
+        this._focusCol=c.id;   /* 点柱子 → 打开分区后自动滚动/高亮到这根柱在清单里的那一行 */
         const _clkPod=(this.curLevel==='L1')?this._colPodLabel(c.id):null;   /* 柱子归属 Podium → 点开对应 P 细分区 */
         if(_clkPod && this.SUBZONES && this.SUBZONES[this.curLevel] && this.SUBZONES[this.curLevel].P){ const _pi=this.SUBZONES[this.curLevel].P.findIndex(e=>String(e.label)===String(_clkPod)); if(_pi>=0){this.selectSubzone('P',_pi);return;} }
         const z=L.zones.find(zz=>zz.label===c.zone);
@@ -2265,6 +2274,7 @@ class Component extends DCLogic {
      sb.querySelectorAll('.actdel').forEach(el=>el.addEventListener('click',ev=>{ev.stopPropagation();this.delCustomAct(el.dataset.a);}));
      const _am=sb.querySelector('.act-month');if(_am)_am.addEventListener('change',()=>{this._actMonth=_am.value;this._planMonth=_am.value;this.render();this.selectZone(z,sub);});
      sb.querySelectorAll('.zpm-nav').forEach(b=>b.addEventListener('click',()=>{const sel=sb.querySelector('.act-month');if(!sel)return;const i=sel.selectedIndex+(+b.dataset.dir);if(i<0||i>=sel.options.length)return;this._actMonth=sel.options[i].value;this._planMonth=this._actMonth;this.render();this.selectZone(z,sub);}));}
+    this._focusColScroll(sb);   /* 点地图柱子后, 自动滚动/高亮到清单里的那一行 */
     {const _msel=sb.querySelector('.zp-month-sel');
      if(_msel){_msel.addEventListener('change',()=>{this._zpMonthSel=this._zpMonthSel||{};this._zpMonthSel[_msel.dataset.z]=_msel.value;this.selectZone(z,sub);});}
      sb.querySelectorAll('.zpm-nav').forEach(b=>b.addEventListener('click',()=>{const sel=sb.querySelector('.zp-month-sel');if(!sel)return;const i=sel.selectedIndex+ (+b.dataset.dir); if(i<0||i>=sel.options.length)return; this._zpMonthSel=this._zpMonthSel||{}; this._zpMonthSel[sel.dataset.z]=sel.options[i].value; this.selectZone(z,sub);}));}
