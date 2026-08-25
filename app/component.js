@@ -674,7 +674,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn');
-    const adminOnly=['#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower','#openCastView','#openLookAhead'].map(s=>this.root.querySelector(s)).filter(Boolean);
+    const adminOnly=['#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* Cast schedule / Look ahead 对所有登录用户可见 */
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
     try{if(this.DATA&&this.root.querySelector('#rail'))this.buildRail();}catch(_e){}
@@ -1101,7 +1101,7 @@ class Component extends DCLogic {
   _dateToActMonth(iso){ if(!iso)return null; const m=String(iso).match(/^(\d{4})-(\d{2})/); if(!m)return null; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+"'"+m[1].slice(2); }
   _actDateOf(lv,zmk,aid){ return (this._actDate||{})[lv+'||'+zmk+'||'+aid]||{}; }
   _actCumDone(lv,zmk,aid){ let s=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m);if(d)s+=d;}); return s; }
-  _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; let aid='slab'; ['slab','slab_top','slab_pile'].some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
+  _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; const _try=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];   /* Bottom slab(C)以 RC Works 的时间为浇筑时间 */ let aid=_try[0]; _try.some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
     const d=this._actDateOf(lv,zmk,aid); const tot=this.actTotal(lv,zmk,aid,null); const cd=this._actCumDone(lv,zmk,aid);
     let cumPlan=0; this.ACT_MONTHS.forEach(m=>{const p=this.actPlan(lv,zmk,aid,m);if(p)cumPlan+=(+p||0);});
     const done=(tot!=null&&tot>0)?(cd>=tot):(cumPlan>0&&cd>=cumPlan);   /* 有总量按总量; 无总量(靠计划跟踪)则累计完成≥累计计划即算完成 */
@@ -1338,7 +1338,7 @@ class Component extends DCLogic {
       }
       s+=base+`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${col}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${col}">${this.esc(e.label)}</text>`;
-      if(this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=this._zoneCastInfo(this.curLevel,_z2); const _dl=_ci2.done?'Completed':(_ci2.date?this._fmtDShort(_ci2.date):'TBA'); const _hd=(_ci2.done||_ci2.date); const _dy=(this.showCastNames===false)?lq[1]+1200:lq[1]+4200; s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${_dy.toFixed(0)}" font-size="3100" font-weight="900" fill="${_hd?'#ffffff':'#ffe14d'}" stroke="#111111" stroke-width="620" paint-order="stroke">${this.esc(_dl)}</text>`; }
+      if(this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=this._zoneCastInfo(this.curLevel,_z2); const _dl=_ci2.done?'Completed':(_ci2.date?this._fmtDShort(_ci2.date):'TBA'); const _dy=(this.showCastNames===false)?lq[1]+900:lq[1]+3300; s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${_dy.toFixed(0)}" font-size="2500" font-weight="900" fill="${_ci2.date||_ci2.done?'#141414':'#b3261e'}" stroke="#ffffff" stroke-width="760" paint-order="stroke">${this.esc(_dl)}</text>`; }
       if(this.colorMode==='castdate'&&cls==='subP'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); const _dl=_mo||'TBA'; const _dy=(this.showCastNames===false)?lq[1]+1200:lq[1]+4200; s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${_dy.toFixed(0)}" font-size="3300" font-weight="900" fill="${_mo?'#141414':'#b3261e'}" stroke="#ffffff" stroke-width="820" paint-order="stroke">${this.esc(_dl)}</text>`; }   /* Podium 区: 显示柱子浇筑月份, 深字白描边看得清 */
       });};
      _dr(_subL.ZC,'subZC','#1d4ed8',false,this.showSubZC);
