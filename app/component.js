@@ -1127,25 +1127,35 @@ class Component extends DCLogic {
       const rows=Object.keys(acts).map(k=>{const o=acts[k];return {lv:o.lv,label:o.lv+' · '+o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),mplan:Math.round(o.mp),mdone:Math.round(o.md),mpct:o.mp>0?Math.min(100,Math.round(o.md/o.mp*100)):(o.md>0?100:0),end:o.end};}).filter(r=>this._laMonth?(r.mplan>0||r.mdone>0):r.total>0).sort((a,b)=>(lvOrder.indexOf(a.lv)-lvOrder.indexOf(b.lv))||a.label.localeCompare(b.label));
       if(rows.length)out.push({cat,label,rows}); });
     return out; }
-  _catchupActual(levels,aid,cat){
+  _reportZoneOk(z,cat,filter){if(cat&&(z.cat||'NB')!==cat)return false;if(filter==='cis')return /CIS/i.test(String(z.label||'')+' '+String(z.mk||''));return true;}
+  _reportToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+  _reportDateLabel(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?(+m[3])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+' '+m[1].slice(2):String(iso||'');}
+  _reportMonthBounds(label){if(label==="Before Apr'26")return {s:Date.UTC(2000,0,1),e:Date.UTC(2026,2,31)};const m=String(label||'').match(/^([A-Z][a-z]{2})'(\d{2})$/);if(!m)return null;const mi=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);if(mi<0)return null;const y=2000+(+m[2]);return {s:Date.UTC(y,mi,1),e:Date.UTC(y,mi+1,0)};}
+  _reportPlanFraction(month,start,end,asOf){const b=this._reportMonthBounds(month);if(!b)return 0;let s=b.s,e=b.e;const ds=Date.parse(String(start||'')+'T00:00:00Z'),de=Date.parse(String(end||'')+'T00:00:00Z'),now=Date.parse(asOf+'T00:00:00Z');if(Number.isFinite(ds))s=Math.max(s,ds);if(Number.isFinite(de))e=Math.min(e,de);if(e<s||now<s)return 0;if(now>=e)return 1;return Math.max(0,Math.min(1,(now-s+86400000)/(e-s+86400000)));}
+  _catchupPlan(levels,aid,cat,filter){const asOf=this._reportToday();let planned=0,total=0,end=null;
+    (levels||[]).forEach(lv=>{const L=this.DATA.levels[lv];if(!L)return;(L.zones||[]).forEach(z=>{if(!this._reportZoneOk(z,cat,filter))return;const zmk=z.mk||z.lid,d=(this._actDate||{})[lv+'||'+zmk+'||'+aid]||{};let any=false,zt=0,zp=0;
+      this.ACT_MONTHS.forEach(m=>{const q=this.actPlan(lv,zmk,aid,m);if(q==null)return;any=true;zt+=(+q||0);zp+=(+q||0)*this._reportPlanFraction(m,d.start,d.end,asOf);});
+      if(!any){const t=this.actTotal(lv,zmk,aid,null);if(t!=null&&+t>0){zt=+t;zp=zt*this._reportPlanFraction(this.dateToActMonth(d.start||asOf),d.start,d.end,asOf);}}
+      total+=zt;planned+=zp;if(d.end&&(!end||d.end>end))end=d.end;});});
+    return {planned:Math.min(total,planned),total,end,asOf};}
+  _catchupActual(levels,aid,cat,filter){
     const ea=this._elemAct(aid), elems={};
-    if(ea){ (levels||[]).forEach(lv=>{ const L=this.DATA.levels[lv]; if(!L)return; (L.zones||[]).forEach(z=>{ if(cat&&(z.cat||'NB')!==cat)return; const zmk=z.mk||z.lid;
+    if(ea){ (levels||[]).forEach(lv=>{ const L=this.DATA.levels[lv]; if(!L)return; (L.zones||[]).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter))return; const zmk=z.mk||z.lid;
         ea.types.forEach(tp=>{ this._zoneElemList(z,tp).forEach(x=>{ const id=typeof x==='string'?x:x.id; if(!id)return; const uk=lv+'||'+tp+'||'+id; const ek=this.ekey(lv,z,tp,id); const o=elems[uk]||(elems[uk]={done:false}); if(this.elemStatus(ek)==='done')o.done=true; }); }); }); });
       const all=Object.values(elems); if(all.length){const done=all.filter(x=>x.done).length,total=all.length;return {done,total,pct:Math.min(100,Math.round(done/total*100))};} }
-    let done=0,total=0; (levels||[]).forEach(lv=>{ const L=this.DATA.levels[lv]; if(!L)return; (L.zones||[]).forEach(z=>{ if(cat&&(z.cat||'NB')!==cat)return; const zmk=z.mk||z.lid; const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid)); if(t)total+=(+t||0); this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:total>0?Math.min(100,Math.round(done/total*100)):0}; }
-  _liveReportRows(cat){ const AM=this.ACT_MONTHS,asOf=Math.max(0,AM.indexOf(this.actCurLabel())),by={};
+    let done=0,total=0; (levels||[]).forEach(lv=>{ const L=this.DATA.levels[lv]; if(!L)return; (L.zones||[]).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter))return; const zmk=z.mk||z.lid; const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid)); if(t)total+=(+t||0); this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:total>0?Math.min(100,Math.round(done/total*100)):0}; }
+  _liveReportRows(cat){ const AM=this.ACT_MONTHS,by={};
     this.DATA.order.forEach(lv=>{ const L=this.DATA.levels[lv]; if(!L)return; (L.zones||[]).forEach(z=>{if((z.cat||'NB')!==cat)return;const zmk=z.mk||z.lid;
-      (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false,ptd=0;for(let i=0;i<AM.length;i++){const p=this.actPlan(lv,zmk,a.id,AM[i]);if(p!=null){any=true;if(i<=asOf)ptd+=(+p||0);}const d=this.actDoneMonth(lv,zmk,a.id,AM[i]);if(d!=null)any=true;}if(!any&&!this._actUsesElems(a.id,lv,zmk))return;
-        const k=lv+'\u0001'+a.id,o=by[k]||(by[k]={a:lv+' · '+a.label,levels:[lv],aid:a.id,ptd:0,end:null,count:true});o.ptd+=ptd;const dt=(this._actDate||{})[lv+'||'+zmk+'||'+a.id];if(dt&&dt.end&&(!o.end||dt.end>o.end))o.end=dt.end;}); }); });
-    return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat);r.tgt=A.total>0?Math.min(100,Math.round(r.ptd/A.total*100)):0;r.by=r.end?this._fmtDShort(r.end):'live plan';r.actual=A;return r;}).filter(r=>r.actual.total>0||r.actual.done>0||r.ptd>0).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
+      (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}if(!any&&!this._actUsesElems(a.id,lv,zmk))return;
+        const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:lv+' · '+a.label,levels:[lv],aid:a.id,unit:a.unit||''};}); }); });
+    return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat),P=this._catchupPlan(r.levels,r.aid,cat),den=A.total||P.total;r.tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;return r;}).filter(r=>r.actual.total>0||r.actual.done>0||r.plan.total>0).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
   /* NB/EB/MA 三份 Report: 普通账号按区域权限查看, admin 看全部 */
   _reportDefs(){ return {
-    NB:{label:'New Basement', title:'New Basement Zone Superstructure – L1 to L2', scope:'New Basement · L1–L2', date:'24 June 26', rows:[
-      {a:'L1 Columns',tgt:85,by:'17 Sep',levels:['L1'],aid:'col',count:true},
-      {a:'L1–L2 Corewall',tgt:65,by:'20 Sep',levels:['L1','L2'],aid:'ls',count:true},
-      {a:'L1–L2 Staircase',tgt:60,by:'30 Sep',levels:['L1','L2'],aid:'temp_stair',count:true},
-      {a:'L2 Beam (steel formwork)',tgt:68,by:'6 Oct',levels:['L2'],aid:'mbeam',count:true},
-      {a:'L2 Slab CIS',tgt:50,by:'21 Oct',levels:['L2'],aid:'slab',count:false} ]},
+    NB:{label:'New Basement', title:'New Basement Zone Superstructure – L1 to L2', scope:'New Basement · L1–L2', rows:[
+      {a:'L1 Columns',levels:['L1'],aid:'col',unit:'nos'},
+      {a:'L1–L2 Core/Lift/Stair Wall',levels:['L1','L2'],aid:'ls',unit:'nos'},
+      {a:'L2 Steel Beam',levels:['L2'],aid:'mbeam',unit:'nos'},
+      {a:'L2 Slab CIS',levels:['L2'],aid:'slab',filter:'cis',unit:'m²'} ]},
     EB:{label:'EB Report', title:'Existing Basement Superstructure', scope:'Existing Basement', date:'Live', rows:null},
     MA:{label:'MA Report', title:'Marine Superstructure', scope:'Marine', date:'Live', rows:null} }; }
   _reportCats(){ const u=this._rwsUser; if(!u)return []; if(u.role==='admin')return ['NB','EB','MA']; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
@@ -1159,20 +1169,20 @@ class Component extends DCLogic {
     const cat=this._reportCat, def=defs[cat];
     const fmtN=n=>{const r=Math.round(n*10)/10;return (r%1===0)?String(r):r.toFixed(1);};
     const reportRows=def.rows||this._liveReportRows(cat);
-    const rows=reportRows.map(r=>{ const A=r.actual||this._catchupActual(r.levels,r.aid,cat); const actSub=r.count?`(${fmtN(A.done)}/${fmtN(A.total)} completed)`:'';
+    const rows=reportRows.map(r=>{ const A=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),P=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),den=A.total||P.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const actSub=`(${fmtN(A.done)}/${fmtN(A.total)}${unit})`,planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—';
       return `<tr>`
         +`<td style="background:#6d1327;color:#fff;font-weight:800;padding:16px 14px;font-size:14px;vertical-align:middle;width:26%">${this.esc(r.a)}</td>`
-        +`<td style="background:#f4dbdf;color:#2b1114;text-align:center;padding:14px 12px;vertical-align:middle;width:37%"><div style="font-size:16px">${r.tgt}%</div><div style="font-size:12px;color:#6d3b40;margin-top:3px">(Complete by ${this.esc(r.by)})</div></td>`
-        +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:14px 12px;vertical-align:middle;width:37%"><div style="font-size:16px">${A.pct}%</div>${actSub?`<div style="font-size:12px;color:#6d3b40;margin-top:3px">${actSub}</div>`:''}</td>`
+        +`<td style="background:#f4dbdf;color:#2b1114;text-align:center;padding:14px 12px;vertical-align:middle;width:37%"><div style="font-size:16px">${tgt}%</div><div style="font-size:12px;color:#6d3b40;margin-top:3px">${planSub}<br>Complete by ${this.esc(by)}</div></td>`
+        +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:14px 12px;vertical-align:middle;width:37%"><div style="font-size:16px">${A.pct}%</div><div style="font-size:12px;color:#6d3b40;margin-top:3px">${actSub}</div></td>`
         +`</tr>`; }).join('') || `<tr><td colspan="3" style="background:#f4dbdf;color:#6d1327;text-align:center;padding:22px;font-size:13px">当前 HTML 数据源里还没有 ${this.esc(cat)} Report 可汇总的 Activity 数据。</td></tr>`;
     const table=`<div style="background:#efe9df;padding:6px;border-radius:4px;width:100%;max-width:760px"><table style="width:100%;border-collapse:separate;border-spacing:6px;font-family:'Segoe UI',Arial,sans-serif"><thead><tr>`
       +`<th style="background:#6d1327;color:#fff;padding:16px 14px;font-size:14px;font-weight:800;text-align:center">Activity</th>`
-      +`<th style="background:#6d1327;color:#fff;padding:16px 14px;font-size:14px;font-weight:800;text-align:center;line-height:1.3">CJY’s Catch-Up<br>${this.esc(def.date)}</th>`
+      +`<th style="background:#6d1327;color:#fff;padding:16px 14px;font-size:14px;font-weight:800;text-align:center;line-height:1.3">CJY’s Catch-Up<br>${this.esc(this._reportDateLabel(this._reportToday()))}</th>`
       +`<th style="background:#6d1327;color:#fff;padding:16px 14px;font-size:14px;font-weight:800;text-align:center">Actual</th>`
       +`</tr></thead><tbody>${rows}</tbody></table></div>`;
     const tabs=cats.length>1?`<div class="seg" id="rptSeg" style="margin:0 0 14px">${cats.map(c=>`<button data-c="${c}" class="${c===cat?'on':''}">${this.esc(c+' Report')}</button>`).join('')}</div>`:'';
     const _leg=[['#f3aeb8','In progress'],['#74c043','Completed'],['#7ea6d4','CIS area'],['#f0b24a','Tie beam']].map(([c,l])=>`<span style="white-space:nowrap"><span style="display:inline-block;width:14px;height:14px;background:${c};border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:5px"></span>${l}</span>`).join('');
-    ov.innerHTML=`<div style="max-width:900px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><button class="hbtn" id="laClose">Close ✕</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">Scope: ${this.esc(def.scope)} · Targets fixed per catch-up plan; Actual pulled live from current progress (done ÷ total, ${this.esc(cat)} zones only).</div>${table}</div>`;
+    ov.innerHTML=`<div style="max-width:900px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><button class="hbtn" id="laClose">Close ✕</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:12px">Scope: ${this.esc(def.scope)} · Catch-Up is the live planned quantity due by today; Actual is pulled live from current progress. L2 Slab CIS includes CIS/CIST zones only.</div>${table}</div>`;
     ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=close;
     ov.querySelectorAll('#rptSeg button[data-c]').forEach(b=>b.onclick=()=>{this._reportCat=b.dataset.c;this.openLookAhead();}); }
   zoneFill(z){
