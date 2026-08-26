@@ -1111,9 +1111,37 @@ class Component extends DCLogic {
   _rpZoneDelayDays(lv,z){if(!z)return null;const zmk=z.mk||z.lid||'',clk=this._rpDelayClock(),gain=[2,7,6,6,7,7,10,10,10,9,9,9,8,8];let pT=0,dT=0,gT=0;
     const acts=(this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z));for(let i=3;i<=clk.idx;i++){const mon=this.ACT_MONTHS[i+1];let pm=0,dm=0;acts.forEach(a=>{const tot=a.total;if(tot==null||tot<=0)return;const pv=this.actPlan(lv,zmk,a.id,mon),dv=this.actDoneMonth(lv,zmk,a.id,mon);if(pv!=null)pm+=(+pv||0);if(dv!=null)dm+=(+dv||0);});pT+=pm;dT+=dm;if(pm>0)gT+=gain[i];}
     if(pT<=0||gT<=0)return null;return Math.round(gT*Math.max(0,pT-dT)/pT);}
+  /* P6 Total Float · 26 Aug 2026（用户提供的 Zone 对照图）：返回正数，由 _delayView 显示为 −N days。
+     D 区明确不采用。一个图上分区覆盖多个 P6 小区时取当前结构阶段较差的负 Float。 */
+  _p6ZoneDelayDays(lv,z){if(lv!=='L1'||!z)return null;let s=String(z.label||'').toUpperCase().replace(/\s+/g,'');
+    /* Marine C 子区先归到地图 ZC，再套用 P6 C-1/C-2/C-3。 */
+    if(/^C(?:1|2|3)/.test(s)&&this.SUBLINKS&&this.SUBLINKS.c2zc){const zl=this.SUBLINKS.c2zc[z.label];if(zl)s=String(zl).toUpperCase().replace(/\s+/g,'');}
+    if(/^ZC1(?:$|[^0-9])/.test(s))return 110;                    /* P6 C-1.1/C-1.2: worst −110 */
+    if(/^ZC2\.1(?:$|[^0-9])/.test(s))return 112;                /* P6 C-2.1 */
+    if(/^ZC2\.2(?:$|[^0-9])/.test(s))return 97;                 /* P6 C-2.2: worst −97 */
+    if(/^ZC3\.1[AB]?(?:$|[^0-9])/.test(s))return 104;           /* P6 C-3.1 */
+    if(/^ZC3\.2(?:$|[^0-9])/.test(s))return 2;                  /* P6 C-3.2 */
+    /* Podium Work Zone 对照: P-2=西上, P-4=西下, P-1=中上, P-3=东上。 */
+    const pg={
+      'P14':87,'P13':87,'P1':87,
+      'P2':108,'P3-2':108,'P4-2':108,'P5-2':108,'P6-2':108,'P7-2':108,'P8-3':108,'P10':108,'P11':108,
+      'P3-1':45,'P4-1':45,'P5-1':45,'P6-1':45,'P12':45,
+      'P7-1':64,'P8-1':64,'P9-1':64,'P8-2':64,'P9-2':64};
+    if(Object.prototype.hasOwnProperty.call(pg,s))return pg[s];
+    /* New Basement A / Existing Basement B：按用户 Zone 图把当前 L1 slab 标签归组。 */
+    if(/^M-SLAB[12]$/.test(s))return 117;                                  /* A-4: M-Slab 1/2 */
+    if(s.indexOf('SLAB')===0)s=s.slice(4);s=s.replace(/\(.*$/,'');
+    if(/^B-1(?:$|[^0-9])/.test(s))return 129;
+    if(/^B-2\./.test(s))return 129;
+    if(/^B-3\./.test(s))return 128;
+    if(/^(?:10(?:-|$)|11[AB]?$|12(?:-|$)|13(?:$|[^0-9]))/.test(s))return 124;  /* A-2.2 */
+    if(/^(?:9[AB]?$|8(?:A)?-|7-)/.test(s))return 112;                         /* A-2.1 */
+    if(/^(?:4[AB]?$|5[AB]?$|6(?:A-1|A|B)?$)/.test(s))return 109;              /* A-3 */
+    if(/^(?:1$|2(?:[ABCD]|D-1)?$|3(?:[ABC]|C-1)?$)/.test(s))return 105;       /* A-1 */
+    return null;}
   _zoneDelayDays(lv,z){if(!z)return null;const m=this._appCfg&&this._appCfg.zoneDelay,zmk=z.mk||z.lid||'',lab=z.label||'';if(m){const ks=[lv+'||'+zmk,lv+'||'+lab,zmk,lab];let raw;
       for(const k of ks){if(k&&Object.prototype.hasOwnProperty.call(m,k)){raw=m[k];break;}}if(raw&&typeof raw==='object')raw=(raw.days!=null?raw.days:raw.delay_days);if(raw!=null&&raw!==''){const n=Number(raw);if(Number.isFinite(n))return n;}}
-    return this._rpZoneDelayDays(lv,z);}
+    const p6=this._p6ZoneDelayDays(lv,z);return p6!=null?p6:this._rpZoneDelayDays(lv,z);}
   _delayView(n){const d=Math.round(Math.abs(n));return n>0?{txt:'−'+d+' days',c:'#c8102e'}:n<0?{txt:'+'+d+' days',c:'#218a5c'}:{txt:'0 days',c:'#667085'};}
   _actCumDone(lv,zmk,aid){ let s=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m);if(d)s+=d;}); return s; }
   _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; const _try=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];   /* Bottom slab(C)以 RC Works 的时间为浇筑时间 */ let aid=_try[0]; _try.some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
