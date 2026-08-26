@@ -14,7 +14,7 @@
 <x-dc>
 <helmet data-dc-atomics>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="presentation/styles.css?v=d97199d8c2">
+<link rel="stylesheet" href="presentation/styles.css?v=710aaee1f2">
 <script src="zone-data.global.js?v=e8594353e0"></script>
 <script src="zp-data.global.js?v=9cfccc4558"></script>
 <script src="cw-groups.global.js?v=6c366895d1"></script>
@@ -25,7 +25,7 @@
 <div id="app" ref="{{ rootRef }}">
   <header>
     <div class="mark"></div>
-    <div class="header-brand"><h1>RWS P1 · Zone Resource &amp; Progress Map (P1 Planning) <span class="refresh-note">⚠ Refresh (F5) before use to load the latest data</span></h1><div class="sub">Quantities &amp; site progress per zone</div></div>
+    <div class="header-brand"><h1>RWS P1 · Zone Resource &amp; Progress Map (P1 Planning)</h1><div class="sub"><span>Quantities &amp; site progress per zone</span><span class="refresh-note">⚠ Refresh (F5) before use</span></div></div>
     <div class="header-actions">
       <div class="header-account">
         <span id="autosave">Autosave on</span>
@@ -38,7 +38,7 @@
         <button class="hbtn primary" id="openSched" style="display:none">📅 Construction Schedule</button>
         <button class="hbtn" id="openM28" title="M28 Daily Progress Dashboard(需登录查看;账号有权限才能改动/评论)">📊 M28</button>
         <button class="hbtn" id="openManpower" title="Manpower summary — daily workers (C carpenter / R ironworker) across all zones">👷 Manpower</button>
-        <button class="hbtn" id="openCastView" title="Cast schedule map — slabs by cast date, columns by month (from activity dates)">🗓 Cast</button>
+        <button class="hbtn" id="openCastView" title="Casting dashboard — slabs by cast date, columns by month (from activity dates)">📊 Dashboard</button>
         <button class="hbtn" id="openLookAhead" title="Reports — live target vs actual, split by NB / EB / MA permissions">📋 Report</button>
         <button class="hbtn" id="rwsHistoryBtn" style="display:none" title="查看历史进度快照 — 调出某一周的完整状态(例如七月看六月做到哪)">🕓 History</button>
       </div>
