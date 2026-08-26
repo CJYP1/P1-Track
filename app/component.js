@@ -585,6 +585,7 @@ class Component extends DCLogic {
       if(d.actDate)  this._actDate =_rebuildFromCSV('act_date', this._actDate, d.actDate);
       if(d.zdate)    this._zdate   =_rebuildFromCSV('zdate',    this._zdate,   d.zdate);
       if(d.colMonth) this._colMonth=_rebuildFromCSV('col_month',this._colMonth,d.colMonth);
+      if(d.zoneDelay&&typeof d.zoneDelay==='object'){this._appCfg=this._appCfg||{};this._appCfg.zoneDelay={...(this._appCfg.zoneDelay||{}),...d.zoneDelay};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
       if(d.marineCol){this._marineCol=d.marineCol;   /* Marine 柱子按 P 区分组映射(marine-col-map.csv) */
         this._marineCritSet=new Set();Object.keys(d.marineCol).forEach(p=>d.marineCol[p].forEach(c=>{if(c.c)this._marineCritSet.add(String(c.id||'').trim().toUpperCase());}));}
       this.saveAct();this.saveDates();
@@ -1101,6 +1102,19 @@ class Component extends DCLogic {
   _castPal(){ return {"Before Apr'26":"#6b6b6b","Apr'26":"#1f7a4d","May'26":"#3aa06a","Jun'26":"#6cc39a","Jul'26":"#3a72d9","Aug'26":"#7c5cd6","Sep'26":"#e0912b","Oct'26":"#b5470f","Nov'26":"#37b6c9","Dec'26":"#2f4fd0","Jan'27":"#1f6b5a","Feb'27":"#8a6d3b","Mar'27":"#c04a86","Apr'27":"#7a8194","May'27":"#c0392b"}; }
   _dateToActMonth(iso){ if(!iso)return null; const m=String(iso).match(/^(\d{4})-(\d{2})/); if(!m)return null; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+"'"+m[1].slice(2); }
   _actDateOf(lv,zmk,aid){ return (this._actDate||{})[lv+'||'+zmk+'||'+aid]||{}; }
+  /* Delay 数据接口（后续可直接导入）:
+     this._appCfg.zoneDelay = {"L1||L1|ZC1":12, "L2||L2|2.1CIS":5}
+     正数 = 延误天数，地图显示 −12 days；负数 = 提前，显示 +N days。也接受 {days:12}。 */
+  _rpDelayClock(){const P=["Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26","Jan '27","Feb '27","Mar '27","Apr '27","May '27"],now=new Date(),mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()];let asOf=mn+" '"+String(now.getFullYear()).slice(2);if(P.indexOf(asOf)<0)asOf="Jul '26";const idx=Math.max(0,P.indexOf(asOf));return {idx,daysElapsed:(idx+1)*30.44};}
+  /* 与 RP Report 完全同一口径：截至本月累计计划 vs 累计实际，再按已过工期折算天数。
+     没有截至本月计划的区域不显示；达到/超过计划显示 0 days。 */
+  _rpZoneDelayDays(lv,z){if(!z)return null;const zmk=z.mk||z.lid||'',clk=this._rpDelayClock(),last=Math.min(this.ACT_MONTHS.length-1,clk.idx+1);let pT=0,dT=0;
+    const acts=(this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z));acts.forEach(a=>{const tot=a.total;if(tot==null||tot<=0)return;for(let i=0;i<=last;i++){const m=this.ACT_MONTHS[i],pv=this.actPlan(lv,zmk,a.id,m),dv=this.actDoneMonth(lv,zmk,a.id,m);if(pv!=null)pT+=(+pv||0);if(dv!=null)dT+=(+dv||0);}});
+    if(pT<=0)return null;return Math.round(clk.daysElapsed*Math.max(0,pT-dT)/pT);}
+  _zoneDelayDays(lv,z){if(!z)return null;const m=this._appCfg&&this._appCfg.zoneDelay,zmk=z.mk||z.lid||'',lab=z.label||'';if(m){const ks=[lv+'||'+zmk,lv+'||'+lab,zmk,lab];let raw;
+      for(const k of ks){if(k&&Object.prototype.hasOwnProperty.call(m,k)){raw=m[k];break;}}if(raw&&typeof raw==='object')raw=(raw.days!=null?raw.days:raw.delay_days);if(raw!=null&&raw!==''){const n=Number(raw);if(Number.isFinite(n))return n;}}
+    return this._rpZoneDelayDays(lv,z);}
+  _delayView(n){const d=Math.round(Math.abs(n));return n>0?{txt:'−'+d+' days',c:'#c8102e'}:n<0?{txt:'+'+d+' days',c:'#218a5c'}:{txt:'0 days',c:'#667085'};}
   _actCumDone(lv,zmk,aid){ let s=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m);if(d)s+=d;}); return s; }
   _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; const _try=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];   /* Bottom slab(C)以 RC Works 的时间为浇筑时间 */ let aid=_try[0]; _try.some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
     const d=this._actDateOf(lv,zmk,aid); const tot=this.actTotal(lv,zmk,aid,null); const cd=this._actCumDone(lv,zmk,aid);
@@ -1289,6 +1303,7 @@ class Component extends DCLogic {
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#b23a2e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*1.18).toFixed(0)}">■ ${this.esc(_e)}</text>`;
         } }   /* Slab 起(▶)/止(■)日期 — 没有 slab 日期的区域不写 TBA, 避免整张图过密 */
       if(this.showDates&&this.colorMode!=='castdate'){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _cm=this._dateToActMonth(_cd.start||_cd.end); if(_cm){_topDates+=`<text class="zname" style="font-size:${(fs*0.38).toFixed(0)}px;font-weight:750;fill:#315b96;stroke:var(--stage);stroke-width:${(fs*0.10).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*1.67).toFixed(0)}">COL ${this.esc(_cm)}</text>`;} }   /* 普通 Dates overlay: 只补充较小的 Column 月份; slab 日期见上方 */
+      if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.52,_dy=this.colorMode==='castdate'?cy+fs*1.48:(this.showDates?cy+fs*2.22:cy+fs*1.18);_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_dy.toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}   /* Delay 图层: 仅有数据的区域显示 */
       if(this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}   /* 角标: 填了 done 却缺总量/计划的区 */
       /* 开工标记改为标签变橘(见上方 zstart), 不再画橘点 */
       /* 延误标记改为标签变红(见上方 zdelay), 不再画红点 */
@@ -1388,6 +1403,7 @@ class Component extends DCLogic {
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
       if(this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=this._zoneCastInfo(this.curLevel,_z2); const _dl=_ci2.done?'Completed':(_ci2.date?this._fmtDShort(_ci2.date):'TBA'); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_ci2.date||_ci2.done?'#141414':'#b3261e'}" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`; }
       if(this.colorMode==='castdate'&&cls==='subP'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); const _dl=_mo||'TBA'; const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_dl.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="${_mo?'#141414':'#b3261e'}" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`; }   /* Podium Column 月份: 自适应小字 + 自动避让 */
+      if(this.showDelay&&!(cls==='subZC'&&this.showSubC)){const _dz={mk:this.curLevel+'|'+e.label,label:e.label};const _dd=this._zoneDelayDays(this.curLevel,_dz);if(_dd!=null){const _dv=this._delayView(_dd),_dfs=Math.max(1150,Math.min(1800,_bw/(Math.max(7,_dv.txt.length)*0.7),_bh*0.16));const _dy=lq[1]+_dfs*(this.colorMode==='castdate'?2.65:1.35),_dp=_placeMDate(lq[0],_dy,_dv.txt,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_dv.c}" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.24).toFixed(0)}" paint-order="stroke">${this.esc(_dv.txt)}</text>`;}}   /* Marine Delay 同样使用日期碰撞避让 */
       });};
      const _maBlue=(this.CAT.MA&&this.CAT.MA.c)||'#1747b8';
      _dr(_subL.ZC,'subZC',_maBlue,false,this.showSubZC);
@@ -2736,6 +2752,7 @@ class Component extends DCLogic {
     mkToggle(this.showCrit,`<span style="width:9px;height:9px;border-radius:50%;background:var(--crit)"></span>Critical path`,()=>{this.showCrit=!this.showCrit;this.buildMetrics();this.render();});
     mkToggle(this.showAreaBounds,`<span style="width:16px;border-top:3px solid var(--dim);display:inline-block"></span>Area boundaries`,()=>{this.showAreaBounds=!this.showAreaBounds;this.buildMetrics();this.render();});
     mkToggle(this.showDates,`<span style="font-size:10px">🕓</span>Dates`,()=>{this.showDates=!this.showDates;this.buildMetrics();this.render();});   /* 所有账号可看; 地图只显示 slab 日期和较小的 column 月份 */
+    mkToggle(this.showDelay,`<span style="font-size:9px;font-weight:900;color:#c8102e">−d</span>Delay`,()=>{this.showDelay=!this.showDelay;this.buildMetrics();this.render();});   /* Delay 数据图层: 所有账号可看 */
     Object.keys(this.OVL).forEach(k=>{const o=this.OVL[k];mkToggle(this.showOvl[k],`<span class="dash" style="color:${o.c}"></span>${o.label}`,()=>{this.showOvl[k]=!this.showOvl[k];this._ovlByLevel=this._ovlByLevel||{};this._ovlByLevel[this.curLevel]={...this.showOvl};this.buildMetrics();this.render();});});
     if(this.DATA.beamlines && this.DATA.beamlines[this.curLevel])
       mkToggle(this.showBeams,`<span style="width:16px;border-top:2px solid var(--beam);display:inline-block"></span>Steel main beams`,()=>{this.showBeams=!this.showBeams;this.buildMetrics();this.render();});
@@ -2928,7 +2945,7 @@ class Component extends DCLogic {
         totals:{area_m2:z.area||0,columns:c.columns||0,pilecap:c.pilecap||0,mainbeam:c.mainbeam||0,steelbeam:c.steelbeam||0,lift:z.lifts?z.lifts.length:0,stair:z.stairs?z.stairs.length:0},
         progress_pct:p.pct==null?null:p.pct,status:p.status||'todo'});});});
     const out={meta:{project:'RWS P1 CJ',exported_at:new Date().toISOString(),exported_by:(this._rwsUser&&this._rwsUser.username)||'',project_pct:this.projPct,act_months:this.ACT_MONTHS},
-      current_state:{element_status:this.elem,element_dates:this._elemDate||{},act_total:this._actTotal||{},act_plan:this._actPlan||{},act_done_m:this._actDoneM||{},act_hidden:this._actHidden||{},act_defs:this._actDefs||[],custom_categories:this._catAdd||[],custom_items:this._elemAdd||{},slab_actual_qty:this._zpOv||{},quantity_overrides:this._qtyOv||{},plan_qty_overrides:this._zpPlanOv||{},critical:this._critOv||{},zone_updates:this.updates||{},edited_keys:this._editedKeys||{},act_date:this._actDate||{},col_month:this._colMonth||{},act_cmt:this._actCmt||{},act_upd:this._actUpd||{}},
+      current_state:{element_status:this.elem,element_dates:this._elemDate||{},act_total:this._actTotal||{},act_plan:this._actPlan||{},act_done_m:this._actDoneM||{},act_hidden:this._actHidden||{},act_defs:this._actDefs||[],custom_categories:this._catAdd||[],custom_items:this._elemAdd||{},slab_actual_qty:this._zpOv||{},quantity_overrides:this._qtyOv||{},plan_qty_overrides:this._zpPlanOv||{},critical:this._critOv||{},zone_updates:this.updates||{},edited_keys:this._editedKeys||{},act_date:this._actDate||{},col_month:this._colMonth||{},zone_delay:(this._appCfg&&this._appCfg.zoneDelay)||{},act_cmt:this._actCmt||{},act_upd:this._actUpd||{}},
       zones};
     if(this.rwsIsAdmin()){ try{out.accounts=await rwsAdminListUsers();}catch(e){out.accounts_error=e.message;} try{out.activity_log=await rwsAdminActivityLog(5000);}catch(e){out.activity_log_error=e.message;} }
     return out;
@@ -2987,7 +3004,7 @@ class Component extends DCLogic {
       body.querySelectorAll('.__snapView').forEach(el=>el.addEventListener('click',()=>this.rwsViewSnapshot(+el.dataset.id)));
       body.querySelectorAll('.__snapDel').forEach(el=>el.addEventListener('click',()=>{this._confirmModal&&this._confirmModal('删除这个快照?',async()=>{await rwsSnapshotDelete(+el.dataset.id);this.rwsOpenHistory();});}));
     }catch(e){body.innerHTML='<div class="empty">加载失败</div>';}}
-  snapshot(){return {v:2,project:'RWS P1 CJ',savedAt:new Date().toISOString(),elem:this.elem,elemDate:this._elemDate,updates:this.updates,zpOv:this._zpOv,crit:this._critOv,actTotal:this._actTotal,actPlan:this._actPlan,actDoneM:this._actDoneM,actHidden:this._actHidden,actDefs:this._actDefs,catAdd:this._catAdd,elemAdd:this._elemAdd,editedKeys:this._editedKeys,actDate:this._actDate,colMonth:this._colMonth,actCmt:this._actCmt};}
+  snapshot(){return {v:2,project:'RWS P1 CJ',savedAt:new Date().toISOString(),elem:this.elem,elemDate:this._elemDate,updates:this.updates,zpOv:this._zpOv,crit:this._critOv,actTotal:this._actTotal,actPlan:this._actPlan,actDoneM:this._actDoneM,actHidden:this._actHidden,actDefs:this._actDefs,catAdd:this._catAdd,elemAdd:this._elemAdd,editedKeys:this._editedKeys,actDate:this._actDate,colMonth:this._colMonth,zoneDelay:(this._appCfg&&this._appCfg.zoneDelay)||{},actCmt:this._actCmt};}
   async saveLock(){
     if(this._locking)return; this._locking=true; setTimeout(()=>{this._locking=false;},4000);
     const isExt=u=>!u||/^(https?:)?\/\//i.test(u)||/^data:/i.test(u);
@@ -3020,7 +3037,7 @@ class Component extends DCLogic {
       const m=txt.match(/<script id="locked-data"[^>]*>([\s\S]*?)<\/script>/i);
       if(m||(txt.trim()[0]==='{')){
         let data=JSON.parse(m?m[1]:txt);
-        if(data.current_state){const cs=data.current_state;data={elem:cs.element_status,elemDate:cs.element_dates,updates:cs.zone_updates,zpOv:cs.slab_actual_qty,qtyOv:cs.quantity_overrides,zpPlanOv:cs.plan_qty_overrides,crit:cs.critical,actTotal:cs.act_total,actPlan:cs.act_plan,actDoneM:cs.act_done_m,actHidden:cs.act_hidden,actDefs:cs.act_defs,catAdd:cs.custom_categories,elemAdd:cs.custom_items,zdate:cs.zone_dates,editedKeys:cs.edited_keys,actDate:cs.act_date,colMonth:cs.col_month,actCmt:cs.act_cmt};}
+        if(data.current_state){const cs=data.current_state;data={elem:cs.element_status,elemDate:cs.element_dates,updates:cs.zone_updates,zpOv:cs.slab_actual_qty,qtyOv:cs.quantity_overrides,zpPlanOv:cs.plan_qty_overrides,crit:cs.critical,actTotal:cs.act_total,actPlan:cs.act_plan,actDoneM:cs.act_done_m,actHidden:cs.act_hidden,actDefs:cs.act_defs,catAdd:cs.custom_categories,elemAdd:cs.custom_items,zdate:cs.zone_dates,editedKeys:cs.edited_keys,actDate:cs.act_date,colMonth:cs.col_month,zoneDelay:cs.zone_delay||((cs.settings||{}).zoneDelay),actCmt:cs.act_cmt};}
         if(data.elem){this.elem={...this.elem,...data.elem};elemN=Object.keys(data.elem).length;}
         if(data.updates){Object.keys(data.updates).forEach(k=>{this.updates[k]=data.updates[k];});updN=Object.keys(data.updates).length;}
         if(data.elemDate){this._elemDate={...(this._elemDate||{}),...data.elemDate};}
@@ -3039,6 +3056,7 @@ class Component extends DCLogic {
         if(data.zdate&&typeof data.zdate==='object'){this._zdate={...(this._zdate||{}),...data.zdate};}
         if(data.actDate&&typeof data.actDate==='object'){this._actDate={...(this._actDate||{}),...data.actDate};}
         if(data.colMonth&&typeof data.colMonth==='object'){this._colMonth={...(this._colMonth||{}),...data.colMonth};}
+        if(data.zoneDelay&&typeof data.zoneDelay==='object'){this._appCfg=this._appCfg||{};this._appCfg.zoneDelay={...(this._appCfg.zoneDelay||{}),...data.zoneDelay};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
         if(data.actCmt&&typeof data.actCmt==='object'){this._actCmt={...(this._actCmt||{}),...data.actCmt};this.saveActCmt();}
         if(data.zdate||data.actDate||data.colMonth)this.saveDates();
         if(Array.isArray(data.catAdd)){this._catAdd=this._catAdd||[];data.catAdd.forEach(c=>{if(c&&c.code&&!this._catAdd.some(x=>x.code===c.code))this._catAdd.push({code:c.code,label:c.label});});}
@@ -3047,6 +3065,7 @@ class Component extends DCLogic {
         try{if(typeof rwsGetSession==='function'&&rwsGetSession()){
           const pv=(store,obj,parse)=>{Object.keys(obj||{}).forEach(k=>{if(this.isEdited(store,k))return;let lv=null,mk=null;if(parse){const pp=k.split('||');lv=pp[0];mk=pp[1];}rwsSyncKV(store,k,obj[k],lv,mk);});};
           pv('act_plan',data.actPlan,true);pv('act_total',data.actTotal,true);pv('act_done_m',data.actDoneM,true);pv('act_hidden',data.actHidden,true);pv('elem_date',data.elemDate,true);pv('crit',data.crit,false);pv('zdate',data.zdate,false);pv('act_date',data.actDate,false);pv('col_month',data.colMonth,false);pv('act_cmt',data.actCmt,true);
+          if(data.zoneDelay&&typeof rwsSyncKV==='function')rwsSyncKV('settings','zoneDelay',this._appCfg.zoneDelay||{},null,null);
           if(data.elem&&typeof rwsSyncElementStatus==='function')Object.keys(data.elem).forEach(k=>rwsSyncElementStatus(k,data.elem[k]));
         }}catch(e){console.warn('import cloud-sync skipped',e);}
       } else {
