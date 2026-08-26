@@ -1250,7 +1250,7 @@ class Component extends DCLogic {
         _ovlLines+=`<${tag} class="ovl" points="${p}" ${seg.closed?`style="fill:url(#hz_${k})"`:''} stroke="${o.c}" stroke-width="${(o.w*1.05).toFixed(1)}" stroke-dasharray="6 4.5" stroke-opacity="0.95"/>`;
       });
     });
-    if(this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
+    if(this.rwsIsAdmin() && this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
       this.DATA.beamlines[this.curLevel].forEach(seg=>{
         const p=seg.map(pt=>pt[0].toFixed(0)+','+(H-pt[1]).toFixed(0)).join(' ');
         s+=`<polyline class="beamln" points="${p}"/>`;
@@ -1680,7 +1680,7 @@ class Component extends DCLogic {
     }
     s+='<div style="height:6px"></div>';
     Object.keys(this.OVL).forEach(k=>{if(this.showOvl[k]){const o=this.OVL[k];s+=`<div class="lr"><span class="dash" style="border-color:${o.c}"></span>${o.label}</div>`;}});
-    if(this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]) s+=`<div class="lr"><span style="width:18px;border-top:2px solid var(--beam)"></span>Steel-main-beam lines (approx.)</div>`;
+    if(this.rwsIsAdmin() && this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]) s+=`<div class="lr"><span style="width:18px;border-top:2px solid var(--beam)"></span>Steel-main-beam lines (approx.)</div>`;
     if(this.showCrit)s+=`<div class="lr"><span style="width:13px;color:var(--crit);font-weight:800;text-align:center">Ab</span>Red zone name = critical path</div>`;
     if(this.showSeq && this.rwsIsAdmin())s+=`<div class="lr"><span class="sw" style="border-radius:50%;background:var(--dim);color:#fff;font-size:8px;text-align:center;line-height:13px;font-weight:800">#</span>Pour sequence</div>`;
     {const _acc=(this.showAccess!==false)?this._accDisplay(this.curLevel,this._accMon()).arr:[];if(_acc.length)s+=`<div class="lr"><svg width="28" height="13" viewBox="0 0 28 13" style="flex:0 0 auto"><line x1="5" y1="6.5" x2="21" y2="6.5" stroke="#1e3a8a" stroke-width="2.4"/><polygon points="28,6.5 20,2.5 20,10.5" fill="#1e3a8a"/><circle cx="4" cy="6.5" r="4" fill="#1e3a8a" stroke="#fff" stroke-width="1.4"/></svg>Access route (● start → direction)</div>`;}
@@ -2754,7 +2754,7 @@ class Component extends DCLogic {
     mkToggle(this.showDates,`<span style="font-size:10px">🕓</span>Dates`,()=>{this.showDates=!this.showDates;this.buildMetrics();this.render();});   /* 所有账号可看; 地图只显示 slab 日期和较小的 column 月份 */
     mkToggle(this.showDelay,`<span style="font-size:9px;font-weight:900;color:#c8102e">−d</span>Delay`,()=>{this.showDelay=!this.showDelay;this.buildMetrics();this.render();});   /* Delay 数据图层: 所有账号可看 */
     Object.keys(this.OVL).forEach(k=>{const o=this.OVL[k];mkToggle(this.showOvl[k],`<span class="dash" style="color:${o.c}"></span>${o.label}`,()=>{this.showOvl[k]=!this.showOvl[k];this._ovlByLevel=this._ovlByLevel||{};this._ovlByLevel[this.curLevel]={...this.showOvl};this.buildMetrics();this.render();});});
-    if(this.DATA.beamlines && this.DATA.beamlines[this.curLevel])
+    if(this.rwsIsAdmin() && this.DATA.beamlines && this.DATA.beamlines[this.curLevel])
       mkToggle(this.showBeams,`<span style="width:16px;border-top:2px solid var(--beam);display:inline-block"></span>Steel main beams`,()=>{this.showBeams=!this.showBeams;this.buildMetrics();this.render();});
     if(this.COLUMNS && this.COLUMNS[this.curLevel])
       mkToggle(this.showColumns,`<span style="width:9px;height:9px;border-radius:50%;background:#8a93a3;display:inline-block"></span>Columns`,()=>{this.showColumns=!this.showColumns;this.buildMetrics();this.render();});
