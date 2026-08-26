@@ -1036,9 +1036,10 @@ class Component extends DCLogic {
     });
     this.commitElem();
   }
-  commitElem(){const _scEl=this.root.querySelector('#sidebody');const _sy=_scEl?_scEl.scrollTop:0;const _open=[...(this.root.querySelectorAll('#sidebody details.sec[open]'))].map(d=>d.dataset.sec);
+  commitElem(){const _scEl=this.root.querySelector('#sidebody');const _sy=_scEl?_scEl.scrollTop:0;const _open=[...(this.root.querySelectorAll('#sidebody details.sec[open]'))].map(d=>d.dataset.sec);const _sub=this._subOpen?{kind:this._subOpen.kind,i:this._subOpen.i}:null;
     this.saveElem();this.applyUpdates();this.buildRail();this.buildTimeline();this.render();
-    const z=this.selKey&&this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z){this.selectZone(z);this.paintSel();this.paintTimelineSel();}
+    if(_sub){this._subOpen=_sub;this.selectSubzone(_sub.kind,_sub.i);this.paintSel();this.paintTimelineSel();}
+    else {const z=this.selKey&&this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z){this.selectZone(z);this.paintSel();this.paintTimelineSel();}}
     const _sc2=this.root.querySelector('#sidebody');if(_sc2){_open.forEach(t=>{const d=_sc2.querySelector('details.sec[data-sec="'+t+'"]');if(d)d.open=true;});_sc2.scrollTop=_sy;}
     this.refreshUpdBadge();if(this.root.querySelector('#modal').classList.contains('open'))this.openTable();}
 
@@ -2253,7 +2254,7 @@ class Component extends DCLogic {
       this.addUpdate(z.mk,{pct,status,date,note,crew,level:this.curLevel,zone:z.label});
     });
     const sb=this.root.querySelector('#sidebody');
-    sb.querySelectorAll('.elchip').forEach(el=>el.addEventListener('click',()=>this.cycleElem(el.dataset.key)));
+    sb.querySelectorAll('.elchip').forEach(el=>el.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();this.cycleElem(el.dataset.key);}));
     sb.querySelectorAll('.eldate').forEach(el=>{el.addEventListener('click',e=>e.stopPropagation());el.addEventListener('change',()=>{const key=el.dataset.key;if(!this.rwsCanEditElement(key)){this.rwsDeny('You can only update columns inside your assigned zones.');this.selectZone(z);return;}this._flashSel='.eldate[data-key="'+key+'"]';this.setElemDate(key,el.value);this.commitElem();});});
     sb.querySelectorAll('.lnk[data-jump]').forEach(_jl=>_jl.addEventListener('click',()=>{const d=sb.querySelector('details.sec[data-sec="'+_jl.dataset.jump+'"]');if(!d)return;d.open=true;const sm=d.querySelector('summary');setTimeout(()=>{d.scrollIntoView({block:'start',behavior:'smooth'});if(sm){sm.classList.add('hlrow');setTimeout(()=>sm.classList.remove('hlrow'),1800);}},30);}));
     const _colIdx={};(this.COLUMNS&&this.COLUMNS[this.curLevel]||[]).forEach((c,ci)=>{_colIdx[c.id]=ci;});
