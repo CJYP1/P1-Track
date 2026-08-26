@@ -14,7 +14,7 @@
 <x-dc>
 <helmet data-dc-atomics>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="presentation/styles.css?v=9908940ad0">
+<link rel="stylesheet" href="presentation/styles.css?v=d97199d8c2">
 <script src="zone-data.global.js?v=e8594353e0"></script>
 <script src="zp-data.global.js?v=9cfccc4558"></script>
 <script src="cw-groups.global.js?v=6c366895d1"></script>
@@ -25,26 +25,33 @@
 <div id="app" ref="{{ rootRef }}">
   <header>
     <div class="mark"></div>
-    <div><h1>RWS P1 · Zone Resource &amp; Progress Map (P1 Planning) <span style="font-size:10px;font-weight:700;color:var(--crit);white-space:nowrap">⚠ Refresh (F5) before use to load the latest data</span></h1><div class="sub">Quantities &amp; site progress per zone</div></div>
-    <div class="spacer"></div>
-    <span id="autosave" style="font-size:10px;color:var(--faint);font-weight:600">Autosave on</span>
-    <span id="rwsQueueBadge" style="font-size:10px;color:var(--crit);font-weight:700;display:none"></span>
-    <span id="rwsUserInfo" style="font-size:11px;color:var(--dim);font-weight:600"></span>
-    <button class="hbtn" id="rwsLogoutBtn" style="display:none">Log out</button>
-    <button class="hbtn" id="rwsAdminBtn" style="display:none">🔐 Admin</button>
-    <button class="hbtn primary" id="openSched" style="display:none">📅 Construction Schedule</button>
-    <button class="hbtn" id="openM28" title="M28 Daily Progress Dashboard(需登录查看;账号有权限才能改动/评论)">📊 M28</button>
-    <button class="hbtn" id="openManpower" title="Manpower summary — daily workers (C carpenter / R ironworker) across all zones">👷 Manpower</button>
-    <button class="hbtn" id="openCastView" title="Cast schedule map — slabs by cast date, columns by month (from activity dates)">🗓 Cast schedule</button>
-    <button class="hbtn" id="openLookAhead" title="Reports — live target vs actual, split by NB / EB / MA permissions">📋 Report</button>
-    <button class="hbtn" id="rwsHistoryBtn" style="display:none" title="查看历史进度快照 — 调出某一周的完整状态(例如七月看六月做到哪)">🕓 History</button>
-    <button class="hbtn primary" id="saveLock" style="display:none" title="Save the whole page — all progress embedded — as one HTML file to forward or archive">💾 Save</button>
-    <button class="hbtn" id="loadLock" style="display:none" title="Import data (P6 plan / saved backup) — merges into the map and syncs to the cloud">📥 Import</button>
-    <button class="hbtn" id="rwsClearCache" title="Clear local cache — remove stale data from this browser and reload (cloud & uploaded data are not affected)">🧹 Clear cache</button>
-    <button class="hbtn" id="exportXls" style="display:none" title="Export the progress table to Excel">⬇ Excel</button>
-    <button class="hbtn" id="exportJson" style="display:none" title="Export ALL data (plan vs actual, who changed what, accounts) as one JSON for tracking">⬇ Full JSON</button>
-    <div id="zoneFindWrap" style="position:relative;display:inline-block;vertical-align:middle"><input id="zoneFind" type="text" placeholder="🔍 Find zone (B2-S7, POD2.2T, C-02, P14…)" autocomplete="off" style="width:230px;font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--txt);text-align:left;font-family:inherit"><div id="zoneFindRes" style="display:none;position:absolute;top:110%;left:0;min-width:260px;max-height:320px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.22);z-index:99990;padding:4px"></div></div>
-    <button class="hbtn" id="openTable" style="display:none" title="Full progress table of every zone (review / print)">▤ Table <span class="cnt" id="elemCnt">0</span></button>
+    <div class="header-brand"><h1>RWS P1 · Zone Resource &amp; Progress Map (P1 Planning) <span class="refresh-note">⚠ Refresh (F5) before use to load the latest data</span></h1><div class="sub">Quantities &amp; site progress per zone</div></div>
+    <div class="header-actions">
+      <div class="header-account">
+        <span id="autosave">Autosave on</span>
+        <span id="rwsQueueBadge" style="display:none"></span>
+        <span id="rwsUserInfo"></span>
+        <button class="hbtn" id="rwsLogoutBtn" style="display:none">Log out</button>
+        <button class="hbtn" id="rwsAdminBtn" style="display:none">🔐 Admin</button>
+      </div>
+      <div class="header-nav">
+        <button class="hbtn primary" id="openSched" style="display:none">📅 Construction Schedule</button>
+        <button class="hbtn" id="openM28" title="M28 Daily Progress Dashboard(需登录查看;账号有权限才能改动/评论)">📊 M28</button>
+        <button class="hbtn" id="openManpower" title="Manpower summary — daily workers (C carpenter / R ironworker) across all zones">👷 Manpower</button>
+        <button class="hbtn" id="openCastView" title="Cast schedule map — slabs by cast date, columns by month (from activity dates)">🗓 Cast</button>
+        <button class="hbtn" id="openLookAhead" title="Reports — live target vs actual, split by NB / EB / MA permissions">📋 Report</button>
+        <button class="hbtn" id="rwsHistoryBtn" style="display:none" title="查看历史进度快照 — 调出某一周的完整状态(例如七月看六月做到哪)">🕓 History</button>
+      </div>
+      <div class="header-tools">
+        <button class="hbtn primary" id="saveLock" style="display:none" title="Save the whole page — all progress embedded — as one HTML file to forward or archive">💾 Save</button>
+        <button class="hbtn" id="loadLock" style="display:none" title="Import data (P6 plan / saved backup) — merges into the map and syncs to the cloud">📥 Import</button>
+        <button class="hbtn icon-compact" id="rwsClearCache" title="Clear local cache — remove stale data from this browser and reload (cloud & uploaded data are not affected)">🧹 <span>Clear</span></button>
+        <button class="hbtn" id="exportXls" style="display:none" title="Export the progress table to Excel">⬇ Excel</button>
+        <button class="hbtn" id="exportJson" style="display:none" title="Export ALL data (plan vs actual, who changed what, accounts) as one JSON for tracking">⬇ Full JSON</button>
+        <div id="zoneFindWrap"><input id="zoneFind" type="text" placeholder="🔍 Find zone…" autocomplete="off"><div id="zoneFindRes" style="display:none;position:absolute;top:110%;right:0;min-width:260px;max-height:320px;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.22);z-index:99990;padding:4px"></div></div>
+        <button class="hbtn" id="openTable" style="display:none" title="Full progress table of every zone (review / print)">▤ Table <span class="cnt" id="elemCnt">0</span></button>
+      </div>
+    </div>
     <input id="lockFile" type="file" accept=".json,.html,.xls,.csv" style="display:none">
   </header>
   
