@@ -156,18 +156,16 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
       +'<div style="font-size:12px;color:#5b6271;font-weight:500;margin-top:1px">Progress tracks the critical-path work on the map · each 100% earns that month’s programme days · April 2026 → May 2027</div>'
       +'</div></div>';
     html+='<div style="display:flex;align-items:center;gap:9px;background:'+liveBg+';border:1px solid '+liveBd+';color:'+liveFg+';border-radius:10px;padding:8px 13px;font-size:11.5px;font-weight:700;margin-bottom:16px"><span style="width:8px;height:8px;border-radius:50%;background:'+liveDot+';flex:0 0 auto"></span>'+liveMsg+'</div>';
-    /* ── 每区欠天数(基线 Apr + 每月按完成度赚回) + 总延迟取最差区 ── */
+    /* ── 每区欠天数：2026-06-30 重置为 0，只按 Jul→当前累计 Plan/Actual 计算 ── */
     (function(){
-      var CALD=[30,31,30,31,31,30,31,30,31,31,28,31,30,31];
       var aseries=(R&&R.byArea)?R.byArea:[];
       var owedArrs=aseries.map(function(a){
-        var owed=(a.baseOwe!=null?a.baseOwe:0),arr=[];
+        var owed=0,arr=[],pCum=0,dCum=0,gainCum=0;
         for(var i=0;i<14;i++){
-          if(i>0){   /* 四月(i=0)已包含在基线里, 不再重复计入; 从五月开始算 */
-            var ratio=null;
-            if(i<3)ratio=1;                                /* May, Jun 锁定 100% */
-            else if(i<=CUR){var pm=(a.planMonth&&a.planMonth[i])||0,dm=(a.doneMonth&&a.doneMonth[i])||0;ratio=pm>0?Math.max(0,Math.min(1,dm/pm)):1;}
-            if(ratio!=null)owed+=ratio*(CALD[i]+base[i][2])-CALD[i];   /* 100%→+该月天数, 0%→−日历月 */
+          if(i>=3&&i<=CUR){
+            var pm=(a.planMonth&&a.planMonth[i])||0,dm=(a.doneMonth&&a.doneMonth[i])||0;
+            pCum+=pm;dCum+=dm;if(pm>0)gainCum+=base[i][2];
+            owed=pCum>0?-Math.round(gainCum*Math.max(0,pCum-dCum)/pCum):0;
           }
           arr.push(Math.round(owed));
         }
@@ -177,7 +175,7 @@ body{font-family:'Poppins',-apple-system,BlinkMacSystemFont,sans-serif;backgroun
         var worst=owedArrs[0];owedArrs.forEach(function(o){if(o.now<worst.now)worst=o;});
         var cards=owedArrs.map(function(o){var neg=o.now<0;return '<div style="flex:1;min-width:120px;border:1px solid #e6e9ef;border-top:3px solid '+o.col+';border-radius:12px;padding:11px 14px'+(o===worst?';box-shadow:0 0 0 2px #c0392b':'')+'"><div style="font-size:12.5px;font-weight:800">'+o.label+(o===worst?' <span style="font-size:9px;color:#c0392b">◆ drives total</span>':'')+'</div><div style="font-size:28px;font-weight:800;color:'+(neg?"#c0392b":"#0f7a52")+';line-height:1.1;margin-top:3px">'+(o.now>0?"+":"")+o.now+'<span style="font-size:13px"> d</span></div><div style="font-size:10px;color:#98a0ad;font-weight:700">'+(neg?"behind":"ahead")+' · as of '+asOfL+'</div></div>';}).join('');
         html+='<div style="background:#fff;border:1px solid #e6e9ef;border-radius:16px;padding:18px 22px;box-shadow:0 6px 22px rgba(20,30,50,.06);margin-bottom:18px">'
-          +'<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div style="font-size:14px;font-weight:800">Schedule position (days) · by area</div><div style="font-size:11px;color:#5b6271">Baseline Apr 2026 → each month earns days by actual completion; total follows the worst (most-behind) area</div><div style="flex:1"></div>'
+          +'<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px"><div style="font-size:14px;font-weight:800">Schedule position (days) · by area</div><div style="font-size:11px;color:#5b6271">Reset to 0 at 30 Jun 2026 · Jul onward uses each area’s cumulative Plan vs Actual; total follows the worst area</div><div style="flex:1"></div>'
           +'<div style="font-size:13px;font-weight:800;color:'+(worst.now<0?"#c0392b":"#0f7a52")+'">Overall '+(worst.now>0?"+":"")+worst.now+' d ('+worst.label+')</div></div>'
           +'<div style="display:flex;gap:12px;flex-wrap:wrap">'+cards+'</div></div>';
       }
