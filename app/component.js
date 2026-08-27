@@ -1163,13 +1163,42 @@ class Component extends DCLogic {
       for(const k of ks){if(k&&Object.prototype.hasOwnProperty.call(m,k)){raw=m[k];break;}}if(raw&&typeof raw==='object')raw=(raw.days!=null?raw.days:raw.delay_days);if(raw!=null&&raw!==''){const n=Number(raw);if(Number.isFinite(n))return n;}}
     const p6=this._p6ZoneDelayDays(lv,z);return p6!=null?p6:this._rpZoneDelayDays(lv,z);}
   _delayView(n){const d=Math.round(Math.abs(n));return n>0?{txt:'−'+d+' days',c:'#c8102e'}:n<0?{txt:'+'+d+' days',c:'#218a5c'}:{txt:'0 days',c:'#667085'};}
+  /* August RP is interpolated two months into the Jun→Sep recovery-plan interval. */
+  _rpAugPct(lv,z){if(!z)return null;const n=s=>String(s||'').toUpperCase().replace(/\s+/g,'').replace(/^POD/,''),lab=n(z.label),cat=z.cat||'NB';
+    const pick=o=>Object.prototype.hasOwnProperty.call(o,lab)?o[lab]:null;
+    if(cat==='EB'){
+      if(lv==='B2')return pick({'EB2-2.1':75,'EB2-2.2':99.4,'EB2-2.3':81,'EB2-2.4':66.7,'EB2-3.1A-1':66.7,'EB2-3.1A-2+3.2-2':22.2,'EB2-3.2-1':66.7,'EB2-3.3':66.7,'EB2-3.4+3.5':33.8});
+      if(lv==='B1')return pick({'EB1S2.1':67,'EB1S2.2':69.6,'EB1S2.3':76.4,'EB1S2.4':78.8,'EB1S5':85.4,'EB1S6':33.3,'EB1S7':1.4,'EB1S8':5.4});
+      if(lv==='L1'){if(/^B-2\.[1-4]$/.test(lab))return 100;return pick({'B-3.1':91.1,'B-3.2':0,'B-3.3+3.5':0,'B-3.4':0});}
+      return null;
+    }
+    if(cat==='MA'){
+      if(lv==='L1'){const p=pick({'ZC1':86.9,'ZC2.1':23.1,'ZC2.2':23.1,'ZC3.1A':12.6,'ZC3.2':12.6,'ZC3.1B':11,'1.1':32.5,'1.2':70.5,'1.2T':66.7,'3.1CIST':29.6,'3.1T':30,'3.2':18.1,'3.2T':0,'3.3CIST':56.9,'3.3T':22.2,'3.4':0,'3.4T':0});return p;}
+      if(lv==='L2')return pick({'1.1':0,'1.2':48.1,'1.2T':33.9,'3.1CIST':0,'3.1T':0,'3.2':0,'3.2T':0,'3.3CIST':0,'3.3T':0,'3.4':0,'3.4T':0});
+      if(lv==='L3'||lv==='L4')return /^(?:1\.[12](?:T)?|3\.[1-4](?:CIST|T)?)$/.test(lab)?0:null;
+      return null;
+    }
+    if(cat!=='NB')return null;
+    if(lv==='B2')return pick({'B2-S1+1A':8.6,'B2-S2+S2A':14.5,'B2-S3':18.2,'B2-S4':4.1,'B2-S5':0,'B2-S6+6A':0,'B2-S7':0,'B2-S8':9.6,'B2-S8A+14A+13A':34.3,'B2-S9':23.8,'B2-S10':6.6,'B2-S11':43.6,'B2-S12':19,'B2-S13':28.3,'B2-S14':49.8});
+    if(lv==='B1')return pick({'C-01A+B':56.9,'C-02':33.3,'D-01':18.4,'D-02':5.4,'E-01':55,'F-01':26.9,'F-02':9.7,'A-07':88.4,'A-05+06':85.7,'A-01+03':64,'A-02+B-01':78.7,'A-04':41.3,'B-02':71.6,'B-03':52.5,'B-04+04A':94.1});
+    if(lv==='B1M')return pick({'S1':6.3,'S2':55.6,'S3':33.3,'S4':3.2,'S5':0,'S6':0,'S7':0,'S8':0});
+    if(lv==='L1')return pick({'2.1':93.6,'2.1T':85.8,'2.1CIS':87.8,'2.1CIST':96.6,'2.2':41.2,'2.2T':61.4,'2.3T':100,'2.3CIST':94,'2.4':0,'2.4T':37.3,'2.6CIS':66.7,'2.6CIST':75.6,'ZSLAB7-1':93.6,'ZSLAB7-2':85.8,'ZSLAB7-3':87.8,'ZSLAB7-4':96.6,'ZSLAB8-1':41.2,'ZSLAB8-2':61.4,'ZSLAB13,F01-1':100,'ZSLAB13,F01-2':94,'ZSLAB8A-1+12-1':0,'ZSLAB8A-2+12-2':37.3,'ZSLAB10-1':66.7,'ZSLAB10-2':75.6});
+    if(lv==='L2')return pick({'2.1':66.7,'2.1CIS':63.1,'2.1CIST':43.8,'2.1T':66.7,'2.2':0,'2.2T':0,'2.3CIST':58.4,'2.3T':88.9,'2.4':0,'2.4T':0,'2.6CIS':6.3,'2.6CIST':43.2});
+    if(lv==='L3')return pick({'2.1':40,'2.1T':12.2,'2.3T':50,'2.1CIS':0,'2.1CIST':0,'2.2':0,'2.2T':0,'2.3CIST':0,'2.4':0,'2.4T':0,'2.6CIS':0,'2.6CIST':0});
+    if(lv==='L4')return lab==='2.1'?0.9:(/^2\./.test(lab)?0:null);return null;}
+  _rpActualPct(lv,z){const a=this.zoneActPct(lv,z);if(a&&Number.isFinite(a.pct))return Math.round(a.pct);return z&&z._p&&Number.isFinite(z._p.pct)?Math.round(z._p.pct):0;}
   _actCumDone(lv,zmk,aid){ let s=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m);if(d)s+=d;}); return s; }
   _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; const _try=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];   /* Bottom slab(C)以 RC Works 的时间为浇筑时间 */ let aid=_try[0]; _try.some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
     const d=this._actDateOf(lv,zmk,aid); const tot=this.actTotal(lv,zmk,aid,null); const cd=this._actCumDone(lv,zmk,aid);
     let cumPlan=0; this.ACT_MONTHS.forEach(m=>{const p=this.actPlan(lv,zmk,aid,m);if(p)cumPlan+=(+p||0);});
     const done=(tot!=null&&tot>0)?(cd>=tot):(cumPlan>0&&cd>=cumPlan);   /* 有总量按总量; 无总量(靠计划跟踪)则累计完成≥累计计划即算完成 */
     const dt=d.end||d.start||null; return {aid,done,date:dt,start:d.start||null,end:d.end||null,month:this._dateToActMonth(dt)}; }
-  _zoneCastColor(z){ if(this._castLayer==='col')return '#efeaec'; const info=this._zoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
+  _marineCastInfo(lv,z){const lab=String(z&&z.label||''),labs=[lab],L=this.SUBLINKS||{};
+    Object.keys(L.c2zc||{}).forEach(c=>{if(L.c2zc[c]===lab)labs.push(c);});Object.keys(L.p2zone||{}).forEach(p=>{if((L.p2zone[p]||[]).indexOf(lab)>=0)labs.push(p);});
+    const inf=labs.map(x=>this._zoneCastInfo(lv,{mk:lv+'|'+x,label:x,cat:'MA',_mslab:/^C/i.test(x)})).filter(x=>x.start||x.end||x.date);if(!inf.length)return this._zoneCastInfo(lv,z);
+    const starts=inf.map(x=>x.start).filter(Boolean).sort(),ends=inf.map(x=>x.end).filter(Boolean).sort(),start=starts[0]||null,end=ends[ends.length-1]||null,date=end||start;return {aid:'marine',done:inf.every(x=>x.done),date,start,end,month:this._dateToActMonth(date)};}
+  _mapZoneCastInfo(lv,z){return lv==='L1'&&z&&z.cat==='MA'&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z);}
+  _zoneCastColor(z){ if(this._castLayer==='col')return '#efeaec'; const info=this._mapZoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
   _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.start||d.end); return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
   /* Marine 柱子归属: 按 marine-col-map.csv 反查这根柱属于哪个 Podium(P) 区 → 用 P 区的 col 活动读取浇筑时间/上色 */
   _colPodLabel(id){ if(!this._marineCol)return null; if(!this._colPodIdx){ const m={}; Object.keys(this._marineCol).forEach(p=>this._marineCol[p].forEach(c=>{m[String(c.id||'').trim().toUpperCase()]=p;})); this._colPodIdx=m; } return this._colPodIdx[String(id||'').trim().toUpperCase()]||null; }
@@ -1221,6 +1250,8 @@ class Component extends DCLogic {
     EB:{label:'EB Report', title:'Existing Basement Superstructure', scope:'Existing Basement · B2 / B1 / L1 / L2',levels:['B2','B1','L1','L2']},
     MA:{label:'MA Report', title:'Marine Superstructure', scope:'Marine · L1',levels:['L1']} }; }
   _reportCats(){ const u=this._rwsUser; if(!u)return []; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; const who=String(u.username||u.display_name||'').trim().toUpperCase(); if(u.role==='admin'||a.indexOf('RWS')>=0||who==='RWS')return ['NB','EB','MA']; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
+  _syncFocusButtons(){const d=this.root&&this.root.querySelector('#toggleDelayTop'),r=this.root&&this.root.querySelector('#toggleRpVsAc');if(d)d.classList.toggle('on',!!this.showDelay);if(r)r.classList.toggle('on',!!this.showRpVsAc);}
+  _toggleFocus(which){if(which==='delay'){this.showDelay=!this.showDelay;if(this.showDelay)this.showRpVsAc=false;}else{this.showRpVsAc=!this.showRpVsAc;if(this.showRpVsAc)this.showDelay=false;}this._syncFocusButtons();this.buildMetrics();this.render();}
   openLookAhead(){
     const defs=this._reportDefs(); const cats=this._reportCats();
     let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
@@ -1248,6 +1279,8 @@ class Component extends DCLogic {
     ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=close;
     ov.querySelectorAll('#rptSeg button[data-c]').forEach(b=>b.onclick=()=>{this._reportCat=b.dataset.c;this.openLookAhead();}); }
   zoneFill(z){
+    if(this.showDelay)return '#f3f4f6';
+    if(this.showRpVsAc){const rp=this._rpAugPct(this.curLevel,z);if(rp==null)return '#eef1f5';return this._rpActualPct(this.curLevel,z)>=rp?'#bfe7ce':'#f4c5cd';}
     if(this.colorMode==='castdate') return this._zoneCastColor(z);
     if(this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); return this.PLAN_COLORS()[st.state]||'#ffffff'; }
     if(this.colorMode==='area') return (this.CAT[z.cat]||this.CAT.NB).c;
@@ -1260,11 +1293,13 @@ class Component extends DCLogic {
   /* ---------- SVG render ---------- */
   render(){
     const L=this.DATA.levels[this.curLevel],H=L.h,W=L.w;
+    const _focusOnly=!!(this.showDelay||this.showRpVsAc);
+    this._syncFocusButtons();
     this.base={x:-W*0.03,y:-H*0.03,w:W*1.06,h:H*1.06};
     // Keep the current zoom/pan when re-rendering the same level (e.g. after editing a status);
     // only reset the view when the level actually changes.
     if(this._vbLevel===this.curLevel && this.vb && this.vb.w){/* preserve this.vb */}else{this.vb={...this.base};}
-    const _pmb=this.root.querySelector('#planMonthBig');if(_pmb){if(this.colorMode==='plan'){_pmb.textContent=this.planMonth();_pmb.style.display='block';}else _pmb.style.display='none';}
+    const _pmb=this.root.querySelector('#planMonthBig');if(_pmb){if(this.colorMode==='plan'&&!_focusOnly){_pmb.textContent=this.planMonth();_pmb.style.display='block';}else _pmb.style.display='none';}
     this._vbLevel=this.curLevel;
     const ef=this.root.querySelector('#emptyfloor');
     const lgEl=this.root.querySelector('#legend');
@@ -1275,7 +1310,7 @@ class Component extends DCLogic {
       const vis=this.zoneVisible(z);
       const pts=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
       const crit=vis&&this.showCrit&&z.crit?' critln':'';
-      let op=vis?(this.colorMode==='area'?0.5:0.72):0.05;
+      let op=vis?(_focusOnly?0.58:(this.colorMode==='area'?0.5:0.72)):0.05;
       let planst='';
       if(vis&&this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); op=st.colored?0.62:0.92; }
       if(vis&&this.colorMode==='castdate'){ if(this._castLayer==='col'){op=0.28;} else {const _ci=this._zoneCastInfo(this.curLevel,z); if(_ci.done)op=0.5;} }   /* 浇筑完成的板: 半透明黑, 跟按月上色的板区分 */
@@ -1283,13 +1318,13 @@ class Component extends DCLogic {
       if(_maL1&&!this.showSubZC)op=0;
       s+=`<polygon class="zone${vis?'':' dim'}${crit}${planst}" data-i="${i}" points="${pts}" fill="${this.zoneFill(z)}" fill-opacity="${op}"/>`;
     });
-    {const _hk=['podcis','podium','transfer'].filter(k=>this.showOvl[k]);
+    {const _hk=_focusOnly?[]:['podcis','podium','transfer'].filter(k=>this.showOvl[k]);
      const _HS={podium:{rot:45,sp:2800,sw:300,op:0.22,cross:false},transfer:{rot:-45,sp:1700,sw:300,op:0.26,cross:false},podcis:{rot:0,sp:2400,sw:260,op:0.20,cross:true}};
      if(_hk.length){s+=`<defs>${_hk.map(k=>{const o=this.OVL[k],h=_HS[k];return `<pattern id="hz_${k}" patternUnits="userSpaceOnUse" width="${h.sp}" height="${h.sp}" patternTransform="rotate(${h.rot})"><rect width="${h.sp}" height="${h.sp}" fill="${o.c}" fill-opacity="0.065"/><line x1="0" y1="0" x2="0" y2="${h.sp}" stroke="${o.c}" stroke-width="${h.sw}" stroke-opacity="${h.op}"/>${h.cross?`<line x1="0" y1="0" x2="${h.sp}" y2="0" stroke="${o.c}" stroke-width="${h.sw}" stroke-opacity="${h.op}"/>`:''}</pattern>`;}).join('')}</defs>`;}}
     let _ovlLines='';   /* overlay 虚线(Podium outline / L5 transfer / Podium CIS)延后到 C/P 子区之后再画, 保证在最上层 */
     let _topDates='';   /* 所有浇筑/计划日期文字收集到这里, 最后画 → 永远在最上层, 不被柱子/overlay 盖住 */
     ['podcis','podium','transfer'].forEach(k=>{
-      if(!this.showOvl[k])return;const o=this.OVL[k];
+      if(_focusOnly||!this.showOvl[k])return;const o=this.OVL[k];
       (this.DATA.overlays[k]||[]).forEach(seg=>{
         const p=seg.pts.map(pt=>{const q=this.proj(pt,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
         const tag=seg.closed?'polygon':'polyline';
@@ -1297,13 +1332,13 @@ class Component extends DCLogic {
         _ovlLines+=`<${tag} class="ovl" points="${p}" ${seg.closed?`style="fill:url(#hz_${k})"`:''} stroke="${o.c}" stroke-width="${(o.w*1.05).toFixed(1)}" stroke-dasharray="6 4.5" stroke-opacity="0.95"/>`;
       });
     });
-    if(this.rwsIsAdmin() && this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
+    if(!_focusOnly&&this.rwsIsAdmin() && this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
       this.DATA.beamlines[this.curLevel].forEach(seg=>{
         const p=seg.map(pt=>pt[0].toFixed(0)+','+(H-pt[1]).toFixed(0)).join(' ');
         s+=`<polyline class="beamln" points="${p}"/>`;
       });
     }
-    if(this.showAreaBounds && this.AREA_OUTLINES && this.AREA_OUTLINES[this.curLevel]){
+    if(!_focusOnly&&this.showAreaBounds && this.AREA_OUTLINES && this.AREA_OUTLINES[this.curLevel]){
       const _AO=this.AREA_OUTLINES[this.curLevel];
       Object.keys(_AO).forEach(cat=>{
         if(this.filterCat!=='all' && cat!==this.filterCat)return;
@@ -1322,7 +1357,7 @@ class Component extends DCLogic {
       const bw=x1-x0,bh=y1-y0;
       let fs=Math.max(1500,Math.min(3500,(bw*0.92)/(Math.max(4,z.label.length)*0.6),bh*0.34));
       if(/^(M-SLAB|CAPPING)/i.test(z.label))fs=1400;
-      _lbls.push({z,i,cx,cy,fs,w:z.label.length*fs*0.62,h:fs*1.85});
+      _lbls.push({z,i,cx,cy,fs,w:Math.max(z.label.length*fs*0.62,_focusOnly?fs*6.8:0),h:_focusOnly?fs*2.55:fs*1.85});
     });
     _lbls.sort((a,b)=>(b.z.area||0)-(a.z.area||0));
     const _placed=[];
@@ -1336,34 +1371,35 @@ class Component extends DCLogic {
     });
     _lbls.forEach(lb=>{
       const z=lb.z,cx=lb.fx,cy=lb.fy,fs=lb.fs;
-      if(this.curLevel==='L1'&&z.cat==='MA')return;   // L1 Marine 父区名字由 ZC 叠加层提供(自身标签不画, 避免重叠; ZC 关时只留边界线)
+      if(this.curLevel==='L1'&&z.cat==='MA'&&this.showSubZC)return;   // ZC 子层已显示时避免父区重复
       const isCrit=z.crit&&this.showCrit;
       const _pm=this.planMonth();
       const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,_pm);   /* 延误: 标签变红粗边(替代原红点) */
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
-      if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="zname${isCrit?' crit':''}${_delayed?' zdelay':''}${_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;   /* Cast 视图可用 Names 开关隐藏区名 */
-      if(this.colorMode==='castdate'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _ci=this._zoneCastInfo(this.curLevel,z); const _hasDt=(_ci.done||_ci.date); if(_hasDt){const _lbl=_ci.done?'Completed':this._fmtDShort(_ci.date); const _ny=(this.showCastNames===false)?(cy+fs*0.30):(cy+fs*0.78); _topDates+=`<text class="zname" style="font-size:${(fs*0.95).toFixed(0)}px;font-weight:900;fill:#ffffff;stroke:#111111;stroke-width:${(fs*0.11).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_lbl)}</text>`;} }   /* Cast slab: 有实际日期才显示；无日期不写 TBA */
-      if(this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); if(_mo){ const _ny=(this.showCastNames===false)?(cy+fs*0.24):(cy+fs*0.68); _topDates+=`<text class="zname" style="font-size:${(fs*0.68).toFixed(0)}px;font-weight:850;fill:#141414;stroke:#fff;stroke-width:${(fs*0.09).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_mo)}</text>`; } }   /* Columns 模式: 每个区只标一次柱子浇筑月份, 字号比 slab 小避免遮挡 */
-      if(this.showDates&&this.colorMode!=='castdate'){ const _ci=this._zoneCastInfo(this.curLevel,z); const _fz=(fs*0.55).toFixed(0);
+      if(_focusOnly||!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="zname${!_focusOnly&&isCrit?' crit':''}${!_focusOnly&&_delayed?' zdelay':''}${!_focusOnly&&_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
+      if(!_focusOnly&&this.colorMode==='castdate'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _ci=this._mapZoneCastInfo(this.curLevel,z); const _hasDt=(_ci.done||_ci.date); if(_hasDt){const _lbl=_ci.done?'Completed':this._fmtDShort(_ci.date); const _ny=(this.showCastNames===false)?(cy+fs*0.30):(cy+fs*0.78); _topDates+=`<text class="zname" style="font-size:${(fs*0.95).toFixed(0)}px;font-weight:900;fill:#ffffff;stroke:#111111;stroke-width:${(fs*0.11).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_lbl)}</text>`;} }
+      if(!_focusOnly&&this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); if(_mo){ const _ny=(this.showCastNames===false)?(cy+fs*0.24):(cy+fs*0.68); _topDates+=`<text class="zname" style="font-size:${(fs*0.68).toFixed(0)}px;font-weight:850;fill:#141414;stroke:#fff;stroke-width:${(fs*0.09).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_mo)}</text>`; } }
+      if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'){ const _ci=this._mapZoneCastInfo(this.curLevel,z); const _fz=(fs*0.55).toFixed(0);
         if(_ci.start||_ci.end){ const _s=_ci.start?this._fmtDShort(_ci.start):'—', _e=_ci.end?this._fmtDShort(_ci.end):'—';
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#1b7a3e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*0.58).toFixed(0)}">▶ ${this.esc(_s)}</text>`;
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#b23a2e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*1.18).toFixed(0)}">■ ${this.esc(_e)}</text>`;
         } }   /* Slab 起(▶)/止(■)日期 — 没有 slab 日期的区域不写 TBA, 避免整张图过密 */
-      if(this.showDates&&this.colorMode!=='castdate'){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _cm=this._dateToActMonth(_cd.start||_cd.end); if(_cm){_topDates+=`<text class="zname" style="font-size:${(fs*0.38).toFixed(0)}px;font-weight:750;fill:#315b96;stroke:var(--stage);stroke-width:${(fs*0.10).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*1.67).toFixed(0)}">COL ${this.esc(_cm)}</text>`;} }   /* 普通 Dates overlay: 只补充较小的 Column 月份; slab 日期见上方 */
-      if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.52,_dy=this.colorMode==='castdate'?cy+fs*1.48:(this.showDates?cy+fs*2.22:cy+fs*1.18);_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_dy.toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}   /* Delay 图层: 仅有数据的区域显示 */
-      if(this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}   /* 角标: 填了 done 却缺总量/计划的区 */
+      if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _cm=this._dateToActMonth(_cd.start||_cd.end); if(_cm){_topDates+=`<text class="zname" style="font-size:${(fs*0.38).toFixed(0)}px;font-weight:750;fill:#315b96;stroke:var(--stage);stroke-width:${(fs*0.10).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*1.67).toFixed(0)}">COL ${this.esc(_cm)}</text>`;} }
+      if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
+      if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
+      if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
       /* 开工标记改为标签变橘(见上方 zstart), 不再画橘点 */
       /* 延误标记改为标签变红(见上方 zdelay), 不再画红点 */
       const sub=fs*0.62;
-      if(this.colorMode==='progress' && z._p){
+      if(!_focusOnly&&this.colorMode==='progress' && z._p){
         const d=this.zoneDisplayPct(z);const col=this.progColor(d.pct);
         s+=`<text class="zpct" style="font-size:${(sub*1.15).toFixed(0)}px;fill:${col}" x="${cx.toFixed(0)}" y="${(cy+sub*1.05).toFixed(0)}">${d.pct}%</text>`;
-      } else if(this.colorMode==='quantity'){
+      } else if(!_focusOnly&&this.colorMode==='quantity'){
         s+=`<text class="zarea" style="font-size:${sub.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy+sub*1.05).toFixed(0)}">${this.fmt(this.mval(z,this.curMetric))}</text>`;
-      } else if(this.colorMode!=='castdate'){
+      } else if(!_focusOnly&&this.colorMode!=='castdate'){
         s+=`<text class="zarea" style="font-size:${sub.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy+sub*1.05).toFixed(0)}">${this.fmt(z.area)} m²</text>`;
       }   /* Cast 模式不显示面积数量 */
-      if(this.showSeq && this.rwsIsAdmin() && z._p){
+      if(!_focusOnly&&this.showSeq && this.rwsIsAdmin() && z._p){
         const bc=z._p.status==='done'?this.cssvar('--done'):z._p.status==='wip'?this.cssvar('--wip'):this.cssvar('--todo');
         s+=`<text class="zseq" style="font-size:${(sub*0.85).toFixed(0)}px;fill:${bc}" x="${cx.toFixed(0)}" y="${(cy+sub*2.15).toFixed(0)}">${this.ordinal(z._p.seq)} pour</text>`;
       }
@@ -1372,7 +1408,7 @@ class Component extends DCLogic {
     const _nrm=id=>String(id||'').trim().toUpperCase();
     let _colHtml='';   /* 柱子先攒起来, 等 Marine 子区画完再追加, 让柱子浮在最上层(名字可见/可点选) */
     const zoneByLabel={};L.zones.forEach(z=>{zoneByLabel[z.label]=z;});
-    if(this.showColumns && this.COLUMNS && this.COLUMNS[this.curLevel] && !(this.colorMode==='castdate'&&this._castLayer==='slab')){   /* Cast 的 Slabs 模式: 只 track 板, 不画柱子(名字/点都不出现) */
+    if(!_focusOnly&&this.showColumns && this.COLUMNS && this.COLUMNS[this.curLevel] && !(this.colorMode==='castdate'&&this._castLayer==='slab')){   /* Focus / Cast Slabs 模式不画柱子 */
       this.COLUMNS[this.curLevel].forEach((c,ci)=>{
         const _nid=_nrm(c.id); if(_colSeen.has(_nid))return; _colSeen.add(_nid);
         const _hid=this._colHidden(this.curLevel,c.id); if(_hid&&!this._hidingCol)return;   // 隐藏的柱: 平时不画; 隐藏模式下淡显以便恢复
@@ -1399,7 +1435,7 @@ class Component extends DCLogic {
         this._evenPtsInZone(z,rem).forEach(p=>{ _colHtml+=`<circle class="colmk colmk-ph" cx="${p[0].toFixed(0)}" cy="${(H-p[1]).toFixed(0)}" r="950" fill="#ffffff" fill-opacity="0.85" stroke="#c8102e" stroke-width="300" stroke-dasharray="650,450"/>`; });
       });
     }
-    if(this.showColumns){   // 本地"点击放置"但还没入库的柱子(实心点); 已入库的跳过避免重复
+    if(!_focusOnly&&this.showColumns){   // 本地"点击放置"但还没入库的柱子(实心点); 已入库的跳过避免重复
       // 去重: 同 id 跳过; 另外按位置去重 —— 和任一正式柱子重叠(<1400)的一律跳过, 清掉已烤入正式数据后本地残留的重复
       const _nearReal=(x,y)=>_realCol.some(rc=>Math.hypot(rc.x-x,rc.y-y)<1400);
       this.placedCols(this.curLevel).forEach(c=>{ const _nid=_nrm(c.id); if(_colSeen.has(_nid)||_realIds.has(c.id)||_nearReal(c.x,c.y))return; if(this._colHidden(this.curLevel,c.id)&&!this._hidingCol)return; _colSeen.add(_nid); const sy=H-c.y;
@@ -1451,17 +1487,19 @@ class Component extends DCLogic {
       }
       s+=base+`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
-      if(this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
-      if(this.colorMode==='castdate'&&cls==='subP'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); const _dl=_mo||'TBA'; const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_dl.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="${_mo?'#141414':'#b3261e'}" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`; }   /* Podium Column 月份: 自适应小字 + 自动避让 */
+      if(!_focusOnly&&this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=cls==='subZC'?this._marineCastInfo(this.curLevel,_z2):this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
+      if(!_focusOnly&&this.colorMode==='castdate'&&cls==='subP'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); if(_mo){const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_mo.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_mo,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">${this.esc(_mo)}</text>`;} }   /* 无日期不显示 TBA */
+      if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'&&!(cls==='subZC'&&this.showSubC)){const _z3={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')},_mi=cls==='subZC'?this._marineCastInfo(this.curLevel,_z3):this._zoneCastInfo(this.curLevel,_z3);if(_mi.start||_mi.end){const _ds=[_mi.start&&('▶ '+this._fmtDShort(_mi.start)),_mi.end&&('■ '+this._fmtDShort(_mi.end))].filter(Boolean).join(' → '),_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_ds.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_ds,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#315b96" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_ds)}</text>`;}}
       if(this.showDelay&&!(cls==='subZC'&&this.showSubC)){const _dz={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA'};const _dd=this._zoneDelayDays(this.curLevel,_dz);if(_dd!=null){const _dv=this._delayView(_dd),_dfs=Math.max(1150,Math.min(1800,_bw/(Math.max(7,_dv.txt.length)*0.7),_bh*0.16));const _dy=lq[1]+_dfs*(this.colorMode==='castdate'?2.65:1.35),_dp=_placeMDate(lq[0],_dy,_dv.txt,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_dv.c}" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.24).toFixed(0)}" paint-order="stroke">${this.esc(_dv.txt)}</text>`;}}   /* Marine Delay 同样使用日期碰撞避让 */
+      if(this.showRpVsAc){const _rz={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA'},_rp=this._rpAugPct(this.curLevel,_rz);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,_rz),_gap=_ac-_rp,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`,_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_rt.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_rt,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_gap>=0?'#218a5c':'#c8102e'}" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_rt)}</text>`;}}
       });};
      const _maBlue=(this.CAT.MA&&this.CAT.MA.c)||'#1747b8';
      _dr(_subL.ZC,'subZC',_maBlue,false,this.showSubZC);
      _dr(_subL.C,'subC','#b35a1f',false,this.showSubC,true);   /* Area=Marine 蓝; Planned=按 legend */
      _dr(_subL.P,'subP','#7c3aed',true,this.showSubP,true);}   /* Area=Marine 蓝; Planned=按 legend */
-    s+=_ovlLines;   /* overlay 三条线画在 C/P 子区之上, 不再被白底盖住 */
+    if(!_focusOnly)s+=_ovlLines;   /* Focus 只保留 zone + 数值 */
     /* Core Wall 多边形(admin 画的) + 正在画的临时轮廓 */
-    if(this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
+    if(!_focusOnly&&this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length, cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length; const lq=this.proj([cx,cy],H);
         const _cc=this._shapeLinkColor(w,'#22c55e','#15803d',swlv); const _foreign=(swlv!==this.curLevel);   /* 未开始=亮绿底色; 做完=深绿, 在做=黄(按成员状态) */
@@ -1473,7 +1511,7 @@ class Component extends DCLogic {
         s+=`<polyline points="${bp}" fill="#c8102e" fill-opacity="0.1" stroke="#c8102e" stroke-width="420" stroke-dasharray="900,500" style="pointer-events:none"/>`;
         this._coreBuf.forEach(q=>{const r=this.proj(q,H);s+=`<circle cx="${r[0].toFixed(0)}" cy="${r[1].toFixed(0)}" r="640" fill="#c8102e" style="pointer-events:none"/>`;});}
       // Lift 矩形(admin 画的) — 蓝色
-      if(this.showLifts!==false){ this._shapesForLevel('lift').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
+      if(!_focusOnly&&this.showLifts!==false){ this._shapesForLevel('lift').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length, cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length; const lq=this.proj([cx,cy],H);
         const _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',swlv); const _foreign=(swlv!==this.curLevel);
@@ -1486,7 +1524,7 @@ class Component extends DCLogic {
         this._liftBuf.forEach(q=>{const r=this.proj(q,H);s+=`<circle cx="${r[0].toFixed(0)}" cy="${r[1].toFixed(0)}" r="640" fill="#1d4ed8" style="pointer-events:none"/>`;});}
     }
     /* Access 折线 + 箭头(admin 画的) + 正在画的预览 */
-    { const _accArr=(this.showAccess!==false)?this._accDisplay(this.curLevel,this._accMon()).arr:[];
+    { const _accArr=(!_focusOnly&&this.showAccess!==false)?this._accDisplay(this.curLevel,this._accMon()).arr:[];
       _accArr.forEach((w,ai)=>{ if(!w.pts||w.pts.length<2)return; const pj=w.pts.map(q=>this.proj(q,H)); s+=this._accArrowSVG(pj,'#1e3a8a',false,'accessline',` data-aci="${ai}"`); });
       if(this._drawingAcc){ _accArr.forEach((w,ai)=>{ if(!w.pts)return; w.pts.forEach((q,pi)=>{ const r=this.proj(q,H); s+=`<circle class="accvtx" data-aci="${ai}" data-pi="${pi}" cx="${r[0].toFixed(1)}" cy="${r[1].toFixed(1)}" r="520" fill="#1e3a8a" stroke="#fff" stroke-width="150" style="cursor:move"/>`; }); }); }
       if(this._drawingAcc&&this._accBuf&&this._accBuf.length){ const pj=this._accBuf.map(q=>this.proj(q,H));
@@ -2802,7 +2840,6 @@ class Component extends DCLogic {
     mkToggle(this.showCrit,`<span style="width:9px;height:9px;border-radius:50%;background:var(--crit)"></span>Critical path`,()=>{this.showCrit=!this.showCrit;this.buildMetrics();this.render();});
     mkToggle(this.showAreaBounds,`<span style="width:16px;border-top:3px solid var(--dim);display:inline-block"></span>Area boundaries`,()=>{this.showAreaBounds=!this.showAreaBounds;this.buildMetrics();this.render();});
     mkToggle(this.showDates,`<span style="font-size:10px">🕓</span>Dates`,()=>{this.showDates=!this.showDates;this.buildMetrics();this.render();});   /* 所有账号可看; slab 日期、区域 column 月份及每根柱子的完成日期 */
-    mkToggle(this.showDelay,`<span style="font-size:9px;font-weight:900;color:#c8102e">−d</span>Delay`,()=>{this.showDelay=!this.showDelay;this.buildMetrics();this.render();});   /* Delay 数据图层: 所有账号可看 */
     Object.keys(this.OVL).forEach(k=>{const o=this.OVL[k];mkToggle(this.showOvl[k],`<span class="dash" style="color:${o.c}"></span>${o.label}`,()=>{this.showOvl[k]=!this.showOvl[k];this._ovlByLevel=this._ovlByLevel||{};this._ovlByLevel[this.curLevel]={...this.showOvl};this.buildMetrics();this.render();});});
     if(this.rwsIsAdmin() && this.DATA.beamlines && this.DATA.beamlines[this.curLevel])
       mkToggle(this.showBeams,`<span style="width:16px;border-top:2px solid var(--beam);display:inline-block"></span>Steel main beams`,()=>{this.showBeams=!this.showBeams;this.buildMetrics();this.render();});
@@ -2839,6 +2876,8 @@ class Component extends DCLogic {
     {const _mpw=this.root.querySelector('#openManpower');if(_mpw)_mpw.addEventListener('click',()=>this.openManpower());}
     {const _cv=this.root.querySelector('#openCastView');if(_cv)_cv.addEventListener('click',()=>{this.colorMode=(this.colorMode==='castdate')?'area':'castdate';this.buildMetrics();this.render();});}
     {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>this.openLookAhead());}
+    {const _d=this.root.querySelector('#toggleDelayTop');if(_d)_d.addEventListener('click',()=>this._toggleFocus('delay'));}
+    {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
     const _zfi=this.root.querySelector('#zoneFind')||document.getElementById('zoneFind');const _zfr=document.getElementById('zoneFindRes');if(_zfi&&_zfr){const _run=()=>{const hits=this._zxSearch(_zfi.value);if(!hits.length){_zfr.style.display='none';return;}_zfr.innerHTML=hits.map((h,ix)=>`<div class="zfrow" data-ix="${ix}" style="padding:7px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px">`+`<span style="font-size:9px;font-weight:800;color:#fff;background:${({EB:'#e8590c',NB:'#c2255c',MA:'#1c7ed6'})[h.area]||'#888'};padding:1px 6px;border-radius:20px">${h.lv}</span>`+`<b style="color:var(--txt)">${this.esc(h.label)}</b>${h.via?`<span style="color:var(--dim);font-size:10px">← ${this.esc(h.via)}</span>`:''}</div>`).join('');_zfr.style.display='block';this._zfHits=hits;};_zfi.addEventListener('input',_run);_zfi.addEventListener('focus',_run);_zfi.addEventListener('keydown',e=>{if(e.key==='Enter'){const h=(this._zfHits||[])[0];if(h)this.gotoZone(h.lv,h.mk);}else if(e.key==='Escape'){_zfr.style.display='none';_zfi.blur();}});_zfr.addEventListener('click',e=>{const r=e.target.closest('.zfrow');if(!r)return;const h=(this._zfHits||[])[+r.dataset.ix];if(h)this.gotoZone(h.lv,h.mk);});_zfr.addEventListener('mouseover',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='var(--panel2)';});_zfr.addEventListener('mouseout',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='';});document.addEventListener('click',e=>{if(!e.target.closest('#zoneFindWrap'))_zfr.style.display='none';});}
     const _zlc=document.getElementById('zlookupClose');if(_zlc)_zlc.addEventListener('click',()=>{const m=document.getElementById('zlookupModal');if(m)m.style.display='none';});
     const _zlm=document.getElementById('zlookupModal');if(_zlm)_zlm.addEventListener('click',e=>{if(e.target===_zlm)_zlm.style.display='none';});

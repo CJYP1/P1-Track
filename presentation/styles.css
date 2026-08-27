@@ -22,6 +22,8 @@ header .sub{font-size:9.5px;color:var(--dim);line-height:1.25;display:flex;align
 .header-account #rwsQueueBadge{color:var(--crit);font-weight:700}
 .header-account #rwsUserInfo{font-size:9.5px;color:var(--dim);font-weight:650;white-space:nowrap}
 header .hbtn{padding:5px 8px;border-radius:7px;font-size:10px;gap:4px;line-height:1.2}
+header .hbtn.focus-tool{padding:7px 13px;font-size:11px;font-weight:850;border-width:1.5px}
+header .hbtn.focus-tool.on{background:#6d1327;border-color:#6d1327;color:#fff;box-shadow:0 2px 8px rgba(109,19,39,.22)}
 #zoneFindWrap{position:relative;display:inline-block;vertical-align:middle;flex:0 0 auto}
 #zoneFind{width:176px;font-size:10px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);text-align:left;font-family:inherit}
 @media(max-width:1500px){header .refresh-note{display:none}header h1{max-width:410px;overflow:hidden;text-overflow:ellipsis}}
