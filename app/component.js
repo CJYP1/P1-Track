@@ -256,8 +256,8 @@ class Component extends DCLogic {
   actAutoTotal(lv,zmk,a){let s=0,any=false;this.ACT_MONTHS.forEach(m=>{const v=this.actPlan(lv,zmk,a,m);if(v!=null){s+=v;any=true;}});return any?Math.round(s*100)/100:null;}
   /* 活动的 Done 是否由构件清单派生。EB(Existing Basement)的 pilecap 清单 IDs 不正确 → 隐藏, 且 Done 改手动 */
   _pileHiddenForEB(lv,zmk){return this.zoneCat(lv,zmk)==='EB';}
-  _actUsesElems(aid,lv,zmk){const ea=this._elemAct(aid);if(!ea)return false;if(aid==='pile'&&this._pileHiddenForEB(lv,zmk))return false;return this._zoneHasElems(lv,zmk,ea.types);}
-  actDoneMonth(lv,zmk,a,m){if(this._actUsesElems(a,lv,zmk))return this.elemDoneInMonth(lv,zmk,this._elemAct(a).types,m);const v=(this._actDoneM||{})[lv+'||'+zmk+'||'+a+'||'+m];return v==null?null:v;}
+  _actUsesElems(aid,lv,zmk){return this._activityElemRefs(lv,zmk,aid).length>0;}
+  actDoneMonth(lv,zmk,a,m){const refs=this._activityElemRefs(lv,zmk,a);if(refs.length){let n=0;refs.forEach(r=>{if(this.elemStatus(r.key)==='done'){const d=this.elemDate(r.key)||this.todayISOStr();if(this.dateToActMonth(d)===m)n++;}});return n>0?n:null;}const v=(this._actDoneM||{})[lv+'||'+zmk+'||'+a+'||'+m];return v==null?null:v;}
   actCumDone(lv,zmk,a){let s=0;this.ACT_MONTHS.forEach(m=>{const v=(this._actDoneM||{})[lv+'||'+zmk+'||'+a+'||'+m];if(v!=null)s+=v;});return s;}
   actCarry(lv,zmk,aid,mi){const M=this.ACT_MONTHS;let cpPrev=0,cdPrev=0;for(let i=0;i<mi;i++){cpPrev+=this.actPlan(lv,zmk,aid,M[i])||0;cdPrev+=this.actDoneMonth(lv,zmk,aid,M[i])||0;}const plan=this.actPlan(lv,zmk,aid,M[mi])||0;const done=this.actDoneMonth(lv,zmk,aid,M[mi])||0;const carryIn=Math.max(0,cpPrev-cdPrev);const required=plan;const balance=(cpPrev+plan)-(cdPrev+done);const cleared=Math.min(done,carryIn);const current=Math.max(0,done-cleared);return {carryIn,plan,done,required,balance,cleared,current,hasData:(cpPrev+cdPrev+plan+done)>0};}
   actVisState(lv,zmk,a){const v=(this._actHidden||{})[lv+'||'+zmk+'||'+a];return (v==='hide')?'hide':(v==='show'?'show':'auto');}
@@ -601,9 +601,13 @@ class Component extends DCLogic {
   dateToActMonth(iso){const M=this.ACT_MONTHS;if(!iso)return M[M.length-1];const y=+iso.slice(0,4),mo=+iso.slice(5,7);const val=y*12+mo;const aprVal=2026*12+4;if(val<aprVal)return "Before Apr'26";const nm=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];if(y===2026&&mo>=4&&mo<=12)return nm[mo]+"'26";return M[M.length-1];}
   /* Columns completed in a given month bucket for a zone (drives the Columns activity) */
   /* Activities whose monthly Done is derived from an element checklist (in sync with the list below) */
-  _elemAct(id){return {col:{types:['col'],sec:'col',label:'columns'},pile:{types:['pile'],sec:'pile',label:'pile caps'},mbeam:{types:['beam'],sec:'beam',label:'steel main beams'},cbeam:{types:['cbeam'],sec:'cbeam',label:'cast s main beams'}}[id]||null;}
+  _elemAct(id){return {col:{types:['col'],sec:'col',label:'columns'},pile:{types:['pile'],sec:'pile',label:'pile caps'},mbeam:{types:['beam'],sec:'beam',label:'steel main beams'},cbeam:{types:['cbeam'],sec:'cbeam',label:'cast s main beams'},ls:{types:['core','lift','stair'],sec:'lift',label:'core/lift/stair items'},act_corewall:{types:['core'],sec:'core',label:'core walls'}}[id]||null;}
   _zoneElemList(z,tp){return ({col:z.cols,pile:z.piles,beam:z.beams,cbeam:z.beams,lift:z.lifts,stair:z.stairs,core:z.cores})[tp]||[];}
   _zoneHasElems(lv,zmk,types){const z=(this.DATA.levels[lv]?this.DATA.levels[lv].zones:[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return false;return types.some(tp=>this._zoneElemList(z,tp).length>0);}
+  _activityElemRefs(lv,zmk,aid,z0){const out=[],seen=new Set(),push=(type,id,key,custom)=>{id=String(id||'').trim();if(!id||seen.has(key))return;seen.add(key);out.push({type,id,key,custom:!!custom});};let z=z0||((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
+    if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:[],stairs:[],cores:[]};}
+    const ea=this._elemAct(aid);if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;push(tp,id,this.ekey(lv,z,tp,id),false);}));
+    if(this._actUnit(aid)==='nos')Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||'),code=p[2];if(p[0]!==lv||p[1]!==zmk||this._catAct({code})!==aid)return;(this._elemAdd[k]||[]).forEach(id=>push(code,id,lv+'||'+zmk+'||'+code+'||'+id,true));});return out;}
   /* Zone overall % = average of each applicable activity's cumulative done/total.
      Activities with no data at all (total<=0 and nothing done) do NOT participate. */
   _pw(){return {demo:8,pilewall:22,exc:11,pilecap:1,baseslab:1,beamslab:32,wallcol:25};}
@@ -1235,17 +1239,17 @@ class Component extends DCLogic {
       total+=zt;planned+=zp;if(d.end&&(!end||d.end>end))end=d.end;});});
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
-    const ea=this._elemAct(aid), elems={};
-    if(ea){ (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter))return; const zmk=z.mk||z.lid;
-        ea.types.forEach(tp=>{ this._zoneElemList(z,tp).forEach(x=>{ const id=typeof x==='string'?x:x.id; if(!id)return; const uk=lv+'||'+tp+'||'+id; const ek=this.ekey(lv,z,tp,id); const o=elems[uk]||(elems[uk]={done:false}); if(this.elemStatus(ek)==='done')o.done=true; }); }); }); });
+    const elems={};
+    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>{const uk=r.custom?r.key:(lv+'||'+r.type+'||'+r.id),o=elems[uk]||(elems[uk]={done:false});if(this.elemStatus(r.key)==='done')o.done=true;});});});
+    if(Object.keys(elems).length){
       const all=Object.values(elems); if(all.length){const done=all.filter(x=>x.done).length,total=all.length;return {done,total,pct:Math.min(100,Math.round(done/total*100))};} }
     let done=0,total=0; (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter))return; const zmk=z.mk||z.lid; const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid)); if(t)total+=(+t||0); this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:total>0?Math.min(100,Math.round(done/total*100)):0}; }
-  _reportStructureAid(aid){return ['slab_pile','pile','col','ls','mbeam','cbeam','slab','slab_top','act_corewall','act_wall','act_colcorbel','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
+  _reportStructureAid(aid){return ['piling','slab_pile','pile','col','ls','mbeam','cbeam','slab','slab_top','act_corewall','act_wall','act_colcorbel','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
-      (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const ea=this._elemAct(a.id),hasElems=ea&&ea.types.some(tp=>this._zoneElemList(z,tp).length>0);if(!any&&!this._actUsesElems(a.id,lv,zmk)&&!hasElems)return;
+      (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0;if(!any&&!hasElems)return;
         if(!this._reportStructureAid(a.id))return;const filter=(cat==='NB'&&lv==='L2'&&a.id==='slab')?'cis':null;
-        const maLabel={slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',act_colcorbel:'Podium · Column Corbel',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
+        const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',act_colcorbel:'Podium · Column Corbel',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
         const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':((cat==='MA'&&maLabel[a.id])||a.label)),levels:[lv],aid:a.id,unit:a.unit||'',filter};}); }); });
     return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=A.total||P.total;r.tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;return r;}).filter(r=>r.actual.total>0||r.actual.done>0||r.plan.total>0).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
   /* NB/EB/MA 三份 Report: 普通账号按区域权限查看; admin / RWS 看全部 */
