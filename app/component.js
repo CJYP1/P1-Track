@@ -675,7 +675,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn');
-    const adminOnly=['#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* Cast schedule / Report 对所有登录用户可见 */
+    const adminOnly=['#saveLock','#loadLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower','#openDelayAdmin'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* Delay Table 及数据管理仅 admin 可见 */
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
     try{if(this.DATA&&this.root.querySelector('#rail'))this.buildRail();}catch(_e){}
@@ -1160,9 +1160,10 @@ class Component extends DCLogic {
     const common={B1:129,B2:129,B3:128,C1:110,C21:112,C22:97,C31:104,C32:2};
     if(Number.isFinite(common[macro]))return common[macro];
     const p1={P1:45,P2:87,P3:64,P4:108};return Number.isFinite(p1[macro])?p1[macro]:null;}
+  _delayBaseDays(lv,z){const p6=this._p6ZoneDelayDays(lv,z);return p6!=null?p6:this._rpZoneDelayDays(lv,z);}
   _zoneDelayDays(lv,z){if(!z)return null;const m=this._appCfg&&this._appCfg.zoneDelay,zmk=z.mk||z.lid||'',lab=z.label||'';if(m){const ks=[lv+'||'+zmk,lv+'||'+lab,zmk,lab];let raw;
       for(const k of ks){if(k&&Object.prototype.hasOwnProperty.call(m,k)){raw=m[k];break;}}if(raw&&typeof raw==='object')raw=(raw.days!=null?raw.days:raw.delay_days);if(raw!=null&&raw!==''){const n=Number(raw);if(Number.isFinite(n))return n;}}
-    const p6=this._p6ZoneDelayDays(lv,z);return p6!=null?p6:this._rpZoneDelayDays(lv,z);}
+    return this._delayBaseDays(lv,z);}
   _delayView(n){const d=Math.round(Math.abs(n));return n>0?{txt:'−'+d+' days',c:'#c8102e'}:n<0?{txt:'+'+d+' days',c:'#218a5c'}:{txt:'0 days',c:'#667085'};}
   /* August RP is interpolated two months into the Jun→Sep recovery-plan interval. */
   _rpAugPct(lv,z){if(!z)return null;const n=s=>String(s||'').toUpperCase().replace(/\s+/g,'').replace(/^POD/,''),lab=n(z.label),cat=z.cat||'NB';
@@ -1253,6 +1254,18 @@ class Component extends DCLogic {
   _reportCats(){ const u=this._rwsUser; if(!u)return []; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; const who=String(u.username||u.display_name||'').trim().toUpperCase(); if(u.role==='admin'||a.indexOf('RWS')>=0||who==='RWS')return ['NB','EB','MA']; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
   _syncFocusButtons(){const d=this.root&&this.root.querySelector('#toggleDelayTop'),r=this.root&&this.root.querySelector('#toggleRpVsAc');if(d)d.classList.toggle('on',!!this.showDelay);if(r)r.classList.toggle('on',!!this.showRpVsAc);}
   _toggleFocus(which){if(which==='delay'){this.showDelay=!this.showDelay;if(this.showDelay)this.showRpVsAc=false;}else{this.showRpVsAc=!this.showRpVsAc;if(this.showRpVsAc)this.showDelay=false;}this._syncFocusButtons();this.buildMetrics();this.render();}
+  openDelayAdmin(){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit Delay days.');return;}const old=document.getElementById('__delayAdmin');if(old)old.remove();
+    const rows=[],seen=new Set(),add=(lv,z,group)=>{if(!z)return;const zmk=z.mk||z.lid||lv+'|'+z.label,key=lv+'||'+zmk;if(seen.has(key))return;seen.add(key);rows.push({lv,zmk,key,label:z.label||zmk,cat:z.cat||'NB',group:group||'',z});};
+    (this.DATA.order||[]).forEach(lv=>{const L=this.DATA.levels[lv];(L&&L.zones||[]).forEach(z=>add(lv,z,''));});
+    const S=this.SUBZONES&&this.SUBZONES.L1;if(S){['C','P'].forEach(k=>(S[k]||[]).forEach(e=>add('L1',{mk:'L1|'+e.label,label:e.label,cat:'MA'},'Marine '+k)));}
+    const map=(this._appCfg&&this._appCfg.zoneDelay)||{},cats={EB:'Existing Basement',NB:'New Basement',MA:'Marine'};
+    const body=rows.map((r,i)=>{let raw=Object.prototype.hasOwnProperty.call(map,r.key)?map[r.key]:'';if(raw&&typeof raw==='object')raw=raw.days!=null?raw.days:raw.delay_days;if(raw==null)raw='';const base=this._delayBaseDays(r.lv,r.z),eff=raw!==''?Number(raw):base,dv=eff==null?null:this._delayView(eff);return `<tr data-q="${this.esc((r.lv+' '+r.label+' '+r.cat+' '+r.group).toLowerCase())}"><td>${this.esc(r.lv)}</td><td><b>${this.esc(r.label)}</b>${r.group?`<small>${this.esc(r.group)}</small>`:''}</td><td>${this.esc(cats[r.cat]||r.cat)}</td><td class="delay-base">${base==null?'—':this.esc(this._delayView(base).txt)}</td><td><div class="delay-edit"><input class="delay-admin-in" type="number" step="1" data-key="${this.esc(r.key)}" value="${this.esc(String(raw))}" placeholder="Auto"><span>days</span><button type="button" class="delay-clear" title="Clear override and use Auto">↺</button></div></td><td class="delay-result" style="color:${dv?dv.c:'#667085'}">${dv?this.esc(dv.txt):'—'}</td></tr>`;}).join('');
+    const ov=document.createElement('div');ov.id='__delayAdmin';ov.innerHTML=`<div class="delay-admin-box"><div class="delay-admin-head"><div><b>Delay Table</b><span>Admin only · positive = delayed · negative = ahead · blank = Auto</span></div><button class="hbtn" id="__delayClose">Close ✕</button></div><div class="delay-admin-tools"><input id="__delayFind" placeholder="Find level or zone…"><span>${rows.length} zones</span></div><div class="delay-admin-scroll"><table><thead><tr><th>Level</th><th>Zone</th><th>Area</th><th>Auto</th><th>Override</th><th>Map display</th></tr></thead><tbody>${body}</tbody></table></div><div class="delay-admin-foot"><span>填写后会覆盖系统自动计算；清空则恢复 Auto。</span><button class="hbtn primary" id="__delaySave">Save Delay Table</button></div></div>`;
+    document.body.appendChild(ov);const close=()=>ov.remove();ov.addEventListener('click',e=>{if(e.target===ov)close();});ov.querySelector('#__delayClose').onclick=close;
+    const refreshRow=inp=>{const tr=inp.closest('tr'),v=inp.value.trim(),base=tr.querySelector('.delay-base').textContent.trim(),out=tr.querySelector('.delay-result');if(v===''){out.textContent=base;out.style.color=base.startsWith('−')?'#c8102e':base.startsWith('+')?'#218a5c':'#667085';return;}const n=Number(v);if(!Number.isFinite(n))return;const d=this._delayView(n);out.textContent=d.txt;out.style.color=d.c;};
+    ov.querySelectorAll('.delay-admin-in').forEach(inp=>inp.addEventListener('input',()=>refreshRow(inp)));ov.querySelectorAll('.delay-clear').forEach(b=>b.onclick=()=>{const inp=b.parentElement.querySelector('input');inp.value='';refreshRow(inp);});
+    ov.querySelector('#__delayFind').oninput=e=>{const q=e.target.value.trim().toLowerCase();ov.querySelectorAll('tbody tr').forEach(tr=>tr.style.display=!q||tr.dataset.q.indexOf(q)>=0?'':'none');};
+    ov.querySelector('#__delaySave').onclick=()=>{this._appCfg=this._appCfg||{};const dst=this._appCfg.zoneDelay=this._appCfg.zoneDelay||{};ov.querySelectorAll('.delay-admin-in').forEach(inp=>{const key=inp.dataset.key,v=inp.value.trim();if(v==='')delete dst[key];else{const n=Number(v);if(Number.isFinite(n))dst[key]=Math.round(n);}});try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','zoneDelay',dst,null,null);close();this.buildMetrics();this.render();this._toast&&this._toast('Delay Table saved ✓');};}
   openLookAhead(){
     const defs=this._reportDefs(); const cats=this._reportCats();
     let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
@@ -1319,13 +1332,13 @@ class Component extends DCLogic {
       if(_maL1&&!this.showSubZC)op=0;
       s+=`<polygon class="zone${vis?'':' dim'}${crit}${planst}" data-i="${i}" points="${pts}" fill="${this.zoneFill(z)}" fill-opacity="${op}"/>`;
     });
-    {const _hk=_focusOnly?[]:['podcis','podium','transfer'].filter(k=>this.showOvl[k]);
+    {const _hk=['podcis','podium','transfer'].filter(k=>this.showOvl[k]);
      const _HS={podium:{rot:45,sp:2800,sw:300,op:0.22,cross:false},transfer:{rot:-45,sp:1700,sw:300,op:0.26,cross:false},podcis:{rot:0,sp:2400,sw:260,op:0.20,cross:true}};
      if(_hk.length){s+=`<defs>${_hk.map(k=>{const o=this.OVL[k],h=_HS[k];return `<pattern id="hz_${k}" patternUnits="userSpaceOnUse" width="${h.sp}" height="${h.sp}" patternTransform="rotate(${h.rot})"><rect width="${h.sp}" height="${h.sp}" fill="${o.c}" fill-opacity="0.065"/><line x1="0" y1="0" x2="0" y2="${h.sp}" stroke="${o.c}" stroke-width="${h.sw}" stroke-opacity="${h.op}"/>${h.cross?`<line x1="0" y1="0" x2="${h.sp}" y2="0" stroke="${o.c}" stroke-width="${h.sw}" stroke-opacity="${h.op}"/>`:''}</pattern>`;}).join('')}</defs>`;}}
     let _ovlLines='';   /* overlay 虚线(Podium outline / L5 transfer / Podium CIS)延后到 C/P 子区之后再画, 保证在最上层 */
     let _topDates='';   /* 所有浇筑/计划日期文字收集到这里, 最后画 → 永远在最上层, 不被柱子/overlay 盖住 */
     ['podcis','podium','transfer'].forEach(k=>{
-      if(_focusOnly||!this.showOvl[k])return;const o=this.OVL[k];
+      if(!this.showOvl[k])return;const o=this.OVL[k];
       (this.DATA.overlays[k]||[]).forEach(seg=>{
         const p=seg.pts.map(pt=>{const q=this.proj(pt,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
         const tag=seg.closed?'polygon':'polyline';
@@ -1339,7 +1352,7 @@ class Component extends DCLogic {
         s+=`<polyline class="beamln" points="${p}"/>`;
       });
     }
-    if(!this.showRpVsAc&&this.showAreaBounds && this.AREA_OUTLINES && this.AREA_OUTLINES[this.curLevel]){
+    if(this.showAreaBounds && this.AREA_OUTLINES && this.AREA_OUTLINES[this.curLevel]){
       const _AO=this.AREA_OUTLINES[this.curLevel];
       Object.keys(_AO).forEach(cat=>{
         if(this.filterCat!=='all' && cat!==this.filterCat)return;
@@ -1498,7 +1511,7 @@ class Component extends DCLogic {
      _dr(_subL.ZC,'subZC',_maBlue,false,this.showSubZC);
      _dr(_subL.C,'subC','#b35a1f',false,this.showSubC,true);   /* Area=Marine 蓝; Planned=按 legend */
      _dr(_subL.P,'subP','#7c3aed',true,this.showSubP,true);}   /* Area=Marine 蓝; Planned=按 legend */
-    if(!_focusOnly)s+=_ovlLines;   /* Focus 只保留 zone + 数值 */
+    s+=_ovlLines;   /* 所有模式保留已开启的 Podium / transfer / CIS 线层 */
     /* Core Wall 多边形(admin 画的) + 正在画的临时轮廓 */
     if(!_focusOnly&&this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
@@ -2882,6 +2895,7 @@ class Component extends DCLogic {
     {const _cv=this.root.querySelector('#openCastView');if(_cv)_cv.addEventListener('click',()=>{this.colorMode=(this.colorMode==='castdate')?'area':'castdate';this.buildMetrics();this.render();});}
     {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>this.openLookAhead());}
     {const _d=this.root.querySelector('#toggleDelayTop');if(_d)_d.addEventListener('click',()=>this._toggleFocus('delay'));}
+    {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
     const _zfi=this.root.querySelector('#zoneFind')||document.getElementById('zoneFind');const _zfr=document.getElementById('zoneFindRes');if(_zfi&&_zfr){const _run=()=>{const hits=this._zxSearch(_zfi.value);if(!hits.length){_zfr.style.display='none';return;}_zfr.innerHTML=hits.map((h,ix)=>`<div class="zfrow" data-ix="${ix}" style="padding:7px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px">`+`<span style="font-size:9px;font-weight:800;color:#fff;background:${({EB:'#e8590c',NB:'#c2255c',MA:'#1c7ed6'})[h.area]||'#888'};padding:1px 6px;border-radius:20px">${h.lv}</span>`+`<b style="color:var(--txt)">${this.esc(h.label)}</b>${h.via?`<span style="color:var(--dim);font-size:10px">← ${this.esc(h.via)}</span>`:''}</div>`).join('');_zfr.style.display='block';this._zfHits=hits;};_zfi.addEventListener('input',_run);_zfi.addEventListener('focus',_run);_zfi.addEventListener('keydown',e=>{if(e.key==='Enter'){const h=(this._zfHits||[])[0];if(h)this.gotoZone(h.lv,h.mk);}else if(e.key==='Escape'){_zfr.style.display='none';_zfi.blur();}});_zfr.addEventListener('click',e=>{const r=e.target.closest('.zfrow');if(!r)return;const h=(this._zfHits||[])[+r.dataset.ix];if(h)this.gotoZone(h.lv,h.mk);});_zfr.addEventListener('mouseover',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='var(--panel2)';});_zfr.addEventListener('mouseout',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='';});document.addEventListener('click',e=>{if(!e.target.closest('#zoneFindWrap'))_zfr.style.display='none';});}
     const _zlc=document.getElementById('zlookupClose');if(_zlc)_zlc.addEventListener('click',()=>{const m=document.getElementById('zlookupModal');if(m)m.style.display='none';});
