@@ -1174,6 +1174,7 @@ class Component extends DCLogic {
   /* Marine 柱子归属: 按 marine-col-map.csv 反查这根柱属于哪个 Podium(P) 区 → 用 P 区的 col 活动读取浇筑时间/上色 */
   _colPodLabel(id){ if(!this._marineCol)return null; if(!this._colPodIdx){ const m={}; Object.keys(this._marineCol).forEach(p=>this._marineCol[p].forEach(c=>{m[String(c.id||'').trim().toUpperCase()]=p;})); this._colPodIdx=m; } return this._colPodIdx[String(id||'').trim().toUpperCase()]||null; }
   _fmtDShort(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m)return String(iso); return m[3]+" "+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+" '"+m[1].slice(2); }
+  _fmtColDate(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m)return String(iso||''); return m[3]+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+"'"+m[1].slice(2); }
   /* ── Report 数据: 各区(EB/NB/MA)各活动 目标%(累计计划到今月)/完成日期 vs 实际%(done/total) ── */
   _lookAheadData(){ const AM=this.ACT_MONTHS, curL=this.actCurLabel(), asOfIdx=Math.max(0,AM.indexOf(curL));
     const cats=[['EB','Existing Basement'],['NB','New Basement'],['MA','Marine']]; const out=[];
@@ -1372,21 +1373,22 @@ class Component extends DCLogic {
     const _colSeen=new Set();          /* 同一层按柱号去重: 每个柱号只画一次(去空格/忽略大小写), 彻底杜绝"两层字" */
     const _nrm=id=>String(id||'').trim().toUpperCase();
     let _colHtml='';   /* 柱子先攒起来, 等 Marine 子区画完再追加, 让柱子浮在最上层(名字可见/可点选) */
+    const zoneByLabel={};L.zones.forEach(z=>{zoneByLabel[z.label]=z;});
     if(this.showColumns && this.COLUMNS && this.COLUMNS[this.curLevel] && !(this.colorMode==='castdate'&&this._castLayer==='slab')){   /* Cast 的 Slabs 模式: 只 track 板, 不画柱子(名字/点都不出现) */
-      const zoneByLabel={};L.zones.forEach(z=>{zoneByLabel[z.label]=z;});
       this.COLUMNS[this.curLevel].forEach((c,ci)=>{
         const _nid=_nrm(c.id); if(_colSeen.has(_nid))return; _colSeen.add(_nid);
         const _hid=this._colHidden(this.curLevel,c.id); if(_hid&&!this._hidingCol)return;   // 隐藏的柱: 平时不画; 隐藏模式下淡显以便恢复
         const sy=H-c.y;
         const _podL=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
         const zz=_podL?{mk:this.curLevel+'|'+_podL,label:_podL,cat:'MA',_pod:true}:zoneByLabel[c.zone];   /* Marine 柱子归到它的 Podium 区: 状态/浇筑时间都从 P 区读 */
-        const st=zz?this.elemStatus(this.ekey(this.curLevel,zz,'col',c.id)):'todo';
+        const _ckey=zz?this.ekey(this.curLevel,zz,'col',c.id):'', st=_ckey?this.elemStatus(_ckey):'todo', _cdate=_ckey?this.elemDate(_ckey):'';
         const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'))):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=完成黑,其余按 Column 活动月上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=_uT||_crit;
         _colHtml+=`<circle class="colmk${_uT?' colmk-t':''}" data-ci="${ci}"${_hid?' opacity="0.28" stroke-dasharray="500,400"':''} cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${fill}" stroke="${_red?'#c8102e':'#ffffff'}" stroke-width="${_uT?560:220}"/>`;
         _colHtml+=`<text class="collbl" ${_red?`style="fill:#c8102e"`:''}${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id.replace('WF-B2','').replace('MK-B2','MK-'))}</text>`;
+        if(this.showDates&&_cdate)_colHtml+=`<text class="coldate"${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_cdate))}</text>`;
       });
     }
     const _realCol=(this.COLUMNS&&this.COLUMNS[this.curLevel])||[];
@@ -1404,8 +1406,10 @@ class Component extends DCLogic {
       const _nearReal=(x,y)=>_realCol.some(rc=>Math.hypot(rc.x-x,rc.y-y)<1400);
       this.placedCols(this.curLevel).forEach(c=>{ const _nid=_nrm(c.id); if(_colSeen.has(_nid)||_realIds.has(c.id)||_nearReal(c.x,c.y))return; if(this._colHidden(this.curLevel,c.id)&&!this._hidingCol)return; _colSeen.add(_nid); const sy=H-c.y;
         const _pc=!!c.crit||!!(this._marineCritSet&&this._marineCritSet.has(_nid));   /* 本地放置柱: 自身 crit 或 marine 表标了 critical → 红 */
+        const _pz=zoneByLabel[c.zone],_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_pd=_pk?this.elemDate(_pk):'';
         _colHtml+=`<circle class="colmk colmk-placed" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pc?'#c8102e':'#8a93a3'}" stroke="#ffffff" stroke-width="220"/>`;
         _colHtml+=`<text class="collbl" ${_pc?`style="fill:#c8102e"`:''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id)}</text>`;
+        if(this.showDates&&_pd)_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
       });
     }
     // ZC 叠加层: 从真实 Marine 父区几何一次性生成(与 C/P 一样可切换显示)
@@ -1525,7 +1529,8 @@ class Component extends DCLogic {
     this.svg.querySelectorAll('.colmk[data-ci]').forEach(el=>{
       el.addEventListener('mousemove',ev=>{const c=this.COLUMNS[this.curLevel][+el.dataset.ci];
         const _tp=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
-        this.tip.innerHTML=`<h4>${this.esc(c.id)}</h4><div class="grp">Column · ${this.esc(c.sz||'')} · zone ${this.esc(_tp||c.zone||'')} · click to open</div>`;
+        const _tz=_tp?{mk:this.curLevel+'|'+_tp,label:_tp}:L.zones.find(z=>z.label===c.zone),_tk=_tz?this.ekey(this.curLevel,_tz,'col',c.id):'',_td=_tk?this.elemDate(_tk):'';
+        this.tip.innerHTML=`<h4>${this.esc(c.id)}</h4><div class="grp">Column · ${this.esc(c.sz||'')} · zone ${this.esc(_tp||c.zone||'')} · click to open</div>${_td?`<div class="grp" style="margin-top:4px;color:var(--txt)">Completed: <b>${this.esc(this._fmtDShort(_td))}</b></div>`:''}`;
         const r=this.svg.getBoundingClientRect();let x=ev.clientX-r.left+14,y=ev.clientY-r.top+14;
         if(x>r.width-220)x-=240;if(y>r.height-80)y-=80;
         this.tip.style.left=x+'px';this.tip.style.top=y+'px';this.tip.style.opacity=1;});
@@ -2799,7 +2804,7 @@ class Component extends DCLogic {
     if(this.rwsIsAdmin())mkToggle(this.showSeq,`<span style="width:14px;height:14px;border-radius:50%;background:var(--dim);color:#fff;font-size:8px;line-height:14px;text-align:center;font-weight:800">#</span>Pour sequence`,()=>{this.showSeq=!this.showSeq;this.buildMetrics();this.render();});
     mkToggle(this.showCrit,`<span style="width:9px;height:9px;border-radius:50%;background:var(--crit)"></span>Critical path`,()=>{this.showCrit=!this.showCrit;this.buildMetrics();this.render();});
     mkToggle(this.showAreaBounds,`<span style="width:16px;border-top:3px solid var(--dim);display:inline-block"></span>Area boundaries`,()=>{this.showAreaBounds=!this.showAreaBounds;this.buildMetrics();this.render();});
-    mkToggle(this.showDates,`<span style="font-size:10px">🕓</span>Dates`,()=>{this.showDates=!this.showDates;this.buildMetrics();this.render();});   /* 所有账号可看; 地图只显示 slab 日期和较小的 column 月份 */
+    mkToggle(this.showDates,`<span style="font-size:10px">🕓</span>Dates`,()=>{this.showDates=!this.showDates;this.buildMetrics();this.render();});   /* 所有账号可看; slab 日期、区域 column 月份及每根柱子的完成日期 */
     mkToggle(this.showDelay,`<span style="font-size:9px;font-weight:900;color:#c8102e">−d</span>Delay`,()=>{this.showDelay=!this.showDelay;this.buildMetrics();this.render();});   /* Delay 数据图层: 所有账号可看 */
     Object.keys(this.OVL).forEach(k=>{const o=this.OVL[k];mkToggle(this.showOvl[k],`<span class="dash" style="color:${o.c}"></span>${o.label}`,()=>{this.showOvl[k]=!this.showOvl[k];this._ovlByLevel=this._ovlByLevel||{};this._ovlByLevel[this.curLevel]={...this.showOvl};this.buildMetrics();this.render();});});
     if(this.rwsIsAdmin() && this.DATA.beamlines && this.DATA.beamlines[this.curLevel])

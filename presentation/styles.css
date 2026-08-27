@@ -111,6 +111,8 @@ header .hbtn{padding:5px 8px;border-radius:7px;font-size:10px;gap:4px;line-heigh
 .hlrow{outline:2.5px solid var(--accent);outline-offset:2px;border-radius:6px}
 .collbl{font-size:1350px;font-weight:600;fill:var(--dim);text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:var(--stage);stroke-width:150px;display:none}
 svg.collabels .collbl{display:block}
+.coldate{font-size:1120px;font-weight:850;fill:#315b96;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:260px;display:none}
+svg.collabels .coldate{display:block}
 .zlabel{font-weight:700;fill:var(--txt);text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:var(--stage);stroke-width:520px}
 .zname{font-weight:700;fill:var(--txt);text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:var(--stage);stroke-width:600px}
 .zname.crit{fill:var(--crit)}
