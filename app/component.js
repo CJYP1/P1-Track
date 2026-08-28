@@ -1280,7 +1280,8 @@ class Component extends DCLogic {
     if(!cats.length){ ov.innerHTML=`<div style="max-width:640px;margin:0 auto"><div style="display:flex;justify-content:flex-end"><button class="hbtn" id="laClose">Close ✕</button></div><div style="text-align:center;color:var(--dim);margin-top:60px;font-size:15px">你的账号没有可查看的 Report。</div></div>`; ov.style.display='block'; const c0=ov.querySelector('#laClose'); if(c0)c0.onclick=close; return; }
     if(!this._reportCat||cats.indexOf(this._reportCat)<0)this._reportCat=cats[0];
     const cat=this._reportCat, def=defs[cat];
-    const fmtN=n=>{const r=Math.round(n*10)/10;return (r%1===0)?String(r):r.toFixed(1);};
+    /* Report 只显示整数；原始计划/完成数量仍保留在数据源中。 */
+    const fmtN=n=>String(Math.round(Number(n)||0));
     const makeRows=(reportRows)=>reportRows.map(r=>{ const A=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),P=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),den=A.total||P.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const actSub=`(${fmtN(A.done)}/${fmtN(A.total)}${unit})`,planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—';
       return `<tr>`
         +`<td style="background:#6d1327;color:#fff;font-weight:800;padding:11px 9px;font-size:11.5px;vertical-align:middle;width:27%">${this.esc(r.a)}</td>`
