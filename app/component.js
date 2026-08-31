@@ -1453,8 +1453,8 @@ class Component extends DCLogic {
         const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'))):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=完成黑,其余按 Column 活动月上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
-        const _red=_uT||_crit;
-        _colHtml+=`<circle class="colmk${_uT?' colmk-t':''}" data-ci="${ci}"${_hid?' opacity="0.28" stroke-dasharray="500,400"':''} cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${fill}" stroke="${_red?'#c8102e':'#ffffff'}" stroke-width="${_uT?560:220}"/>`;
+        const _red=st!=='done'&&(_uT||_crit);   /* critical 柱完成后变黑，同时去掉红色外圈 */
+        _colHtml+=`<circle class="colmk${_uT?' colmk-t':''}" data-ci="${ci}"${_hid?' opacity="0.28" stroke-dasharray="500,400"':''} cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${fill}" stroke="${_red?'#c8102e':'#ffffff'}" stroke-width="${_red&&_uT?560:220}"/>`;
         _colHtml+=`<text class="collbl" ${_red?`style="fill:#c8102e"`:''}${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id.replace('WF-B2','').replace('MK-B2','MK-'))}</text>`;
         if(this.showDates&&_cdate)_colHtml+=`<text class="coldate"${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_cdate))}</text>`;
       });
@@ -1474,9 +1474,9 @@ class Component extends DCLogic {
       const _nearReal=(x,y)=>_realCol.some(rc=>Math.hypot(rc.x-x,rc.y-y)<1400);
       this.placedCols(this.curLevel).forEach(c=>{ const _nid=_nrm(c.id); if(_colSeen.has(_nid)||_realIds.has(c.id)||_nearReal(c.x,c.y))return; if(this._colHidden(this.curLevel,c.id)&&!this._hidingCol)return; _colSeen.add(_nid); const sy=H-c.y;
         const _pc=!!c.crit||!!(this._marineCritSet&&this._marineCritSet.has(_nid));   /* 本地放置柱: 自身 crit 或 marine 表标了 critical → 红 */
-        const _pz=zoneByLabel[c.zone],_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_pd=_pk?this.elemDate(_pk):'';
-        _colHtml+=`<circle class="colmk colmk-placed" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pc?'#c8102e':'#8a93a3'}" stroke="#ffffff" stroke-width="220"/>`;
-        _colHtml+=`<text class="collbl" ${_pc?`style="fill:#c8102e"`:''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id)}</text>`;
+        const _pl=(this.curLevel==='L1')?this._colPodLabel(c.id):null,_pz=_pl?{mk:this.curLevel+'|'+_pl,label:_pl,cat:'MA',_pod:true}:zoneByLabel[c.zone],_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_ps=_pk?this.elemStatus(_pk):'todo',_pd=_pk?this.elemDate(_pk):'',_pr=_pc&&_ps!=='done',_pf=_ps==='done'?'#111111':_ps==='wip'?this.cssvar('--wip'):'#8a93a3';
+        _colHtml+=`<circle class="colmk colmk-placed" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pf}" stroke="${_pr?'#c8102e':'#ffffff'}" stroke-width="${_pr?360:220}"/>`;
+        _colHtml+=`<text class="collbl" ${_pr?`style="fill:#c8102e"`:''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id)}</text>`;
         if(this.showDates&&_pd)_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
       });
     }
