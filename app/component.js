@@ -1891,15 +1891,10 @@ class Component extends DCLogic {
     if(!rows.length){host.style.display='none';host.innerHTML='';return;}
     host.style.display='flex';
     const order=Object.keys(this.CAT);rows.sort((a,b)=>order.indexOf(a.cat)-order.indexOf(b.cat));
-    const dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
-    host.innerHTML=rows.map(r=>{const cc=this.CAT[r.cat]||this.CAT.NB,tot=r.zones||1;
+    host.innerHTML=rows.map(r=>{const cc=this.CAT[r.cat]||this.CAT.NB;
       const active=this.filterCat===r.cat,dim=this.filterCat!=='all'&&!active;
       return `<div class="astrip-card${active?' on':''}${dim?' dim':''}" data-cat="${r.cat}" style="--c:${cc.c}">
-        <div class="asc-top"><span class="asc-dot"></span><span class="asc-nm">${cc.label}</span><span style="flex:1"></span><span class="asc-pct" style="color:${this.progColor(r.pct)}">${r.pct}%</span></div>
-        <div class="asc-mid"><span class="asc-area">${this.fmt(r.area)} <small>m\u00b2</small></span><span class="asc-zn">${active?'\u2713 ':''}${r.zones} zones</span></div>
-        <div class="asc-qty"><span class="asc-qc">Col ${r.columns}</span><span class="asc-qc">Cap ${r.pilecap}</span><span class="asc-qc">SMB ${r.mainbeam}</span><span class="asc-qc">L/S ${r.liftstair}</span></div>
-        <div class="asc-bar"><i style="width:${r.done/tot*100}%;background:${dc}"></i><i style="width:${r.wip/tot*100}%;background:${wc}"></i><i style="width:${r.todo/tot*100}%;background:${tc}"></i></div>
-        <div class="asc-foot"><span><b style="color:${dc}">${r.done}</b> done · <b style="color:${wc}">${r.wip}</b> wip · <b style="color:${tc}">${r.todo}</b> todo</span><span>${this.filterCat==='all'?'Click a card to filter':'Filtered · click to clear'}</span></div>
+        <div class="asc-main"><div class="asc-left"><div class="asc-top"><span class="asc-dot"></span><span class="asc-nm">${cc.label}</span></div><div class="asc-pct" style="color:${this.progColor(r.pct)}">${r.pct}%</div><div class="asc-mid"><span class="asc-area">${this.fmt(r.area)} <small>m\u00b2</small></span><span class="asc-zn">${active?'\u2713 ':''}${r.zones} zones</span></div></div><div class="asc-team-slot"></div></div>
       </div>`;}).join('');
     host.querySelectorAll('.astrip-card').forEach(el=>el.addEventListener('click',()=>{const c=el.dataset.cat;this.filterCat=(this.filterCat===c)?'all':c;this.selKey=null;
       /* 点分类卡片时把视野对准这个分类, 避免之前缩放/平移后点了却看不到 */
