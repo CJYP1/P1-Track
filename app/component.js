@@ -632,14 +632,17 @@ class Component extends DCLogic {
   _marineComboPct(lv,z){const lab=z.label,L=this.SUBLINKS||{};const nrm=s=>String(s||'').replace(/\s+/g,'').toUpperCase(),nlab=nrm(lab);const items=[[lab,z.area||1]];
     Object.keys(L.c2zc||{}).forEach(c=>{if(nrm(L.c2zc[c])===nlab){const sc=(this.SUBZONES[lv]&&this.SUBZONES[lv].C||[]).find(x=>x.label===c);items.push([c,(sc&&sc.a)||1]);}});
     Object.keys(L.p2zone||{}).forEach(p=>{if((L.p2zone[p]||[]).some(x=>nrm(x)===nlab)){const sp=(this.SUBZONES[lv]&&this.SUBZONES[lv].P||[]).find(x=>x.label===p);items.push([p,(sp&&sp.a)||1]);}});
-    let acc=0,wsum=0,started=false;items.forEach(([l,w])=>{const r=this._subActPct(l);if(r.pct==null)return;acc+=r.pct*w;wsum+=w;if(r.started)started=true;});
-    return wsum?{pct:Math.round(acc/wsum),n:items.length,started}:null;}
+    let acc=0,wsum=0,started=false,complete=true,n=0;items.forEach(([l,w])=>{const r=this._subActPct(l);if(r.pct==null)return;n++;acc+=r.pct*w;wsum+=w;if(r.started)started=true;if(!r.complete)complete=false;});
+    return wsum?{pct:complete?100:Math.min(99,Math.round(acc/wsum)),n,started,complete}:null;}
+  /* Zone SITE PROGRESS: every activity that has a total/plan/done participates.
+     Each activity is first normalized to its own completion %, so unlike raw
+     quantities (m³/nos/%), different units are never added together. */
+  _zoneAllActivityPct(lv,z){const zmk=z.mk||z.lid,M=this.ACT_MONTHS||[],ratios=[];let started=false;
+    (this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{let done=0,plan=0;M.forEach(m=>{const d=this.actDoneMonth(lv,zmk,a.id,m),p=this.actPlan(lv,zmk,a.id,m);if(d!=null)done+=(+d||0);if(p!=null)plan+=(+p||0);});let total=this.actTotal(lv,zmk,a.id,a.total);if(total==null||total<=0)total=plan>0?plan:(done>0?done:0);if(total<=0||(!plan&&!done))return;const ratio=Math.max(0,Math.min(1,done/total));ratios.push(ratio);if(done>0)started=true;});
+    if(!ratios.length)return null;const complete=ratios.every(r=>r>=1),raw=ratios.reduce((a,b)=>a+b,0)/ratios.length,pct=complete?100:Math.min(99,Math.round(raw*100));return {pct,n:ratios.length,started,complete};}
   zoneActPct(lv,z){
     if(lv==='L1'&&z&&z.cat==='MA'&&z.ring&&this.SUBLINKS){const _c=this._marineComboPct(lv,z);if(_c)return _c;}   /* marine 父区: ZC+C+P 合并 */
-    const ph=this._zonePhases(lv,z);const W=this._pw();
-    const present=Object.keys(ph);if(!present.length)return null;
-    let wsum=0,acc=0;present.forEach(p=>{const w=W[p]||0;wsum+=w;acc+=ph[p]*w;});
-    return wsum?{pct:Math.round(acc/wsum*100),n:present.length}:null;}
+    return this._zoneAllActivityPct(lv,z);}
   /* Slab casting status for map colouring (mirrors column status): none/todo/wip/done */
   elemDoneInMonth(lv,zmk,types,m){const z=(this.DATA.levels[lv]?this.DATA.levels[lv].zones:[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return null;let n=0;types.forEach(tp=>{this._zoneElemList(z,tp).forEach(x=>{const id=(typeof x==='string')?x:x.id;const k=this.ekey(lv,z,tp,id);if(this.elemStatus(k)==='done'){const d=this.elemDate(k)||this.todayISOStr();if(this.dateToActMonth(d)===m)n++;}});});return n>0?n:null;}
 
@@ -1670,8 +1673,9 @@ class Component extends DCLogic {
       const acts=(this._actList?this._actList(lv,z):[]).filter(a=>a.custom||this._actApplies(a.id,lv,z));
       const M=this.ACT_MONTHS||[]; const ratios=[]; let anyDone=false;
       acts.forEach(a=>{const tot=a.total; if(tot==null||tot<=0)return; let done=0,plan=0; M.forEach(m=>{const v=this.actDoneMonth(lv,zmk,a.id,m); if(v!=null)done+=(+v||0); const p=this.actPlan(lv,zmk,a.id,m); if(p!=null)plan+=(+p||0);}); if(plan<=0&&done<=0)return; /* 这个区没这项工作(既没排计划也没做过)→ 不参与计算 */ if(done>0)anyDone=true; ratios.push(Math.max(0,Math.min(1,done/tot)));});
-      if(!ratios.length)return {pct:null,started:false,hasPlan:false};
-      return {pct:Math.round(ratios.reduce((a,b)=>a+b,0)/ratios.length*100), started:anyDone, hasPlan:true};
+      if(!ratios.length)return {pct:null,started:false,hasPlan:false,complete:false};
+      const complete=ratios.every(r=>r>=1),raw=ratios.reduce((a,b)=>a+b,0)/ratios.length*100;
+      return {pct:complete?100:Math.min(99,Math.round(raw)), started:anyDone, hasPlan:true,complete};
     }catch(e){ return {pct:null,started:false,hasPlan:false}; }
   }
   _subZoneProg(label){const r=this._subActPct(label); return r.started?r.pct:null;}   /* 地图填色: 有做才上色 */
