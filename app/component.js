@@ -95,7 +95,7 @@ class Component extends DCLogic {
   _actApplies(aid,lv,z){const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='col'||aid==='act_colcorbel'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
-    switch(aid){case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
+    switch(aid){case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
   mval(z,k){if(k==='area')return z.area||0;if(k==='liftstairAll')return this.lsAll(z.counts);return z.counts[k]||0;}
   fmt(n){return (n||0).toLocaleString('en-US');}
   esc(s){return (s+'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
