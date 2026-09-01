@@ -1098,20 +1098,31 @@ class Component extends DCLogic {
   _zoneMonthState(lv,z,M){
     const zmk=z.mk||z.lid, AM=this.ACT_MONTHS, n=AM.length, mi=AM.indexOf(M);
     if(mi<0)return {state:'none',colored:false};
-    const acts=this._actList(lv,z).filter(a=>a.custom||this._actApplies(a.id,lv,z));
-    const planM=new Array(n).fill(0), doneM=new Array(n).fill(0); let target=0;
+    const acts=this._actList(lv,z).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id));
+    const planM=new Array(n).fill(0), doneM=new Array(n).fill(0);
+    let scopedActs=0, allCompleteAsOf=true, actFinishMi=-1;
     acts.forEach(a=>{
-      const tot=this.actTotal(lv,zmk,a.id,a.total); if(tot!=null&&tot>0)target+=tot;
-      for(let i=0;i<n;i++){const p=this.actPlan(lv,zmk,a.id,AM[i]); if(p)planM[i]+=p; const d=this.actDoneMonth(lv,zmk,a.id,AM[i]); if(d)doneM[i]+=d;}
+      const ad=new Array(n).fill(0);let totalPlan=0,totalDone=0;
+      for(let i=0;i<n;i++){
+        const p=+(this.actPlan(lv,zmk,a.id,AM[i])||0),d=+(this.actDoneMonth(lv,zmk,a.id,AM[i])||0);
+        ad[i]=d;planM[i]+=p;doneM[i]+=d;totalPlan+=p;totalDone+=d;
+      }
+      let target=+(this.actTotal(lv,zmk,a.id,a.total)||0);
+      if(target<=0)target=totalPlan>0?totalPlan:(totalDone>0?totalDone:0);
+      if(target<=0||(!totalPlan&&!totalDone))return;
+      scopedActs++;
+      let finish=-1,cum=0;
+      for(let i=0;i<n;i++){cum+=ad[i];if(cum>=target){finish=i;break;}}
+      /* 每项工作必须独立达到自己的总量；不同单位绝不能互相抵消。 */
+      if(finish<0||finish>mi)allCompleteAsOf=false;
+      else actFinishMi=Math.max(actFinishMi,finish);
     });
-    let totalPlan=0; for(let i=0;i<n;i++)totalPlan+=planM[i];
-    if(!target)target=totalPlan;
     let cumDone=0; for(let i=0;i<=mi;i++)cumDone+=doneM[i];
     let planFinishMi=-1; for(let i=0;i<n;i++){if(planM[i]>0)planFinishMi=i;}   // 最后一个有计划量的月 = 计划完成月
-    let actFinishMi=-1; if(target>0){let c=0;for(let i=0;i<n;i++){c+=doneM[i]; if(c>=target){actFinishMi=i;break;}}}
+    const zoneFinished=scopedActs>0&&allCompleteAsOf;
     let state;
-    if(actFinishMi>=0 && actFinishMi<mi) state='fin_earlier';   // 更早月份就做完 → 灰绿, 之后每月保留
-    else if(actFinishMi===mi)            state='act_finish';    // 本月实际做完
+    if(zoneFinished&&actFinishMi>=0&&actFinishMi<mi) state='fin_earlier';   // 全部活动更早月份就做完 → 灰绿
+    else if(zoneFinished&&actFinishMi===mi)          state='act_finish';    // 全部活动在本月实际做完
     else if(cumDone>0)                   state='act_prog';      // 实际已开始/进行中(实际压过计划)
     else if(planFinishMi===mi)           state='plan_finish';   // 本月计划完成(还没动)
     else if(planM[mi]>0)                 state='plan_this';     // 本月计划开始/在做(还没动)
