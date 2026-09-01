@@ -2267,11 +2267,11 @@ class Component extends DCLogic {
     if(!this._actMonth||M.indexOf(this._actMonth)<0)this._actMonth=this.actDefaultMonthVis();
     const sm=this._actMonth, mi=M.indexOf(sm), curL=this.actCurLabel();
     const acts=this._actList(lv,z);
-    /* 把本月有 Plan 或 Done 数据的活动排到前面,方便一眼看到这个月要做什么 — 稳定排序,同组内保持原顺序 */
+    /* 管理员先看仍有欠量的活动；其次才是本月有 Plan/Done 的活动。 */
     const _hasThisMonth=a=>{const p=this.actPlan(lv,zmk,a.id,sm),d=this.actDoneMonth(lv,zmk,a.id,sm);return !(p==null&&d==null);};
     const rows=acts.filter(a=>a.custom||this._actApplies(a.id,lv,z))
-      .map((a,i)=>({a,i,has:_hasThisMonth(a)}))
-      .sort((x,y)=>(y.has-x.has)||(x.i-y.i))
+      .map((a,i)=>({a,i,has:_hasThisMonth(a),owe:admin&&this.actCarry(lv,zmk,a.id,mi).balance>0}))
+      .sort((x,y)=>(y.owe-x.owe)||(y.has-x.has)||(x.i-y.i))
       .map(({a})=>{
       const _vis=this.actVisState(lv,zmk,a.id); const hidden=(_vis==='hide');
       const total=a.total;
