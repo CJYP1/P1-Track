@@ -297,7 +297,7 @@ svg.collabels .coldate{display:block}
 .actmn span.on{color:var(--accent)}
 .actmn span.on b{color:var(--accent)}
 #progroll{padding:10px 14px;border-bottom:1px solid var(--line)}
-#progroll .ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+#progroll .ph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0}
 #progroll .ph .t{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--accent)}
 #progroll .ph .big{font-size:18px;font-weight:800}
 .statusbar{height:12px;border-radius:6px;overflow:hidden;display:flex;margin-bottom:6px}

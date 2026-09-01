@@ -94,7 +94,8 @@ class Component extends DCLogic {
   lsAll(c){return (c.liftcw||0)+(c.stair||0)+(c.liftstair||0);}
   _actApplies(aid,lv,z){const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
-    if(aid==='col'||aid==='act_colcorbel'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
+    if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
+    if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
     switch(aid){case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
   mval(z,k){if(k==='area')return z.area||0;if(k==='liftstairAll')return this.lsAll(z.counts);return z.counts[k]||0;}
   fmt(n){return (n||0).toLocaleString('en-US');}
@@ -617,7 +618,7 @@ class Component extends DCLogic {
     if(aid==='earth'||aid==='exc')return 'exc';
     if(aid==='pile')return 'pilecap';
     if(aid==='slab_pile'||aid==='rc')return 'baseslab';
-    if(aid==='col'||aid==='act_wall'||aid==='act_corewall'||aid==='ls'||aid==='act_colcorbel'||aid==='temp_stair')return 'wallcol';
+    if(aid==='col'||aid==='act_wall'||aid==='act_corewall'||aid==='ls'||aid==='temp_stair')return 'wallcol';
     if(aid==='mbeam'||aid==='sbeam'||aid==='cbeam'||aid==='pcbeam'||aid==='act_cyclical'||aid==='slab_top')return 'beamslab';
     if(aid==='slab')return (lv==='B2'||lv==='B1'||lv==='B1M')?'baseslab':'beamslab';
     const _d=(this._actDefs||[]).find(d=>d.id===aid);return (_d&&_d.phase)||null;}
@@ -1075,8 +1076,8 @@ class Component extends DCLogic {
   progCategoryActive(){const t=this.catTypesFor(this.curMetric);if(!t)return false;return this.DATA.levels[this.curLevel].zones.some(z=>this.catStats(this.curLevel,z,t).total>0);}
 
   /* ---- Monthly-plan overview: which zones have planned work in a given month ---- */
-  _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',act_colcorbel:'nos',pcbeam:'nos',temp_stair:'nos',act_cyclical:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
-  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolition Wall'},{id:'demo',label:'Demolition Slab'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'act_colcorbel',label:'Column Cobel'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(!a.some(x=>x.id===d.id))a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
+  _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',pcbeam:'nos',temp_stair:'nos',act_cyclical:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
+  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolition Wall'},{id:'demo',label:'Demolition Slab'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
   planMonth(){if(!this._planMonth||this.visMonths().indexOf(this._planMonth)<0)this._planMonth=this.actDefaultMonthVis();return this._planMonth;}
   zonePlanItems(lv,z,m){const zmk=z.mk||z.lid;const out=[];this._actMeta().forEach(a=>{if(this.actHidden(lv,zmk,a.id))return;const p=this.actPlan(lv,zmk,a.id,m);if(p!=null&&p>0)out.push({label:a.label,qty:p,unit:a.unit});});return out;}
   zoneHasPlan(lv,z,m){return this.zonePlanItems(lv,z,m).length>0;}
@@ -1261,14 +1262,14 @@ class Component extends DCLogic {
     if(Object.keys(elems).length){
       const all=Object.values(elems); if(all.length){const done=all.filter(x=>x.done).length,total=all.length;return {done,total,pct:Math.min(100,Math.round(done/total*100))};} }
     const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal; (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(areaTotal==null){const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));if(t)total+=(+t||0);} this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:total>0?Math.min(100,Math.round(done/total*100)):0}; }
-  _reportStructureAid(aid){return ['piling','slab_pile','pile','col','ls','mbeam','cbeam','slab','slab_top','act_corewall','act_wall','act_colcorbel','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
+  _reportStructureAid(aid){return ['piling','slab_pile','pile','col','ls','mbeam','cbeam','slab','slab_top','act_corewall','act_wall','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
   /* Catch-Up and Actual share one authoritative full-level denominator. */
   _reportCommonTotal(levels,aid,cat,filter,A,P){const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0;if(!any&&!hasElems)return;
         if(!this._reportStructureAid(a.id))return;const filter=(cat==='NB'&&lv==='L2'&&a.id==='slab')?'cis':null;
-        const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',act_colcorbel:'Podium · Column Corbel',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
+        const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
         const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':((cat==='MA'&&maLabel[a.id])||a.label)),levels:[lv],aid:a.id,unit:a.unit||'',filter};}); }); });
     return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
   /* NB/EB/MA 三份 Report: 普通账号按区域权限查看; admin / RWS 看全部 */
@@ -1427,7 +1428,7 @@ class Component extends DCLogic {
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
       if(_focusOnly||!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="zname${!_focusOnly&&isCrit?' crit':''}${!_focusOnly&&_delayed?' zdelay':''}${!_focusOnly&&_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
       if(!_focusOnly&&this.colorMode==='castdate'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _ci=this._mapZoneCastInfo(this.curLevel,z); const _hasDt=(_ci.done||_ci.date); if(_hasDt){const _lbl=_ci.done?'Completed':this._fmtDShort(_ci.date); const _ny=(this.showCastNames===false)?(cy+fs*0.30):(cy+fs*0.78); _topDates+=`<text class="zname" style="font-size:${(fs*0.95).toFixed(0)}px;font-weight:900;fill:#ffffff;stroke:#111111;stroke-width:${(fs*0.11).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_lbl)}</text>`;} }
-      if(!_focusOnly&&this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); if(_mo){ const _ny=(this.showCastNames===false)?(cy+fs*0.24):(cy+fs*0.68); _topDates+=`<text class="zname" style="font-size:${(fs*0.68).toFixed(0)}px;font-weight:850;fill:#141414;stroke:#fff;stroke-width:${(fs*0.09).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_mo)}</text>`; } }
+      /* Dashboard / Columns 不再显示 zone 的计划月份；日期只来自每根已完成柱子的实际完成日期。 */
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'){ const _ci=this._mapZoneCastInfo(this.curLevel,z); const _fz=(fs*0.55).toFixed(0);
         if(_ci.start||_ci.end){ const _s=_ci.start?this._fmtDShort(_ci.start):'—', _e=_ci.end?this._fmtDShort(_ci.end):'—';
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#1b7a3e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*0.58).toFixed(0)}">▶ ${this.esc(_s)}</text>`;
@@ -1465,13 +1466,13 @@ class Component extends DCLogic {
         const _podL=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
         const zz=_podL?{mk:this.curLevel+'|'+_podL,label:_podL,cat:'MA',_pod:true}:zoneByLabel[c.zone];   /* Marine 柱子归到它的 Podium 区: 状态/浇筑时间都从 P 区读 */
         const _ckey=zz?this.ekey(this.curLevel,zz,'col',c.id):'', st=_ckey?this.elemStatus(_ckey):'todo', _cdate=_ckey?this.elemDate(_ckey):'';
-        const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'))):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* 完成=黑; castdate=完成黑,其余按 Column 活动月上色 */
+        const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':'#8a93a3')):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* Dashboard Columns: 完成=黑，所有未完成=灰，不再按计划月份上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=st!=='done'&&(_uT||_crit);   /* critical 柱完成后变黑，同时去掉红色外圈 */
         _colHtml+=`<circle class="colmk${_uT?' colmk-t':''}" data-ci="${ci}"${_hid?' opacity="0.28" stroke-dasharray="500,400"':''} cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${fill}" stroke="${_red?'#c8102e':'#ffffff'}" stroke-width="${_red&&_uT?560:220}"/>`;
         _colHtml+=`<text class="collbl" ${_red?`style="fill:#c8102e"`:''}${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id.replace('WF-B2','').replace('MK-B2','MK-'))}</text>`;
-        if(this.showDates&&_cdate)_colHtml+=`<text class="coldate"${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_cdate))}</text>`;
+        if(_cdate&&st==='done'&&(this.showDates||(this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false)))_colHtml+=`<text class="coldate"${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_cdate))}</text>`;
       });
     }
     const _realCol=(this.COLUMNS&&this.COLUMNS[this.curLevel])||[];
@@ -1492,7 +1493,7 @@ class Component extends DCLogic {
         const _pl=(this.curLevel==='L1')?this._colPodLabel(c.id):null,_pz=_pl?{mk:this.curLevel+'|'+_pl,label:_pl,cat:'MA',_pod:true}:zoneByLabel[c.zone],_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_ps=_pk?this.elemStatus(_pk):'todo',_pd=_pk?this.elemDate(_pk):'',_pr=_pc&&_ps!=='done',_pf=_ps==='done'?'#111111':_ps==='wip'?this.cssvar('--wip'):'#8a93a3';
         _colHtml+=`<circle class="colmk colmk-placed" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pf}" stroke="${_pr?'#c8102e':'#ffffff'}" stroke-width="${_pr?360:220}"/>`;
         _colHtml+=`<text class="collbl" ${_pr?`style="fill:#c8102e"`:''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id)}</text>`;
-        if(this.showDates&&_pd)_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
+        if(_pd&&_ps==='done'&&(this.showDates||(this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false)))_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
       });
     }
     // ZC 叠加层: 从真实 Marine 父区几何一次性生成(与 C/P 一样可切换显示)
@@ -1537,7 +1538,7 @@ class Component extends DCLogic {
       s+=base+`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
       if(!_focusOnly&&this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=cls==='subZC'?this._marineCastInfo(this.curLevel,_z2):this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
-      if(!_focusOnly&&this.colorMode==='castdate'&&cls==='subP'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.start||_cd.end); if(_mo){const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_mo.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_mo,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">${this.esc(_mo)}</text>`;} }   /* 无日期不显示 TBA */
+      /* Podium 的 Column zone 计划月份同样不画；每根柱仅显示实际完成日期。 */
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'&&!(cls==='subZC'&&this.showSubC)){const _z3={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')},_mi=cls==='subZC'?this._marineCastInfo(this.curLevel,_z3):this._zoneCastInfo(this.curLevel,_z3);if(_mi.start||_mi.end){const _ds=[_mi.start&&('▶ '+this._fmtDShort(_mi.start)),_mi.end&&('■ '+this._fmtDShort(_mi.end))].filter(Boolean).join(' → '),_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_ds.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_ds,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#315b96" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_ds)}</text>`;}}
       if(this.showDelay&&!(cls==='subZC'&&this.showSubC)){const _dz={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA'};const _dd=this._zoneDelayDays(this.curLevel,_dz);if(_dd!=null){const _dv=this._delayView(_dd),_dfs=Math.max(1150,Math.min(1800,_bw/(Math.max(7,_dv.txt.length)*0.7),_bh*0.16));const _dy=lq[1]+_dfs*(this.colorMode==='castdate'?2.65:1.35),_dp=_placeMDate(lq[0],_dy,_dv.txt,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_dv.c}" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.24).toFixed(0)}" paint-order="stroke">${this.esc(_dv.txt)}</text>`;}}   /* Marine Delay 同样使用日期碰撞避让 */
       if(this.showRpVsAc){const _rz={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA'},_rp=this._rpAugPct(this.curLevel,_rz);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,_rz),_gap=_ac-_rp,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`,_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_rt.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_rt,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_gap>=0?'#218a5c':'#c8102e'}" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_rt)}</text>`;}}
@@ -1783,12 +1784,18 @@ class Component extends DCLogic {
   drawLegend(){
     const lg=this.root.querySelector('#legend');let s='';
     if(this.colorMode==='castdate'){
-      s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Cast date / month</div>';
-      s+='<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Slabs by cast date · columns by month · from activity DATES</div>';
-      const _pal=this._castPal();
-      this.ACT_MONTHS.forEach(m=>{ if(m==="Before Apr'26")return; s+=`<div class="lr"><span class="sw" style="background:${_pal[m]}"></span>${m}</div>`; });
-      s+=`<div class="lr"><span class="sw" style="background:#111111"></span>Completed</div>`;
-      s+=`<div class="lr" style="margin-top:3px"><span style="width:12px;text-align:center;color:#1b7a3e;font-weight:900">▶</span>Start date&nbsp;&nbsp;<span style="width:12px;text-align:center;color:#b23a2e;font-weight:900">■</span>End date</div>`;
+      if(this._castLayer==='col'){
+        s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Column completion</div>';
+        s+='<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Actual status and each completed column\'s completion date</div>';
+        s+='<div class="lr"><span class="sw" style="background:#111111"></span>Completed</div><div class="lr"><span class="sw" style="background:#8a93a3"></span>Not completed</div>';
+      }else{
+        s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Slab cast date / month</div>';
+        s+='<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Slabs by cast date · from activity DATES</div>';
+        const _pal=this._castPal();
+        this.ACT_MONTHS.forEach(m=>{ if(m==="Before Apr'26")return; s+=`<div class="lr"><span class="sw" style="background:${_pal[m]}"></span>${m}</div>`; });
+        s+=`<div class="lr"><span class="sw" style="background:#111111"></span>Completed</div>`;
+        s+=`<div class="lr" style="margin-top:3px"><span style="width:12px;text-align:center;color:#1b7a3e;font-weight:900">▶</span>Start date&nbsp;&nbsp;<span style="width:12px;text-align:center;color:#b23a2e;font-weight:900">■</span>End date</div>`;
+      }
     } else if(this.colorMode==='area'){
       s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Construction area</div>';
       Object.values(this.CAT).forEach(v=>s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(v.c,0.5)}"></span>${v.label}</div>`);
@@ -1862,16 +1869,9 @@ class Component extends DCLogic {
 
   buildProgRoll(){
     const lp=this.progFilter(this.curLevel);
-    const dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
     const scope=this.filterCat==='all'?'All areas':`${this.ASHORT[this.filterCat]||this.filterCat}`;
     this.root.querySelector('#progroll').innerHTML=`
-      <div class="ph"><div class="t">Site progress · <span style="color:${this.filterCat==='all'?'var(--faint)':this.BCOL[this.filterCat]}">${scope}</span></div><div class="big" style="color:${this.progColor(lp.avg)}">${lp.avg}%</div></div>
-      <div class="statusbar" style="background:${tc}" title="Overall progress ${lp.avg}%"><i style="width:${lp.avg}%;background:${this.progColor(lp.avg)}"></i></div>
-      <div class="statuskeys">
-        <span><i class="d" style="background:${dc}"></i>Complete ${lp.done}</span>
-        <span><i class="d" style="background:${wc}"></i>In progress ${lp.wip}</span>
-        <span><i class="d" style="background:${tc}"></i>Not started ${lp.todo}</span>
-      </div>`;
+      <div class="ph"><div class="t">Site progress · <span style="color:${this.filterCat==='all'?'var(--faint)':this.BCOL[this.filterCat]}">${scope}</span></div><div class="big" style="color:${this.progColor(lp.avg)}">${lp.avg}%</div></div>`;
   }
 
   areaBreakdown(lv){
@@ -2236,7 +2236,6 @@ class Component extends DCLogic {
       {id:'cbeam',label:'Cast Steel Main Beam',unit:'nos',total:this.actTotal(lv,zmk,'cbeam',this.actAutoTotal(lv,zmk,'cbeam'))},
       {id:'slab',label:'Slab',unit:'m²',total:this.actTotal(lv,zmk,'slab',this.actAutoTotal(lv,zmk,'slab')),info:'Enter the completed area under \u201cDone\u201d based on the work stage: 40% for formwork, 50% for rebar, and 10% for slab casting.'},
       {id:'act_wall',label:'Wall',unit:'nos',total:this.actTotal(lv,zmk,'act_wall',this.actAutoTotal(lv,zmk,'act_wall'))},
-      {id:'act_colcorbel',label:'Column Cobel',unit:'nos',total:this.actTotal(lv,zmk,'act_colcorbel',this.actAutoTotal(lv,zmk,'act_colcorbel'))},
       {id:'slab_top',label:'Top Slab',unit:'m²',total:this.actTotal(lv,zmk,'slab_top',this.actAutoTotal(lv,zmk,'slab_top'))},
       {id:'rc',label:'RC Works',unit:'m³',total:this.actTotal(lv,zmk,'rc',this.actAutoTotal(lv,zmk,'rc'))},
       {id:'pcbeam',label:'Precast Beam Installation',unit:'nos',total:this.actTotal(lv,zmk,'pcbeam',this.actAutoTotal(lv,zmk,'pcbeam'))},
@@ -2247,14 +2246,14 @@ class Component extends DCLogic {
       {id:'mep_elec',label:'ELEC',unit:'%',total:this.actTotal(lv,zmk,'mep_elec',this.actAutoTotal(lv,zmk,'mep_elec'))},
       {id:'mep_bms',label:'BMS',unit:'%',total:this.actTotal(lv,zmk,'mep_bms',this.actAutoTotal(lv,zmk,'mep_bms'))},
     ];
-    (this._actDefs||[]).forEach(d=>{if(acts.some(a=>a.id===d.id))return;acts.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit),custom:true,total:this.actTotal(lv,zmk,d.id,this.actAutoTotal(lv,zmk,d.id))});});
+    (this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||acts.some(a=>a.id===d.id))return;acts.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit),custom:true,total:this.actTotal(lv,zmk,d.id,this.actAutoTotal(lv,zmk,d.id))});});
     const _mset=this._marineActSet(lv,z);
     return _mset?acts.filter(a=>_mset.has(a.id)):acts;
   }
   /* L1 marine 各 slab 层只显示各自相关的活动(卡片+顶部总量框同一来源 _actList) */
   _marineActSet(lv,z){
     if(lv!=='L1')return null;
-    if(z._pod)   return new Set(['act_colcorbel','col','ls','mbeam','cbeam']);            // Podium
+    if(z._pod)   return new Set(['col','ls','mbeam','cbeam']);            // Podium
     if(z._mslab) return new Set(['pcbeam','rc','act_cyclical']);                          // Bottom slab (C)
     if(z.cat==='MA') return new Set(['piling','slab_top','mep_acmv','mep_fps','mep_elec','mep_bms']); // Top slab (ZC 真实分区)
     return null;
@@ -2642,7 +2641,7 @@ class Component extends DCLogic {
         const z={mk:'L1|'+label,label,cat:'MA',counts:{},cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],cores:[],_pod:(kind==='P'),_mslab:(kind==='C')};
         zones.push({lv:'L1',z,label,cat:'MA',crit:false}); })); }
     // 按活动分组: 活动顺序(Excavation 在前) + 标签/单位
-    const ACTORDER=['earth','exc','piling','demo_wall','demo','slab_pile','pile','col','ls','mbeam','cbeam','slab','act_wall','act_colcorbel','slab_top','rc','pcbeam','temp_stair','act_cyclical','mep_acmv','mep_fps','mep_elec','mep_bms'];
+    const ACTORDER=['earth','exc','piling','demo_wall','demo','slab_pile','pile','col','ls','mbeam','cbeam','slab','act_wall','slab_top','rc','pcbeam','temp_stair','act_cyclical','mep_acmv','mep_fps','mep_elec','mep_bms'];
     const actMeta={};
     zones.forEach(o=>this._schZoneActs(o.lv,o.z).forEach(a=>{if(!actMeta[a.id])actMeta[a.id]={label:a.label,unit:a.unit};}));
     const orderedIds=ACTORDER.filter(id=>actMeta[id]).concat(Object.keys(actMeta).filter(id=>ACTORDER.indexOf(id)<0));
@@ -2868,7 +2867,7 @@ class Component extends DCLogic {
     mc.appendChild(seg);
     if(this.colorMode==='castdate'){ if(!this._castLayer)this._castLayer='slab';
       const dvc=document.createElement('span');dvc.className='divv';mc.appendChild(dvc);
-      mc.appendChild(mkLbl('Cast:'));
+      mc.appendChild(mkLbl('Dashboard:'));
       const cseg=document.createElement('div');cseg.className='modeseg';
       [['slab','🗓 Slabs'],['col','⬤ Columns']].forEach(([k,lab])=>{const b=document.createElement('button');b.className=k===this._castLayer?'on':'';b.innerHTML=lab;b.addEventListener('click',()=>{this._castLayer=k;this.buildMetrics();this.render();});cseg.appendChild(b);});
       mc.appendChild(cseg);
