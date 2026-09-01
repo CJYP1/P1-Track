@@ -1849,8 +1849,8 @@ class Component extends DCLogic {
         <div class="kmc"><span style="color:${dc}">${es.done} done</span><span style="color:${wc}">${es.wip} wip</span><span style="color:var(--faint)">${rem} left</span></div>`; };
     // Excavation / Demolition — admin totals + cumulative done, summed across the level
     let excT=0,excD=0,demoT=0,demoD=0;
-    uniq.forEach(z=>{const zmk=z.mk||z.lid;excT+=this.excTotal(this.curLevel,z)||0;excD+=this.actCumDone(this.curLevel,zmk,'exc')||0;demoT+=this.actTotal(this.curLevel,zmk,'demo',0)||0;demoD+=this.actCumDone(this.curLevel,zmk,'demo')||0;});
-    if(OVk.exc!=null)excT=OVk.exc; if(OVk.demo!=null)demoT=OVk.demo;
+    uniq.forEach(z=>{const zmk=z.mk||z.lid;if(this._actApplies('exc',this.curLevel,z)){excT+=this.excTotal(this.curLevel,z)||0;excD+=this.actCumDone(this.curLevel,zmk,'exc')||0;}if(this._actApplies('demo_wall',this.curLevel,z)){demoT+=(this.actTotal(this.curLevel,zmk,'demo',0)||0)+(this.actTotal(this.curLevel,zmk,'demo_wall',0)||0);demoD+=(this.actCumDone(this.curLevel,zmk,'demo')||0)+(this.actCumDone(this.curLevel,zmk,'demo_wall')||0);}});
+    if(OVk.exc!=null&&(this.filterCat==='all'||this.filterCat==='NB'))excT=OVk.exc; if(OVk.demo!=null&&(this.filterCat==='all'||this.filterCat==='EB'))demoT=OVk.demo;
     const miniVol=(tot,done)=>{ if(!tot) return ''; const rem=Math.max(0,tot-done); const dp=Math.min(100,done/tot*100);
       return `<div class="kmini" title="${this.fmt(done)} done · ${this.fmt(rem)} remaining"><i style="width:${dp}%;background:${dc}"></i><i style="width:${100-dp}%;background:${tc}"></i></div>
         <div class="kmc"><span style="color:${dc}">${this.fmt(done)} done</span><span style="color:var(--faint)">${this.fmt(rem)} left</span></div>`; };
@@ -1861,16 +1861,12 @@ class Component extends DCLogic {
   }
 
   buildProgRoll(){
-    const lp=this.progFilter(this.curLevel), tot=lp.done+lp.wip+lp.todo||1;
+    const lp=this.progFilter(this.curLevel);
     const dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
     const scope=this.filterCat==='all'?'All areas':`${this.ASHORT[this.filterCat]||this.filterCat}`;
     this.root.querySelector('#progroll').innerHTML=`
       <div class="ph"><div class="t">Site progress · <span style="color:${this.filterCat==='all'?'var(--faint)':this.BCOL[this.filterCat]}">${scope}</span></div><div class="big" style="color:${this.progColor(lp.avg)}">${lp.avg}%</div></div>
-      <div class="statusbar">
-        <i style="width:${lp.done/tot*100}%;background:${dc}"></i>
-        <i style="width:${lp.wip/tot*100}%;background:${wc}"></i>
-        <i style="width:${lp.todo/tot*100}%;background:${tc}"></i>
-      </div>
+      <div class="statusbar" style="background:${tc}" title="Overall progress ${lp.avg}%"><i style="width:${lp.avg}%;background:${this.progColor(lp.avg)}"></i></div>
       <div class="statuskeys">
         <span><i class="d" style="background:${dc}"></i>Complete ${lp.done}</span>
         <span><i class="d" style="background:${wc}"></i>In progress ${lp.wip}</span>
