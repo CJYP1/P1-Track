@@ -611,10 +611,19 @@ class Component extends DCLogic {
   /* Zone overall % = average of each applicable activity's cumulative done/total.
      Activities with no data at all (total<=0 and nothing done) do NOT participate. */
   _pw(){return {demo:8,pilewall:22,exc:11,pilecap:1,baseslab:1,beamslab:32,wallcol:25};}
-  _actPhase(aid,lv){if(aid==='demo')return 'demo';if(aid==='exc')return 'exc';if(aid==='pile')return 'pilecap';if(aid==='col'||aid==='act_wall'||aid==='act_corewall'||aid==='ls'||aid==='act_colcorbel')return 'wallcol';if(aid==='mbeam'||aid==='sbeam'||aid==='cbeam')return 'beamslab';   /* Walls + columns + core(25%): 含 柱/墙/核心筒·电梯·楼梯墙(ls)/柱牛腿 */if(aid==='slab')return (lv==='B2'||lv==='B1'||lv==='B1M')?'baseslab':'beamslab';const _d=(this._actDefs||[]).find(d=>d.id===aid);return (_d&&_d.phase)||null;}
+  _actPhase(aid,lv){
+    if(aid==='demo'||aid==='demo_wall')return 'demo';
+    if(aid==='piling')return 'pilewall';
+    if(aid==='earth'||aid==='exc')return 'exc';
+    if(aid==='pile')return 'pilecap';
+    if(aid==='slab_pile'||aid==='rc')return 'baseslab';
+    if(aid==='col'||aid==='act_wall'||aid==='act_corewall'||aid==='ls'||aid==='act_colcorbel'||aid==='temp_stair')return 'wallcol';
+    if(aid==='mbeam'||aid==='sbeam'||aid==='cbeam'||aid==='pcbeam'||aid==='act_cyclical'||aid==='slab_top')return 'beamslab';
+    if(aid==='slab')return (lv==='B2'||lv==='B1'||lv==='B1M')?'baseslab':'beamslab';
+    const _d=(this._actDefs||[]).find(d=>d.id===aid);return (_d&&_d.phase)||null;}
   /* per-zone phase completions {phase:ratio 0-1}; each phase = average of its activities' ratios (avoids mixing units) */
   _zonePhases(lv,z){const zmk=z.mk||z.lid,sm=this._actMonth||(this.actDefaultMonth?this.actDefaultMonth():this.ACT_MONTHS[0]),ph={};
-    const ids=[...new Set(['col','pile','mbeam','cbeam','sbeam','exc','demo','slab'].filter(a=>this._actApplies(a,lv,z)).concat(['act_wall','act_corewall']).concat((this._actDefs||[]).filter(d=>d.phase).map(d=>d.id)))];
+    const ids=[...new Set((this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).map(a=>a.id))];
     const _M=this.ACT_MONTHS||[]; let _mi=_M.indexOf(sm); if(_mi<0)_mi=_M.length-1;
     ids.forEach(aid=>{const p=this._actPhase(aid,lv);if(!p)return;
       /* 累计: 到当前月为止的累计计划 vs 累计完成 —— 这样上月没做完(欠账)且后面没新计划的, 依然算进度; 做完的也一直保持 */
@@ -642,7 +651,8 @@ class Component extends DCLogic {
     if(!ratios.length)return null;const complete=ratios.every(r=>r>=1),raw=ratios.reduce((a,b)=>a+b,0)/ratios.length,pct=complete?100:Math.min(99,Math.round(raw*100));return {pct,n:ratios.length,started,complete};}
   zoneActPct(lv,z){
     if(lv==='L1'&&z&&z.cat==='MA'&&z.ring&&this.SUBLINKS){const _c=this._marineComboPct(lv,z);if(_c)return _c;}   /* marine 父区: ZC+C+P 合并 */
-    return this._zoneAllActivityPct(lv,z);}
+    const ph=this._zonePhases(lv,z),W=this._pw(),present=Object.keys(ph).filter(p=>(W[p]||0)>0),all=this._zoneAllActivityPct(lv,z);if(!present.length)return all;
+    let wsum=0,acc=0;present.forEach(p=>{const w=W[p];wsum+=w;acc+=ph[p]*w;});if(!wsum)return all;const raw=Math.round(acc/wsum*100),complete=raw>=100&&(!all||all.complete),pct=complete?100:Math.min(99,raw);return {pct,n:all?all.n:present.length,started:all?all.started:pct>0,complete,phases:present.length};}
   /* Slab casting status for map colouring (mirrors column status): none/todo/wip/done */
   elemDoneInMonth(lv,zmk,types,m){const z=(this.DATA.levels[lv]?this.DATA.levels[lv].zones:[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return null;let n=0;types.forEach(tp=>{this._zoneElemList(z,tp).forEach(x=>{const id=(typeof x==='string')?x:x.id;const k=this.ekey(lv,z,tp,id);if(this.elemStatus(k)==='done'){const d=this.elemDate(k)||this.todayISOStr();if(this.dateToActMonth(d)===m)n++;}});});return n>0?n:null;}
 
