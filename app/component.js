@@ -1219,7 +1219,7 @@ class Component extends DCLogic {
     const starts=inf.map(x=>x.start).filter(Boolean).sort(),ends=inf.map(x=>x.end).filter(Boolean).sort(),start=starts[0]||null,end=ends[ends.length-1]||null,date=end||start;return {aid:'marine',done:inf.every(x=>x.done),date,start,end,month:this._dateToActMonth(date)};}
   _mapZoneCastInfo(lv,z){return lv==='L1'&&z&&z.cat==='MA'&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z);}
   _zoneCastColor(z){ if(this._castLayer==='col')return '#efeaec'; const info=this._mapZoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
-  _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.start||d.end); return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
+  _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.end||d.start); return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
   /* Marine 柱子归属: 按 marine-col-map.csv 反查这根柱属于哪个 Podium(P) 区 → 用 P 区的 col 活动读取浇筑时间/上色 */
   _colPodLabel(id){ if(!this._marineCol)return null; if(!this._colPodIdx){ const m={}; Object.keys(this._marineCol).forEach(p=>this._marineCol[p].forEach(c=>{m[String(c.id||'').trim().toUpperCase()]=p;})); this._colPodIdx=m; } return this._colPodIdx[String(id||'').trim().toUpperCase()]||null; }
   _fmtDShort(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m)return String(iso); return m[3]+" "+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+" '"+m[1].slice(2); }
@@ -1428,7 +1428,7 @@ class Component extends DCLogic {
       const _started=this.colorMode==='plan'&&!_delayed&&this.zoneHasPlan(this.curLevel,z,_pm)&&this.zonePlanStarted(this.curLevel,z,_pm);   /* 开工: 标签变橘粗边(替代原橘点) */
       if(_focusOnly||!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="zname${!_focusOnly&&isCrit?' crit':''}${!_focusOnly&&_delayed?' zdelay':''}${!_focusOnly&&_started?' zstart':''}" style="font-size:${fs.toFixed(0)}px" x="${cx.toFixed(0)}" y="${(cy-fs*0.25).toFixed(0)}">${this.esc(z.label)}</text>`;
       if(!_focusOnly&&this.colorMode==='castdate'&&this._castLayer!=='col'&&this.showCastDates!==false){ const _ci=this._mapZoneCastInfo(this.curLevel,z); const _hasDt=(_ci.done||_ci.date); if(_hasDt){const _lbl=_ci.done?'Completed':this._fmtDShort(_ci.date); const _ny=(this.showCastNames===false)?(cy+fs*0.30):(cy+fs*0.78); _topDates+=`<text class="zname" style="font-size:${(fs*0.95).toFixed(0)}px;font-weight:900;fill:#ffffff;stroke:#111111;stroke-width:${(fs*0.11).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_lbl)}</text>`;} }
-      /* Dashboard / Columns 不再显示 zone 的计划月份；日期只来自每根已完成柱子的实际完成日期。 */
+      if(!_focusOnly&&this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _mo=this._dateToActMonth(_cd.end||_cd.start); if(_mo){ const _ny=(this.showCastNames===false)?(cy+fs*0.24):(cy+fs*0.68); _topDates+=`<text class="zname" style="font-size:${(fs*0.68).toFixed(0)}px;font-weight:850;fill:#141414;stroke:#fff;stroke-width:${(fs*0.09).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${_ny.toFixed(0)}">${this.esc(_mo)}</text>`; } }
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'){ const _ci=this._mapZoneCastInfo(this.curLevel,z); const _fz=(fs*0.55).toFixed(0);
         if(_ci.start||_ci.end){ const _s=_ci.start?this._fmtDShort(_ci.start):'—', _e=_ci.end?this._fmtDShort(_ci.end):'—';
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#1b7a3e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*0.58).toFixed(0)}">▶ ${this.esc(_s)}</text>`;
@@ -1466,13 +1466,13 @@ class Component extends DCLogic {
         const _podL=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
         const zz=_podL?{mk:this.curLevel+'|'+_podL,label:_podL,cat:'MA',_pod:true}:zoneByLabel[c.zone];   /* Marine 柱子归到它的 Podium 区: 状态/浇筑时间都从 P 区读 */
         const _ckey=zz?this.ekey(this.curLevel,zz,'col',c.id):'', st=_ckey?this.elemStatus(_ckey):'todo', _cdate=_ckey?this.elemDate(_ckey):'';
-        const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':'#8a93a3')):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* Dashboard Columns: 完成=黑，所有未完成=灰，不再按计划月份上色 */
+        const fill=this.colorMode==='castdate'?(this._castLayer==='slab'?'#c3c8cf':(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3'))):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* Dashboard Columns: 完成=黑；未完成按 zone 的计划完成月份上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=st!=='done'&&(_uT||_crit);   /* critical 柱完成后变黑，同时去掉红色外圈 */
         _colHtml+=`<circle class="colmk${_uT?' colmk-t':''}" data-ci="${ci}"${_hid?' opacity="0.28" stroke-dasharray="500,400"':''} cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${fill}" stroke="${_red?'#c8102e':'#ffffff'}" stroke-width="${_red&&_uT?560:220}"/>`;
         _colHtml+=`<text class="collbl" ${_red?`style="fill:#c8102e"`:''}${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id.replace('WF-B2','').replace('MK-B2','MK-'))}</text>`;
-        if(_cdate&&st==='done'&&(this.showDates||(this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false)))_colHtml+=`<text class="coldate"${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_cdate))}</text>`;
+        if(this.showDates&&_cdate&&st==='done')_colHtml+=`<text class="coldate"${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_cdate))}</text>`;
       });
     }
     const _realCol=(this.COLUMNS&&this.COLUMNS[this.curLevel])||[];
@@ -1493,7 +1493,7 @@ class Component extends DCLogic {
         const _pl=(this.curLevel==='L1')?this._colPodLabel(c.id):null,_pz=_pl?{mk:this.curLevel+'|'+_pl,label:_pl,cat:'MA',_pod:true}:zoneByLabel[c.zone],_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_ps=_pk?this.elemStatus(_pk):'todo',_pd=_pk?this.elemDate(_pk):'',_pr=_pc&&_ps!=='done',_pf=_ps==='done'?'#111111':_ps==='wip'?this.cssvar('--wip'):'#8a93a3';
         _colHtml+=`<circle class="colmk colmk-placed" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pf}" stroke="${_pr?'#c8102e':'#ffffff'}" stroke-width="${_pr?360:220}"/>`;
         _colHtml+=`<text class="collbl" ${_pr?`style="fill:#c8102e"`:''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id)}</text>`;
-        if(_pd&&_ps==='done'&&(this.showDates||(this.colorMode==='castdate'&&this._castLayer==='col'&&this.showCastDates!==false)))_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
+        if(this.showDates&&_pd&&_ps==='done')_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
       });
     }
     // ZC 叠加层: 从真实 Marine 父区几何一次性生成(与 C/P 一样可切换显示)
@@ -1538,7 +1538,7 @@ class Component extends DCLogic {
       s+=base+`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
       if(!_focusOnly&&this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=cls==='subZC'?this._marineCastInfo(this.curLevel,_z2):this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
-      /* Podium 的 Column zone 计划月份同样不画；每根柱仅显示实际完成日期。 */
+      if(!_focusOnly&&this.colorMode==='castdate'&&cls==='subP'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.end||_cd.start); if(_mo){const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_mo.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_mo,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">${this.esc(_mo)}</text>`;} }
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'&&!(cls==='subZC'&&this.showSubC)){const _z3={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')},_mi=cls==='subZC'?this._marineCastInfo(this.curLevel,_z3):this._zoneCastInfo(this.curLevel,_z3);if(_mi.start||_mi.end){const _ds=[_mi.start&&('▶ '+this._fmtDShort(_mi.start)),_mi.end&&('■ '+this._fmtDShort(_mi.end))].filter(Boolean).join(' → '),_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_ds.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_ds,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#315b96" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_ds)}</text>`;}}
       if(this.showDelay&&!(cls==='subZC'&&this.showSubC)){const _dz={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA'};const _dd=this._zoneDelayDays(this.curLevel,_dz);if(_dd!=null){const _dv=this._delayView(_dd),_dfs=Math.max(1150,Math.min(1800,_bw/(Math.max(7,_dv.txt.length)*0.7),_bh*0.16));const _dy=lq[1]+_dfs*(this.colorMode==='castdate'?2.65:1.35),_dp=_placeMDate(lq[0],_dy,_dv.txt,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_dv.c}" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.24).toFixed(0)}" paint-order="stroke">${this.esc(_dv.txt)}</text>`;}}   /* Marine Delay 同样使用日期碰撞避让 */
       if(this.showRpVsAc){const _rz={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA'},_rp=this._rpAugPct(this.curLevel,_rz);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,_rz),_gap=_ac-_rp,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`,_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_rt.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_rt,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="${_gap>=0?'#218a5c':'#c8102e'}" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_rt)}</text>`;}}
@@ -1785,9 +1785,11 @@ class Component extends DCLogic {
     const lg=this.root.querySelector('#legend');let s='';
     if(this.colorMode==='castdate'){
       if(this._castLayer==='col'){
-        s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Column completion</div>';
-        s+='<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Actual status and each completed column\'s completion date</div>';
-        s+='<div class="lr"><span class="sw" style="background:#111111"></span>Completed</div><div class="lr"><span class="sw" style="background:#8a93a3"></span>Not completed</div>';
+        s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Column planned completion</div>';
+        s+='<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Unfinished columns use their zone planned-finish month</div>';
+        const _pal=this._castPal();
+        this.ACT_MONTHS.forEach(m=>{ if(m==="Before Apr'26")return; s+=`<div class="lr"><span class="sw" style="background:${_pal[m]}"></span>${m}</div>`; });
+        s+='<div class="lr"><span class="sw" style="background:#111111"></span>Completed</div><div class="lr"><span class="sw" style="background:#8a93a3"></span>No zone finish date</div>';
       }else{
         s+='<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Slab cast date / month</div>';
         s+='<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Slabs by cast date · from activity DATES</div>';
@@ -2299,7 +2301,8 @@ class Component extends DCLogic {
       const mn='';  /* Done/Plan单月行已移除(与 by累计 重复) */
       const _adv=(this._actDate||{})[lv+'||'+zmk+'||'+a.id]||{};
       const actDateLine=admin?`<div class="actsub actdate"><span class="am2">Dates</span> <input type="date" class="actdate-in" data-a="${a.id}" data-which="start" value="${_adv.start||''}" title="${a.label} start"> <span class="asep">→</span> <input type="date" class="actdate-in" data-a="${a.id}" data-which="end" value="${_adv.end||''}" title="${a.label} end"></div>`:((_adv.start||_adv.end)?`<div class="actsub actdate"><span class="am2">Dates</span> <b>${_adv.start?this._fmtD(_adv.start):'—'} → ${_adv.end?this._fmtD(_adv.end):'—'}</b></div>`:'');
-      const _noWorkThisMonth=admin&&plan==null&&dm==null;
+      /* 当前月虽无新增计划，只要还有历史欠量就仍是 active，不可灰掉。 */
+      const _noWorkThisMonth=admin&&plan==null&&dm==null&&cg.balance<=0;
       /* Core Wall activity card: embed the existing Core Walls element checklist (same list,
          same saved status — just moved here from the old standalone bottom-of-page section) */
       const _coreListHtml='';  /* Core/Lift/Stair 已统一到 ls 活动清单(见 _actElemSec) */
