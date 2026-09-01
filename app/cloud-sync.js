@@ -52,18 +52,18 @@ function rwsQueuePush(fn, args){ const q=rwsQueueList(); q.push({id:Date.now()+'
 function rwsQueueSize(){ return rwsQueueList().length; }
 let _rwsFlushing = false;
 async function rwsQueueFlush(){
-  if (_rwsFlushing) return; _rwsFlushing = true;
+  if (_rwsFlushing) return; _rwsFlushing = true; let lastResult=null;
   try{
     let q = rwsQueueList();
     while (q.length) {
       const item = q[0];
-      const r = await rwsCall(item.fn, item.args);
+      const r = await rwsCall(item.fn, item.args); lastResult=r;
       if (r.ok) { q.shift(); rwsQueueSave(q); }
       else if (r.offline) { break; }
       else { console.warn('[rws] dropping queued edit, server rejected it:', item, r.error); q.shift(); rwsQueueSave(q); }
     }
   } finally { _rwsFlushing = false; }
-  rwsNotifyFail(r); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
+  rwsNotifyFail(lastResult); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
 }
 window.addEventListener('online', rwsQueueFlush);
 setInterval(rwsQueueFlush, 20000);

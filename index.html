@@ -20,7 +20,7 @@
 <script src="cw-groups.global.js?v=6c366895d1"></script>
 <script src="floor-templates.global.js?v=f343887b20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app/cloud-sync.js?v=d9d109788f"></script>
+<script src="app/cloud-sync.js?v=658cf36f3f"></script>
 </helmet>
 <div id="app" ref="{{ rootRef }}">
   <header>
@@ -47,7 +47,6 @@
       </div>
       <div class="header-tools">
         <button class="hbtn primary" id="saveLock" style="display:none" title="Save the whole page — all progress embedded — as one HTML file to forward or archive">💾 Save</button>
-        <button class="hbtn" id="loadLock" style="display:none" title="Import data (P6 plan / saved backup) — merges into the map and syncs to the cloud">📥 Import</button>
         <button class="hbtn icon-compact" id="rwsClearCache" title="Clear local cache — remove stale data from this browser and reload (cloud & uploaded data are not affected)">🧹 <span>Clear</span></button>
         <button class="hbtn" id="exportXls" style="display:none" title="Export the progress table to Excel">⬇ Excel</button>
         <button class="hbtn" id="exportJson" style="display:none" title="Export ALL data (plan vs actual, who changed what, accounts) as one JSON for tracking">⬇ Full JSON</button>
@@ -55,7 +54,6 @@
         <button class="hbtn" id="openTable" style="display:none" title="Full progress table of every zone (review / print)">▤ Table <span class="cnt" id="elemCnt">0</span></button>
       </div>
     </div>
-    <input id="lockFile" type="file" accept=".json,.html,.xls,.csv" style="display:none">
   </header>
   
   <div id="body">
@@ -132,8 +130,8 @@
 </div>
 
 <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1f4a73"/><g transform="translate(30,28)"><rect x="0" y="0" width="18" height="18" rx="2" fill="#4a90e2"/><rect x="22" y="0" width="18" height="18" rx="2" fill="#35c08e"/><rect x="0" y="22" width="18" height="18" rx="2" fill="#f5a623"/><rect x="22" y="22" width="18" height="18" rx="2" fill="#ef5f7a"/></g></svg></template></x-dc>
-<script src="generated/app.bundle.js?v=ad2870cd4e"></script>
-<script src="generated/embeds.bundle.js?v=ad2870cd4e"></script>
+<script src="generated/app.bundle.js?v=187b324310"></script>
+<script src="generated/embeds.bundle.js?v=187b324310"></script>
 
 <div id="zlookupModal" style="display:none;position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:99997;align-items:center;justify-content:center"><div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(1180px,94vw);height:88vh;box-shadow:0 20px 60px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)"><div style="font-weight:800;font-size:14px;color:var(--txt)">⇄ Zone Cross-Reference Lookup</div><button class="hbtn" id="zlookupClose" style="padding:6px 14px">Close</button></div><iframe id="zlookupFrame" sandbox="allow-scripts" style="flex:1;border:0;width:100%;background:#f6f7fb"></iframe></div></div>
 </body>

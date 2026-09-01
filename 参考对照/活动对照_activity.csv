@@ -2,8 +2,8 @@
 earth,Earthwork,m³
 exc,Excavation,m³
 piling,Piling,nos
-demo_wall,Demolition Wall,m³
-demo,Demolition Slab,m³
+demo_wall,Wall Demolition,m³
+demo,Slab Demolition,m³
 slab_pile,Slab + Pilecap,m²
 pile,Pilecap,nos
 col,Column,nos
