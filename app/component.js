@@ -2474,7 +2474,7 @@ class Component extends DCLogic {
     });
     const sb=this.root.querySelector('#sidebody');
     sb.querySelectorAll('.elchip').forEach(el=>el.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();this.cycleElem(el.dataset.key);}));
-    sb.querySelectorAll('.eldate').forEach(el=>{el.addEventListener('click',e=>e.stopPropagation());el.addEventListener('change',()=>{const key=el.dataset.key;if(!this.rwsCanEditElement(key)){this.rwsDeny('You can only update columns inside your assigned zones.');this.selectZone(z);return;}this._flashSel='.eldate[data-key="'+key+'"]';this.setElemDate(key,el.value);this.commitElem();});});
+    sb.querySelectorAll('.eldate').forEach(el=>{el.addEventListener('click',e=>e.stopPropagation());el.addEventListener('change',()=>{const key=el.dataset.key;if(!this.rwsCanEditElement(key)){this.rwsDeny('You can only update items inside your assigned zones.');this.selectZone(z);return;}this._flashSel='.eldate[data-key="'+key+'"]';this.setElemDate(key,el.value);this.commitElem();});});
     sb.querySelectorAll('.lnk[data-jump]').forEach(_jl=>_jl.addEventListener('click',()=>{const d=sb.querySelector('details.sec[data-sec="'+_jl.dataset.jump+'"]');if(!d)return;d.open=true;const sm=d.querySelector('summary');setTimeout(()=>{d.scrollIntoView({block:'start',behavior:'smooth'});if(sm){sm.classList.add('hlrow');setTimeout(()=>sm.classList.remove('hlrow'),1800);}},30);}));
     const _colIdx={};(this.COLUMNS&&this.COLUMNS[this.curLevel]||[]).forEach((c,ci)=>{_colIdx[c.id]=ci;});
     sb.querySelectorAll('.collink').forEach(el=>el.addEventListener('click',()=>{const ci=_colIdx[el.dataset.colid];if(ci!=null)this.focusColumn(ci);}));

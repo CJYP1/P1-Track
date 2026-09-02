@@ -191,7 +191,7 @@ begin
   if array_length(parts,1) <> 4 then raise exception 'bad element key'; end if;
   lv := parts[1]; zmk := parts[2]; etype := parts[3]; eid := parts[4];
   if s.role <> 'admin' then
-    if etype <> 'col' then raise exception 'not permitted: only column status can be edited'; end if;
+    -- 区域账号可更新自己负责区域内的全部构件状态，不再只限 Column。
     if not _rws_area_ok(s.allowed_scopes, lv, zmk) then raise exception 'not permitted: outside your assigned area'; end if;
   end if;
   select status into old_status from rws_element_status where element_key = p_element_key;
