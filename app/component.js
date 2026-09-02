@@ -1780,7 +1780,10 @@ class Component extends DCLogic {
       if(k==='__ulalign'){this.startUlAlign();return;}
       if(k==='__ulaligncancel'){this._ulAlignCancel();return;}
       if(k==='__expcol'){this.exportPlacedCols();return;}
-      if(k==='ZC')this.showSubZC=!this.showSubZC;else if(k==='C')this.showSubC=!this.showSubC;else if(k==='P')this.showSubP=!this.showSubP;
+      /* 三个 Marine 视图互斥；地图、KPI、进度和月度清单始终使用同一范围。 */
+      if(k==='ZC'){this.showSubZC=true;this.showSubC=false;this.showSubP=false;}
+      else if(k==='C'){this.showSubZC=false;this.showSubC=true;this.showSubP=false;}
+      else if(k==='P'){this.showSubZC=false;this.showSubC=false;this.showSubP=true;}
       this.buildMetrics();this.render();}));
   }
   showTip(ev,i){
@@ -1855,7 +1858,40 @@ class Component extends DCLogic {
   }
 
   setSummaryVis(){const sel=!!this.selKey;['#sideTitle','#kpis','#progroll'].forEach(id=>{const el=this.root.querySelector(id);if(el)el.style.display=sel?'none':'';});const a=this.root.querySelector('#areastrip');if(a){if(sel)a.style.display='none';else this.buildAreaBreak();}}
+  /* L1 Marine 的三个按钮不只是图层开关，也定义右侧汇总的数据范围。 */
+  _marineViewScope(){
+    if(this.curLevel!=='L1'||this.filterCat!=='MA'||!this.SUBZONES||!this.SUBZONES.L1)return null;
+    const kind=this.showSubP?'P':(this.showSubC?'C':(this.showSubZC?'ZC':null));if(!kind)return null;
+    let zones=[];
+    if(kind==='ZC'){
+      const seen={};(this.DATA.levels.L1.zones||[]).forEach(z=>{if((z.cat||'NB')!=='MA')return;const k=this.zid(z);if(!seen[k]){seen[k]=1;zones.push(z);}});
+    }else{
+      zones=(this.SUBZONES.L1[kind]||[]).map(e=>{const cols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?(this._marineCol[e.label]||[]):[];return {mk:'L1|'+e.label,label:e.label,cat:'MA',area:e.a||0,cols,piles:[],beams:[],lifts:[],stairs:[],cores:[],sub:[],counts:{columns:cols.length,pilecap:0,mainbeam:0,steelbeam:0},_pod:kind==='P',_mslab:kind==='C'};});
+    }
+    return {kind,label:{ZC:'Top slab',C:'Bottom slab',P:'Podium'}[kind],zones};
+  }
+  _marineViewStats(scope){
+    const by={},M=this.ACT_MONTHS||[];let area=0;
+    (scope.zones||[]).forEach(z=>{area+=Number(z.area)||0;const zmk=z.mk||z.lid;
+      (this._actList('L1',z)||[]).filter(a=>(a.custom||this._actApplies(a.id,'L1',z))&&!this.actHidden('L1',zmk,a.id)).forEach(a=>{
+        let plan=0,done=0;M.forEach(m=>{plan+=Number(this.actPlan('L1',zmk,a.id,m))||0;done+=Number(this.actDoneMonth('L1',zmk,a.id,m))||0;});
+        let total=Number(this.actTotal('L1',zmk,a.id,a.total))||0;if(total<=0)total=plan>0?plan:(done>0?done:0);if(total<=0&&plan<=0&&done<=0)return;
+        const k=a.id+'||'+(a.unit||''),r=by[k]||(by[k]={id:a.id,label:a.label,unit:a.unit||'',total:0,done:0,wip:0});r.total+=total;r.done+=done;
+        this._activityElemRefs('L1',zmk,a.id,z).forEach(ref=>{if(this.elemStatus(ref.key)==='wip')r.wip++;});
+      });
+    });
+    return {area,rows:Object.values(by)};
+  }
+  _marineViewPct(scope){let acc=0,ws=0,complete=true,any=false;(scope.zones||[]).forEach(z=>{const p=this._zoneAllActivityPct('L1',z);if(!p)return;const w=Number(z.area)||1;acc+=p.pct*w;ws+=w;any=true;if(!p.complete)complete=false;});return any?(complete?100:Math.min(99,Math.round(acc/Math.max(1,ws)))):0;}
   buildKPIs(){
+    const _mv=this._marineViewScope();
+    if(_mv){
+      const _ms=this._marineViewStats(_mv),dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
+      const _num=v=>this.fmt(Math.max(0,Math.round((Number(v)||0)*100)/100));
+      const _cards=_ms.rows.map(r=>{const total=Math.max(0,r.total),done=Math.max(0,r.done),wip=Math.max(0,Math.min(r.wip,total-done)),left=Math.max(0,total-done-wip),dp=total?Math.min(100,done/total*100):0,wp=total?Math.min(100-dp,wip/total*100):0;return `<div class="kpi"><div class="n">${_num(total)}</div><div class="l">${this.esc(r.label)}${r.unit?' '+this.esc(r.unit):''}</div><div class="kmini" title="${_num(done)} done · ${_num(wip)} in progress · ${_num(left)} remaining"><i style="width:${dp}%;background:${dc}"></i><i style="width:${wp}%;background:${wc}"></i><i style="width:${Math.max(0,100-dp-wp)}%;background:${tc}"></i></div><div class="kmc"><span style="color:${dc}">${_num(done)} done</span>${wip?`<span style="color:${wc}">${_num(wip)} wip</span>`:''}<span style="color:var(--faint)">${_num(left)} left</span></div></div>`;});
+      _cards.push(`<div class="kpi"><div class="n">${this.fmt(_ms.area)}</div><div class="l">Area m² · ${this.esc(_mv.label)}</div></div>`);
+      this.root.querySelector('#kpis').innerHTML=_cards.join('');return;
+    }
     const seen={},uniq=[];this.DATA.levels[this.curLevel].zones.forEach(z=>{if(!this.zoneVisible(z))return;const k=this.zid(z);if(!seen[k]){seen[k]=1;uniq.push(z);}});
     const t={columns:0,pilecap:0,mainbeam:0,steelbeam:0,ls:0,area:0};
     uniq.forEach(z=>{const c=z.counts;t.columns+=c.columns||0;t.pilecap+=c.pilecap||0;t.mainbeam+=c.mainbeam||0;t.steelbeam+=c.steelbeam||0;t.ls+=this.lsAll(c);t.area+=z.area||0;});
@@ -1884,6 +1920,7 @@ class Component extends DCLogic {
   }
 
   buildProgRoll(){
+    const _mv=this._marineViewScope();if(_mv){const pct=this._marineViewPct(_mv);this.root.querySelector('#progroll').innerHTML=`<div class="ph"><div class="t">Site progress · <span style="color:${this.BCOL.MA}">Marine · ${this.esc(_mv.label)}</span></div><div class="big" style="color:${this.progColor(pct)}">${pct}%</div></div>`;return;}
     const lp=this.progFilter(this.curLevel);
     const scope=this.filterCat==='all'?'All areas':`${this.ASHORT[this.filterCat]||this.filterCat}`;
     this.root.querySelector('#progroll').innerHTML=`
@@ -1904,13 +1941,14 @@ class Component extends DCLogic {
   buildAreaBreak(){
     const host=this.root.querySelector('#areastrip');
     let rows=this.areaBreakdown(this.curLevel);
+    const _mv=this._marineViewScope();if(_mv){const _ms=this._marineViewStats(_mv),_mr=rows.find(r=>r.cat==='MA');if(_mr){_mr.pct=this._marineViewPct(_mv);_mr.area=_ms.area;_mr.zones=_mv.zones.length;_mr.viewLabel=_mv.label;}}
     if(!rows.length){host.style.display='none';host.innerHTML='';return;}
     host.style.display='flex';
     const order=Object.keys(this.CAT);rows.sort((a,b)=>order.indexOf(a.cat)-order.indexOf(b.cat));
     host.innerHTML=rows.map(r=>{const cc=this.CAT[r.cat]||this.CAT.NB;
       const active=this.filterCat===r.cat,dim=this.filterCat!=='all'&&!active;
       return `<div class="astrip-card${active?' on':''}${dim?' dim':''}" data-cat="${r.cat}" style="--c:${cc.c}">
-        <div class="asc-main"><div class="asc-left"><div class="asc-top"><span class="asc-dot"></span><span class="asc-nm">${cc.label}</span></div><div class="asc-pct" style="color:${this.progColor(r.pct)}">${r.pct}%</div><div class="asc-mid"><span class="asc-area">${this.fmt(r.area)} <small>m\u00b2</small></span><span class="asc-zn">${active?'\u2713 ':''}${r.zones} zones</span></div></div><div class="asc-team-slot"></div></div>
+        <div class="asc-main"><div class="asc-left"><div class="asc-top"><span class="asc-dot"></span><span class="asc-nm">${cc.label}${r.viewLabel?' · '+this.esc(r.viewLabel):''}</span></div><div class="asc-pct" style="color:${this.progColor(r.pct)}">${r.pct}%</div><div class="asc-mid"><span class="asc-area">${this.fmt(r.area)} <small>m\u00b2</small></span><span class="asc-zn">${active?'\u2713 ':''}${r.zones} zones</span></div></div><div class="asc-team-slot"></div></div>
       </div>`;}).join('');
     host.querySelectorAll('.astrip-card').forEach(el=>el.addEventListener('click',()=>{const c=el.dataset.cat;this.filterCat=(this.filterCat===c)?'all':c;this.selKey=null;
       /* 点分类卡片时把视野对准这个分类, 避免之前缩放/平移后点了却看不到 */
@@ -2149,18 +2187,19 @@ class Component extends DCLogic {
     L.zones.forEach(z=>{if(!this.zoneVisible(z))return;const k=this.zid(z);if(!seen[k]){seen[k]=1;arr.push(z);}});
     arr.sort((a,b)=>this.mval(b,this.curMetric)-this.mval(a,this.curMetric));
     const m=this.METRICS.find(x=>x.k===this.curMetric),mx=this.levelMax();
-    this.root.querySelector('#sideTitle').innerHTML=`<span>${this.curLevel} · ${this.esc(this.DATA.levels[this.curLevel].title)}</span><span class="pill">${arr.length} zones</span>`;
-    let s=`<div class="listhint" style="font-size:11.5px;color:var(--faint);padding:16px 6px;line-height:1.7">Select a zone on the map to view its details.<br><span style="font-size:10px">${arr.length} zones on this level · switch <b>Colour</b> to <b>Planned (month)</b> for the monthly plan overview.</span></div>`;
+    const _mv=this._marineViewScope(),_viewCount=_mv?_mv.zones.length:arr.length,_viewTitle=_mv?('L1 · Marine · '+_mv.label):(this.curLevel+' · '+this.DATA.levels[this.curLevel].title);
+    this.root.querySelector('#sideTitle').innerHTML=`<span>${this.esc(_viewTitle)}</span><span class="pill">${_viewCount} zones</span>`;
+    let s=`<div class="listhint" style="font-size:11.5px;color:var(--faint);padding:16px 6px;line-height:1.7">Select a zone on the map to view its details.<br><span style="font-size:10px">${_viewCount} zones in this view · switch <b>Colour</b> to <b>Planned (month)</b> for the monthly plan overview.</span></div>`;
     if(this.colorMode==='plan'){
       const m=this.planMonth(), M=this.visMonths(), mi=M.indexOf(m), curL=this.actCurLabel();
-      const planned=arr.map(z=>({z,items:this.zonePlanItems(this.curLevel,z,m),k:this.zid(z)})).filter(x=>x.items.length);
-      if(this.curLevel==='L1'&&this.SUBZONES&&this.SUBZONES.L1){   /* 把 marine C/P 细分里本月有计划或已开工(done>0)的也列进来 */
+      let planned=(_mv?_mv.zones:arr).map((z,idx)=>({z,items:this.zonePlanItems(this.curLevel,z,m),k:this.zid(z),sub:(_mv&&_mv.kind!=='ZC')?(_mv.kind+'|'+idx):null})).filter(x=>x.items.length);
+      if(!_mv&&this.curLevel==='L1'&&this.SUBZONES&&this.SUBZONES.L1){   /* 未选 Marine 子视图时，才把 C/P 本月数据附加到整层清单 */
         const _subItems=(label)=>{const zmk='L1|'+label,out=[];this._actMeta().forEach(a=>{if(this.actHidden('L1',zmk,a.id))return;const p=this.actPlan('L1',zmk,a.id,m),d=this.actDoneMonth('L1',zmk,a.id,m);if((p!=null&&p>0)||(d!=null&&d>0))out.push({label:a.label,qty:((p!=null&&p>0)?p:d),unit:a.unit});});return out;};
         ['C','P'].forEach(kind=>{(this.SUBZONES.L1[kind]||[]).forEach((sz,idx)=>{const items=_subItems(sz.label);if(items.length)planned.push({z:{label:sz.label,cat:'MA',crit:false},items,k:sz.label,sub:kind+'|'+idx});});});
       }
       planned.sort((a,b)=>this.esc(a.z.label).localeCompare(this.esc(b.z.label)));
       const opts=M.map(mm=>`<option value="${mm}" ${mm===m?'selected':''}>${mm}${mm===curL?' (now)':''}</option>`).join('');
-      s=`<div class="planhd"><div class="t">📅 Monthly plan · ${this.curLevel}</div><div class="plan-monthbar"><button class="hbtn planm-nav" data-dir="-1" ${mi<=0?'disabled':''}>‹</button><select class="plan-month">${opts}</select><button class="hbtn planm-nav" data-dir="1" ${mi>=M.length-1?'disabled':''}>›</button></div><div class="plan-sub"><b style="color:var(--accent)">${planned.length}</b> of ${arr.length} zones have planned work in <b>${m}</b> · <span style="color:#6d6f74"><b style="color:#8c968f">■ done (stays)</b> · <b style="color:#166b47">■ done this month</b> · <b style="color:#c98f1e">■ in progress</b> · <b style="color:#3f38a6">■ plan finish</b> · <b style="color:#a7a2e8">■ planned</b></span></div></div>`;
+      s=`<div class="planhd"><div class="t">📅 Monthly plan · ${this.esc(_mv?('L1 · '+_mv.label):this.curLevel)}</div><div class="plan-monthbar"><button class="hbtn planm-nav" data-dir="-1" ${mi<=0?'disabled':''}>‹</button><select class="plan-month">${opts}</select><button class="hbtn planm-nav" data-dir="1" ${mi>=M.length-1?'disabled':''}>›</button></div><div class="plan-sub"><b style="color:var(--accent)">${planned.length}</b> of ${_viewCount} zones have planned work in <b>${m}</b> · <span style="color:#6d6f74"><b style="color:#8c968f">■ done (stays)</b> · <b style="color:#166b47">■ done this month</b> · <b style="color:#c98f1e">■ in progress</b> · <b style="color:#3f38a6">■ plan finish</b> · <b style="color:#a7a2e8">■ planned</b></span></div></div>`;
       if(!planned.length){ s+=`<div class="empty" style="padding:16px 6px">No zones have planned activity in ${m}.</div>`; }
       else { s+=planned.map(x=>{const z=x.z;const _tag=x.sub?` <span style="font-size:9px;font-weight:700;color:var(--faint)">· ${x.sub[0]==='P'?'Podium':'sub-div'}</span>`:'';return `<div class="planzone" data-k="${this.esc(x.k)}"${x.sub?` data-sub="${this.esc(x.sub)}"`:''}><div class="pz-nm"><span class="sw" style="background:${(this.CAT[z.cat]||this.CAT.NB).c}"></span>${this.esc(z.label)}${z.crit?' <span style="color:var(--crit)">◆</span>':''}${_tag}</div><div class="pz-acts">${x.items.map(it=>`<div class="pz-act"><span>${this.esc(it.label)}</span><b>${this.fmt(it.qty)} ${this.esc(it.unit)}</b></div>`).join('')}</div></div>`;}).join(''); }
     }
