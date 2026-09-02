@@ -2193,7 +2193,7 @@ class Component extends DCLogic {
     if(this.colorMode==='plan'){
       const m=this.planMonth(), M=this.visMonths(), mi=M.indexOf(m), curL=this.actCurLabel();
       let planned=(_mv?_mv.zones:arr).map((z,idx)=>({z,items:this.zonePlanItems(this.curLevel,z,m),k:this.zid(z),sub:(_mv&&_mv.kind!=='ZC')?(_mv.kind+'|'+idx):null})).filter(x=>x.items.length);
-      if(!_mv&&this.curLevel==='L1'&&this.SUBZONES&&this.SUBZONES.L1){   /* 未选 Marine 子视图时，才把 C/P 本月数据附加到整层清单 */
+      if(!_mv&&this.curLevel==='L1'&&(this.filterCat==='all'||this.filterCat==='MA')&&this.SUBZONES&&this.SUBZONES.L1){   /* 只有 All/Marine 才附加 C/P；选择 EB/NB 时绝不混入 Marine */
         const _subItems=(label)=>{const zmk='L1|'+label,out=[];this._actMeta().forEach(a=>{if(this.actHidden('L1',zmk,a.id))return;const p=this.actPlan('L1',zmk,a.id,m),d=this.actDoneMonth('L1',zmk,a.id,m);if((p!=null&&p>0)||(d!=null&&d>0))out.push({label:a.label,qty:((p!=null&&p>0)?p:d),unit:a.unit});});return out;};
         ['C','P'].forEach(kind=>{(this.SUBZONES.L1[kind]||[]).forEach((sz,idx)=>{const items=_subItems(sz.label);if(items.length)planned.push({z:{label:sz.label,cat:'MA',crit:false},items,k:sz.label,sub:kind+'|'+idx});});});
       }
