@@ -1267,7 +1267,7 @@ class Component extends DCLogic {
   _catchupPlan(levels,aid,cat,filter){const asOf=this._reportToday();let planned=0,total=0,end=null;
     (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid,d=(this._actDate||{})[lv+'||'+zmk+'||'+aid]||{};let any=false,zt=0,zp=0;
       this.ACT_MONTHS.forEach(m=>{const q=this.actPlan(lv,zmk,aid,m);if(q==null)return;any=true;zt+=(+q||0);zp+=(+q||0)*this._reportPlanFraction(m,d.start,d.end,asOf);});
-      if(!any){const t=this.actTotal(lv,zmk,aid,null);if(t!=null&&+t>0){zt=+t;zp=zt*this._reportPlanFraction(this.dateToActMonth(d.start||asOf),d.start,d.end,asOf);}}
+      /* Catch-Up 只能来自明确填写的月度 Plan。Total 是分母，不能把没有 Plan 的余量自动补成“计划已到期”。 */
       total+=zt;planned+=zp;if(d.end&&(!end||d.end>end))end=d.end;});});
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
@@ -1281,11 +1281,11 @@ class Component extends DCLogic {
   _reportCommonTotal(levels,aid,cat,filter,A,P){const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
-      (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0;if(!any&&!hasElems)return;
+      (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
         if(!this._reportStructureAid(a.id))return;const filter=(cat==='NB'&&lv==='L2'&&a.id==='slab')?'cis':null;
         const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
-        const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':((cat==='MA'&&maLabel[a.id])||a.label)),levels:[lv],aid:a.id,unit:a.unit||'',filter};}); }); });
-    return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
+        const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':((cat==='MA'&&maLabel[a.id])||a.label)),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
+    return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0||r.hasSchedule).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
   /* NB/EB/MA 三份 Report: 普通账号按区域权限查看; admin / RWS 看全部 */
   _reportDefs(){ return {
     NB:{label:'NB Report', title:'New Basement Superstructure', scope:'New Basement · B2 / B1 / L1 / L2',levels:['B2','B1','L1','L2']},
