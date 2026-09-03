@@ -146,7 +146,7 @@ svg.collabels .coldate{display:block}
 #tip .tpb>i{display:block;height:100%}
 #legend{position:absolute;left:14px;bottom:12px;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(3px);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:10.5px;color:var(--dim);box-shadow:0 4px 14px var(--shadow);max-width:216px;max-height:calc(100% - 24px);overflow-y:auto;z-index:6}
 #legend .lr{display:flex;align-items:center;gap:7px;padding:2px 0}
-#legend .sw{width:13px;height:13px;border-radius:3px;flex-shrink:0}
+#legend .sw{width:13px;height:13px;border:1px solid rgba(24,35,52,.32);box-shadow:0 0 0 1px rgba(255,255,255,.5) inset;border-radius:3px;flex-shrink:0}
 #legend .dash{width:18px;border-top:2px dashed;display:inline-block}
 #legend .grad{height:10px;border-radius:3px;width:100%;margin:3px 0}
 #legend .gl{display:flex;justify-content:space-between;font-size:9px;color:var(--faint)}

@@ -64,11 +64,13 @@ class Component extends DCLogic {
     try{this._underlay=JSON.parse(localStorage.getItem('rws_underlay')||'{}');}catch(e){this._underlay={};}   // 描图底图(本地, 不同步): 每层一张图 {src,x,y,w,h,rot,op}
     this.loadUpdates();
     this.loadElem();
+    /* 先把地图柱子与实际 Zone 边界对齐，再计算进度；否则旧的柱子归属会让
+       Column List、区域完成量和地图点击分别使用不同的 Zone。 */
+    this._reconcileZoneCols();
     this.deriveProgress();
     this.svg = this.root.querySelector('#svg');
     this.tip = this.root.querySelector('#tip');
     this.vb = {x:0,y:0,w:1,h:1}; this.base = {x:0,y:0,w:1,h:1};
-    this._reconcileZoneCols();
     this.bindGlobal();
     this.buildRail(); this.buildMetrics(); this.buildTimeline();
     this.root.querySelector('#foot').innerHTML = '';
@@ -155,13 +157,25 @@ class Component extends DCLogic {
     const addl=admin?`<div class="cust-add-row" style="padding-left:2px"><span class="allbtn cnewcat-act" data-a="${aid}" data-lab="${this.esc(_alab)}" title="Add an item to the ${this.esc(_alab)} list" style="color:var(--accent);cursor:pointer;font-size:10.5px;font-weight:700">+ ${this.esc(_alab)} List</span></div>`:'';
     return base+flat+linked+addl;
   }
-  /* 对账: 地图数据(COLUMNS)里属于某区的柱子, 合并进该区的柱清单(z.cols), 让"清单"和地图上的柱子点一致(补齐漏列的) */
+  /* L2 的旧柱台账含 P1.2T/相邻区等过期归属。柱心明确落在一个 Zone 内时，
+     以地图边界为准；边界外的柱子才保留台账归属。 */
+  _resolvedColZone(lv,c,zones){
+    const hit=(zones||[]).filter(z=>z.ring&&this.ptIn(z.ring,c.x,c.y));
+    if(lv==='L2'&&hit.length===1)return hit[0];
+    const old=String(c.zone||''), aliases=old==='P1.2T'?['1.2T',old]:[old];
+    for(const label of aliases){const z=(zones||[]).find(x=>x.label===label);if(z)return z;}
+    return hit.length===1?hit[0]:null;
+  }
+  /* 对账: 地图数据(COLUMNS)与柱清单共用同一个 Zone 归属。L2 先移除旧台账挂载，
+     再按柱心边界重新加入，避免同一根柱同时出现在旧 Zone 和正确 Zone。 */
   _reconcileZoneCols(){
     if(!this.COLUMNS||!this.DATA)return;
     (this.DATA.order||[]).forEach(lv=>{
-      const byLabel={}; ((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).forEach(z=>{byLabel[z.label]=z;});
-      ((this.COLUMNS[lv])||[]).forEach(c=>{const z=byLabel[c.zone]; if(!z)return; z.cols=z.cols||[];
+      const zones=((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]), ledger=((this.COLUMNS[lv])||[]);
+      if(lv==='L2'&&ledger.length){const ids=new Set(ledger.map(c=>String(c.id||'').trim().toUpperCase()));zones.forEach(z=>{z.cols=(z.cols||[]).filter(x=>!ids.has(String((typeof x==='string')?x:x.id||'').trim().toUpperCase()));});}
+      ledger.forEach(c=>{const z=this._resolvedColZone(lv,c,zones); if(!z)return; c.zone=z.label; z.cols=z.cols||[];
         if(!z.cols.some(x=>((typeof x==='string')?x:x.id)===c.id)) z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit});});
+      if(lv==='L2')zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
     });
   }
   colHtmlFor(lv,z){const zoneCrit=!!z.crit;
@@ -1132,8 +1146,9 @@ class Component extends DCLogic {
   _zoneCum(lv,z){const zmk=z.mk||z.lid;let done=0,plan=0;this._actMeta().forEach(a=>{this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,a.id,m);if(d)done+=d;const pl=this.actPlan(lv,zmk,a.id,m);if(pl)plan+=pl;});});return {done,plan};}
   zoneRollIn(lv,z,m){const zmk=z.mk||z.lid;const mi=this.ACT_MONTHS.indexOf(m);if(mi<=0)return false;return this._actMeta().some(a=>{if(this.actHidden(lv,zmk,a.id))return false;const c=this.actCarry(lv,zmk,a.id,mi);return c&&c.carryIn>0;});}
   /* ── Cast date/month 展示模式 ── */
-  /* Dashboard 月份采用高饱和、冷暖交错的分类色，避免相邻月份看起来相同。 */
-  _castPal(){ return {"Before Apr'26":"#7a5c00","Apr'26":"#14883b","May'26":"#7cb518","Jun'26":"#00a6d6","Jul'26":"#0057b8","Aug'26":"#7b2cbf","Sep'26":"#ffc400","Oct'26":"#8a7d00","Nov'26":"#00897b","Dec'26":"#303f9f","Jan'27":"#006064","Feb'27":"#a66a00","Mar'27":"#b66dff","Apr'27":"#00c853","May'27":"#4d9de0"}; }
+  /* Dashboard 月份按“深、浅”交替；相邻月份同时拉开明度和色相，并避开
+     Completed 黑、No date 灰、Critical 红三种状态色。 */
+  _castPal(){ return {"Before Apr'26":"#6b4f00","Apr'26":"#8be8b0","May'26":"#14532d","Jun'26":"#8be3ff","Jul'26":"#0047ab","Aug'26":"#d4b5ff","Sep'26":"#6d28d9","Oct'26":"#ffe066","Nov'26":"#006d77","Dec'26":"#afcbff","Jan'27":"#003566","Feb'27":"#ffd166","Mar'27":"#6a1b9a","Apr'27":"#8fe388","May'27":"#005f73"}; }
   _dateToActMonth(iso){ if(!iso)return null; const m=String(iso).match(/^(\d{4})-(\d{2})/); if(!m)return null; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+"'"+m[1].slice(2); }
   _actDateOf(lv,zmk,aid){ return (this._actDate||{})[lv+'||'+zmk+'||'+aid]||{}; }
   /* Delay 数据接口（后续可直接导入）:
