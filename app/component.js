@@ -157,25 +157,27 @@ class Component extends DCLogic {
     const addl=admin?`<div class="cust-add-row" style="padding-left:2px"><span class="allbtn cnewcat-act" data-a="${aid}" data-lab="${this.esc(_alab)}" title="Add an item to the ${this.esc(_alab)} list" style="color:var(--accent);cursor:pointer;font-size:10.5px;font-weight:700">+ ${this.esc(_alab)} List</span></div>`:'';
     return base+flat+linked+addl;
   }
-  /* L2 的旧柱台账含 P1.2T/相邻区等过期归属。柱心明确落在一个 Zone 内时，
-     以地图边界为准；边界外的柱子才保留台账归属。 */
+  /* 旧柱台账的 Zone 字段可能过期。所有楼层都以当前 HTML 地图上的柱心坐标
+     和现有 Zone 边界为准；只有柱心确实落在所有边界之外时才回退旧字段。 */
   _resolvedColZone(lv,c,zones){
     const hit=(zones||[]).filter(z=>z.ring&&this.ptIn(z.ring,c.x,c.y));
-    if(lv==='L2'&&hit.length===1)return hit[0];
+    if(hit.length===1)return hit[0];
     const old=String(c.zone||''), aliases=old==='P1.2T'?['1.2T',old]:[old];
     for(const label of aliases){const z=(zones||[]).find(x=>x.label===label);if(z)return z;}
     return hit.length===1?hit[0]:null;
   }
-  /* 对账: 地图数据(COLUMNS)与柱清单共用同一个 Zone 归属。L2 先移除旧台账挂载，
-     再按柱心边界重新加入，避免同一根柱同时出现在旧 Zone 和正确 Zone。 */
+  /* 对账: 地图数据(COLUMNS)与柱清单共用同一个 Zone 归属。每层先移除全部旧挂载，
+     再按当前地图柱心边界重新加入，避免旧清单多算、漏算或跨 Zone 重复。 */
   _reconcileZoneCols(){
     if(!this.COLUMNS||!this.DATA)return;
     (this.DATA.order||[]).forEach(lv=>{
       const zones=((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]), ledger=((this.COLUMNS[lv])||[]);
-      if(lv==='L2'&&ledger.length){const ids=new Set(ledger.map(c=>String(c.id||'').trim().toUpperCase()));zones.forEach(z=>{z.cols=(z.cols||[]).filter(x=>!ids.has(String((typeof x==='string')?x:x.id||'').trim().toUpperCase()));});}
+      /* 当前 HTML 地图是唯一来源：旧 zone-data 清单可能还有已经移位或根本未画出的柱号，
+         因此整层清空后只用 COLUMNS 中实际绘制的柱子重建。 */
+      if(ledger.length)zones.forEach(z=>{z.cols=[];});
       ledger.forEach(c=>{const z=this._resolvedColZone(lv,c,zones); if(!z)return; c.zone=z.label; z.cols=z.cols||[];
         if(!z.cols.some(x=>((typeof x==='string')?x:x.id)===c.id)) z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit});});
-      if(lv==='L2')zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
+      zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
     });
   }
   colHtmlFor(lv,z){const zoneCrit=!!z.crit;
