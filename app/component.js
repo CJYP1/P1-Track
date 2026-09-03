@@ -1133,7 +1133,7 @@ class Component extends DCLogic {
   zoneRollIn(lv,z,m){const zmk=z.mk||z.lid;const mi=this.ACT_MONTHS.indexOf(m);if(mi<=0)return false;return this._actMeta().some(a=>{if(this.actHidden(lv,zmk,a.id))return false;const c=this.actCarry(lv,zmk,a.id,mi);return c&&c.carryIn>0;});}
   /* ── Cast date/month 展示模式 ── */
   /* Dashboard 月份采用高饱和、冷暖交错的分类色，避免相邻月份看起来相同。 */
-  _castPal(){ return {"Before Apr'26":"#424242","Apr'26":"#14883b","May'26":"#9bbd00","Jun'26":"#00a9ce","Jul'26":"#0057b8","Aug'26":"#7b2cbf","Sep'26":"#ffb000","Oct'26":"#e64a19","Nov'26":"#00897b","Dec'26":"#303f9f","Jan'27":"#006064","Feb'27":"#8d5a2b","Mar'27":"#d81b60","Apr'27":"#607d8b","May'27":"#c62828"}; }
+  _castPal(){ return {"Before Apr'26":"#7a5c00","Apr'26":"#14883b","May'26":"#7cb518","Jun'26":"#00a6d6","Jul'26":"#0057b8","Aug'26":"#7b2cbf","Sep'26":"#ffc400","Oct'26":"#8a7d00","Nov'26":"#00897b","Dec'26":"#303f9f","Jan'27":"#006064","Feb'27":"#a66a00","Mar'27":"#b66dff","Apr'27":"#00c853","May'27":"#4d9de0"}; }
   _dateToActMonth(iso){ if(!iso)return null; const m=String(iso).match(/^(\d{4})-(\d{2})/); if(!m)return null; return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+"'"+m[1].slice(2); }
   _actDateOf(lv,zmk,aid){ return (this._actDate||{})[lv+'||'+zmk+'||'+aid]||{}; }
   /* Delay 数据接口（后续可直接导入）:
