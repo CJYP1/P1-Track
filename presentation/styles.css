@@ -53,6 +53,7 @@ header .hbtn.focus-tool.on{background:#6d1327;border-color:#6d1327;color:#fff;bo
 .rbtn .rpb>i{display:block;height:100%;background:var(--done)}
 .rbtn .rpct{font-size:8.5px;font-weight:700;margin-top:2px;color:var(--dim)}
 .rbtn.on .rpct{color:#fff}
+.rail-cmt-badge{position:absolute;z-index:3;top:-7px;right:-7px;display:flex;align-items:center;justify-content:center;min-width:23px;height:23px;padding:0 5px;border:2px solid #fff;border-radius:13px;background:#d51f35;color:#fff;font:800 11px/1 Poppins,sans-serif;box-shadow:0 3px 9px rgba(213,31,53,.38);pointer-events:none}
 .rbtn.tpl{border-style:dashed;opacity:.92}
 .rbtn.tpl .code{color:var(--dim)}
 .rbtn .tag{font-size:6.5px;font-weight:800;letter-spacing:.4px;color:var(--faint);margin-top:5px;border:1px solid var(--line);border-radius:4px;padding:1px 0}
@@ -107,6 +108,7 @@ header .hbtn.focus-tool.on{background:#6d1327;border-color:#6d1327;color:#fff;bo
 .collink{cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
 .cmtpanel{margin:2px 0 8px;padding:7px 9px;background:color-mix(in srgb,var(--accent) 6%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:8px}
 .cmtrow{font-size:11.5px;padding:5px 0;border-bottom:1px dashed color-mix(in srgb,var(--dim) 25%,transparent);display:flex;align-items:flex-start;gap:6px}.cmt-main{min-width:0;flex:1}
+.cmt-edit{color:var(--accent);font-weight:800;cursor:pointer}.cmt-edit:hover{text-decoration:underline}
 .cmt-t{color:var(--txt)} .cmt-m{color:var(--faint);font-size:10px;margin-left:6px}
 .cmt-del{color:var(--crit);cursor:pointer;margin-left:6px}
 .cmt-add{display:grid;grid-template-columns:125px minmax(100px,1fr) auto;gap:6px;margin-top:7px}.cmt-to-select,.cmt-in{width:100%;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--txt);padding:7px 9px;font-size:11px;font-family:inherit}.cmt-in{font-size:12px}.cmt-in:focus,.cmt-to-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}.cmt-send{border-radius:10px;padding:7px 13px}

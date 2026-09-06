@@ -1,6 +1,8 @@
 -- ============================================================
--- Report Edit 可分派权限
--- 用法：管理员给账号同时勾选 REPEDIT + NB / EB / MA。
+-- Report Edit + PM / Planning 评论分流权限
+-- Report 编辑：给账号同时勾选 REPEDIT + NB / EB / MA。
+-- Planning 评论：给 Planning 账号勾选 PLAN；PM 评论按 NB / EB / MA 区域分派。
+-- 谁能填写评论仍由原来的 CMT（Comment main map + M28）权限控制。
 -- 前端按 reportOverrides:NB / :EB / :MA 分开保存；数据库再次核对区域，
 -- 防止一个区域的 Report 编辑人修改另一个区域。
 -- 在 Supabase SQL Editor 整段运行一次（可重复运行）。
@@ -8,9 +10,10 @@
 
 create or replace function public.rws_set_kv(p_token uuid, p_store text, p_k text, p_value jsonb, p_level text, p_zone_mk text)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare s record; old jsonb; report_area text;
+declare s record; old jsonb; report_area text; comment_to text;
 begin
   select * into s from _rws_session(p_token);
+  select value into old from rws_kv where store = p_store and k = p_k;
   if p_store not in ('act_total','act_plan','act_done_m','act_hidden','elem_date','act_def','crit','zdate','act_date','col_month','act_cmt','settings','edited','manpower','act_upd') then
     raise exception 'bad store';
   end if;
@@ -26,15 +29,27 @@ begin
     elsif p_store in ('act_total','act_plan','act_hidden','act_def','crit','zdate','act_date','col_month','settings','edited') then
       raise exception 'admin only';
     elsif p_store = 'act_cmt' then
-      if not ((coalesce(s.allowed_scopes,'[]'::jsonb) ? 'CMT') or _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk)) then
-        raise exception 'not permitted: no comment or area permission';
+      if p_value is null then
+        raise exception 'not permitted: only admin can delete comments';
+      elsif old is null then
+        if not (coalesce(s.allowed_scopes,'[]'::jsonb) ? 'CMT') then
+          raise exception 'not permitted: Comment permission required';
+        end if;
+      else
+        comment_to := coalesce(p_value->>'to', old->>'to', '');
+        if comment_to = 'Planning' and not (coalesce(s.allowed_scopes,'[]'::jsonb) ? 'PLAN') then
+          raise exception 'not permitted: Planning comment';
+        elsif comment_to = 'PM' and not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
+          raise exception 'not permitted: PM comment outside assigned area';
+        elsif comment_to not in ('PM','Planning') then
+          raise exception 'not permitted: unassigned comment';
+        end if;
       end if;
     elsif not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
       raise exception 'not permitted: outside your assigned area';
     end if;
   end if;
 
-  select value into old from rws_kv where store = p_store and k = p_k;
   if s.role <> 'admin' and p_store = 'act_done_m' and p_value is not null and old is not null
      and jsonb_typeof(p_value) = 'number' and jsonb_typeof(old) = 'number'
      and (p_value#>>'{}')::numeric < (old#>>'{}')::numeric then
@@ -53,4 +68,3 @@ begin
     values (s.user_id,s.username,p_store,p_k,old,p_value);
   return jsonb_build_object('ok',true);
 end;$$;
-
