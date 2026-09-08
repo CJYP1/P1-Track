@@ -67,6 +67,7 @@ class Component extends DCLogic {
     /* 先把地图柱子与实际 Zone 边界对齐，再计算进度；否则旧的柱子归属会让
        Column List、区域完成量和地图点击分别使用不同的 Zone。 */
     this._reconcileZoneCols();
+    this._reconcileZoneStairs();
     this.deriveProgress();
     this.svg = this.root.querySelector('#svg');
     this.tip = this.root.querySelector('#tip');
@@ -178,6 +179,56 @@ class Component extends DCLogic {
       ledger.forEach(c=>{const z=this._resolvedColZone(lv,c,zones); if(!z)return; c.zone=z.label; z.cols=z.cols||[];
         if(!z.cols.some(x=>((typeof x==='string')?x:x.id)===c.id)) z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit});});
       zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
+    });
+  }
+  _stairTarget(lv,w){
+    const L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];if(!L||!w||!w.pts||!w.pts.length)return null;
+    const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;
+    /* L1 Marine 的 staircase 属于 Podium：P 区覆盖在 Marine 主区上，所以必须
+       先查 P polygon，不能先被底下的 ZC/top/bottom slab 主区截走。 */
+    if(lv==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){
+      const i=this.SUBZONES.L1.P.findIndex(e=>e.pts&&this.ptIn(e.pts,cx,cy));
+      if(i>=0){const e=this.SUBZONES.L1.P[i];return {lv,zmk:'L1|'+e.label,label:e.label,sub:{kind:'P',i}};}
+    }
+    const zmk=this._shapeZmk(w,lv),z=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk);
+    if(lv==='L1'&&z&&z.cat==='MA'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){
+      const all=this.SUBZONES.L1.P,byZone=all.map((e,i)=>({e,i})).filter(o=>((((this.SUBLINKS||{}).p2zone||{})[o.e.label]||[]).indexOf(z.label)>=0)),cand=byZone.length?byZone:all.map((e,i)=>({e,i}));
+      cand.sort((a,b)=>{const pa=a.e.lp||a.e.pts[0],pb=b.e.lp||b.e.pts[0];return Math.hypot(pa[0]-cx,pa[1]-cy)-Math.hypot(pb[0]-cx,pb[1]-cy);});
+      if(cand[0])return {lv,zmk:'L1|'+cand[0].e.label,label:cand[0].e.label,sub:{kind:'P',i:cand[0].i}};
+    }
+    return z?{lv,zmk,label:z.label,z}:null;
+  }
+  _stairItemsFor(lv,zmk){return (((this._stairZoneItems||{})[lv]||{})[zmk]||[]);}
+  /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
+     stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
+     跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
+  _reconcileZoneStairs(){
+    if(!this.DATA)return;
+    this._baseZoneStairs=this._baseZoneStairs||{};
+    this._stairZoneItems={};
+    (this.DATA.order||[]).forEach(lv=>{
+      const L=this.DATA.levels[lv],zones=(L&&L.zones)||[];
+      if(!this._baseZoneStairs[lv]){
+        const base=this._baseZoneStairs[lv]={};
+        zones.forEach(z=>{base[z.mk||z.lid]=(z.stairs||[]).map(x=>typeof x==='string'?x:{...x});});
+      }
+      const base=this._baseZoneStairs[lv];
+      zones.forEach(z=>{z.stairs=(base[z.mk||z.lid]||[]).map(x=>typeof x==='string'?x:{...x});});
+      this._stairZoneItems[lv]={};
+    });
+    const store=(((this._appCfg||{}).lifts)||{}),assign=[];
+    Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{
+      const rng=this._linksFloorRange(w,srcLv),srcOrd=this._floorOrd(srcLv);
+      (this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=lv===srcLv||(rng&&ord!=null&&ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6);if(show){const target=this._stairTarget(lv,w);if(target)assign.push({w,srcLv,target});}});
+    }));
+    assign.forEach(({w,srcLv,target})=>{
+      const lv=target.lv,zones=(this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[],name=String(w.id||'').trim();if(!name)return;
+      const matched=[];
+      zones.forEach(z=>{const keep=[];(z.stairs||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;if(this._idSameGroup(id,name))matched.push(x);else keep.push(x);});z.stairs=keep;});
+      const add=matched.length?matched:[{id:name,_drawnStairShape:true}];
+      let dst;if(target.sub){dst=this._stairZoneItems[lv][target.zmk]=this._stairZoneItems[lv][target.zmk]||[];}else{dst=target.z.stairs=target.z.stairs||[];}
+      add.forEach(x=>{const id=typeof x==='string'?x:x.id;if(!dst.some(y=>this._idSameGroup(typeof y==='string'?y:y.id,id)))dst.push(x);});
+      if(srcLv===lv)w.zone=target.label;
     });
   }
   colHtmlFor(lv,z){const zoneCrit=!!z.crit;
@@ -371,6 +422,23 @@ class Component extends DCLogic {
     let p=row.parentElement; while(p&&p!==sb){ if(p.tagName==='DETAILS')p.open=true; p=p.parentElement; }
     setTimeout(()=>{ try{row.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){row.scrollIntoView();} row.classList.add('flash-ok'); setTimeout(()=>row.classList.remove('flash-ok'),1500); },30);
   }catch(e){} }
+  _panelOpenKey(lv,z){return String(lv||'')+'||'+String(z&&(z.mk||z.lid)||'');}
+  _rememberOpenSections(){
+    const sb=this.root&&this.root.querySelector('#sidebody');if(!sb||!sb.dataset.openKey)return;
+    if(sb.dataset.noOpenCapture==='1'){delete sb.dataset.noOpenCapture;return;}
+    this._openActivitySecs=this._openActivitySecs||{};
+    this._openActivitySecs[sb.dataset.openKey]=[...sb.querySelectorAll('details.sec[open]')].map(d=>d.dataset.sec).filter(Boolean);
+  }
+  _restoreOpenSections(sb,lv,z){
+    if(!sb)return;const key=this._panelOpenKey(lv,z),saved=(this._openActivitySecs||{})[key];sb.dataset.openKey=key;
+    if(saved){const on=new Set(saved);sb.querySelectorAll('details.sec').forEach(d=>{d.open=on.has(d.dataset.sec);});}
+    const remember=()=>{this._openActivitySecs=this._openActivitySecs||{};this._openActivitySecs[key]=[...sb.querySelectorAll('details.sec[open]')].map(d=>d.dataset.sec).filter(Boolean);};
+    sb.querySelectorAll('details.sec').forEach(d=>d.addEventListener('toggle',remember));
+  }
+  _discardOpenSections(lv,z){
+    const key=this._panelOpenKey(lv,z);if(this._openActivitySecs)delete this._openActivitySecs[key];
+    const sb=this.root&&this.root.querySelector('#sidebody');if(sb&&sb.dataset.openKey===key)sb.dataset.noOpenCapture='1';
+  }
   _actRerender(z){this.applyUpdates();if(this.buildRail)this.buildRail();if(this.buildTimeline)this.buildTimeline();this.render();if(this._subOpen){this.selectSubzone(this._subOpen.kind,this._subOpen.i);return;}const zz=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(zz)this.selectZone(zz);else if(z)this.selectZone(z);}
   _numOrNull(raw){const s=String(raw==null?'':raw).replace(/,/g,'').trim();const v=s===''?null:parseFloat(s);if(v!=null&&(isNaN(v)||v<0))return undefined;return v;}
   setActTotal(lv,zmk,a,raw,z){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can set the total.');return;}const v=this._numOrNull(raw);if(v===undefined)return;const k=lv+'||'+zmk+'||'+a;this._actTotal=this._actTotal||{};if(v==null)delete this._actTotal[k];else this._actTotal[k]=v;this.saveAct();this.markEdited('act_total',k);rwsSyncKV('act_total',k,(v==null?null:v),lv,zmk);this._markUpd(lv,zmk,a);this._actRerender(z);}
@@ -818,6 +886,7 @@ class Component extends DCLogic {
       if(own('act_cmt')){this._actCmt={...(state.act_cmt||{})};this.saveActCmt();}
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
       if(own('settings')){this._appCfg={...(state.settings||{})};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
+      this._reconcileZoneStairs();
       if(own('manpower')){this._manpower={...(state.manpower||{})};try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}}
       if(Array.isArray(state.custom_cats)){const seen={};this._catAdd=[];state.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;this._catAdd.push({code:c.code,label:c.label});}});}
       if(Array.isArray(state.custom_items)){this._elemAdd={};state.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(this._elemAdd[k]=this._elemAdd[k]||[]).push(it.elem_id);});}
@@ -872,7 +941,7 @@ class Component extends DCLogic {
         if(changed){
           this.saveAct&&this.saveAct();this.saveDates&&this.saveDates();this.saveActCmt&&this.saveActCmt();this.saveActUpd&&this.saveActUpd();this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();this.saveEdited&&this.saveEdited();
           try{localStorage.setItem('rws_zp_ov',JSON.stringify(this._zpOv||{}));localStorage.setItem('rws_qty_ov',JSON.stringify(this._qtyOv||{}));localStorage.setItem('rws_zp_plan_ov',JSON.stringify(this._zpPlanOv||{}));localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg||{}));localStorage.setItem('rws_manpower',JSON.stringify(this._manpower||{}));}catch(e){}
-          this.zpApplyOv&&this.zpApplyOv();this.applyQtyOv&&this.applyQtyOv();
+          this.zpApplyOv&&this.zpApplyOv();this.applyQtyOv&&this.applyQtyOv();this._reconcileZoneStairs&&this._reconcileZoneStairs();
           this.applyUpdates&&this.applyUpdates();
           this.render&&this.render();
           if(this.selKey){const z=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z)this.selectZone(z);}
@@ -1291,7 +1360,7 @@ class Component extends DCLogic {
   _reportDateLabel(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?(+m[3])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+' '+m[1].slice(2):String(iso||'');}
   _reportMonthBounds(label){if(label==="Before Apr'26")return {s:Date.UTC(2000,0,1),e:Date.UTC(2026,2,31)};const m=String(label||'').match(/^([A-Z][a-z]{2})'(\d{2})$/);if(!m)return null;const mi=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);if(mi<0)return null;const y=2000+(+m[2]);return {s:Date.UTC(y,mi,1),e:Date.UTC(y,mi+1,0)};}
   _reportPlanFraction(month,start,end,asOf){const b=this._reportMonthBounds(month);if(!b)return 0;let s=b.s,e=b.e;const ds=Date.parse(String(start||'')+'T00:00:00Z'),de=Date.parse(String(end||'')+'T00:00:00Z'),now=Date.parse(asOf+'T00:00:00Z');if(Number.isFinite(ds))s=Math.max(s,ds);if(Number.isFinite(de))e=Math.min(e,de);if(e<s||now<s)return 0;if(now>=e)return 1;return Math.max(0,Math.min(1,(now-s+86400000)/(e-s+86400000)));}
-  _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});const out=Object.values(by);if(cat==='MA'&&lv==='L1'){const S=this.SUBZONES&&this.SUBZONES.L1;['C','P'].forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:[],cores:[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
+  _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});const out=Object.values(by);if(cat==='MA'&&lv==='L1'){const S=this.SUBZONES&&this.SUBZONES.L1;['C','P'].forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
   /* m² Report activities use the full applicable zone area as their denominator.
      This includes not-yet-scheduled zones and keeps Marine Top/Bottom/Podium scopes separate. */
@@ -1627,7 +1696,7 @@ class Component extends DCLogic {
       if(!_focusOnly&&this.showLifts!==false){ this._shapesForLevel('lift').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length, cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length; const lq=this.proj([cx,cy],H);
-        const _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',swlv); const _foreign=(swlv!==this.curLevel);
+        const _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',this.curLevel,'stair'); const _foreign=(swlv!==this.curLevel);
         s+=`<polygon class="liftwall" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="${_lc[0]}" fill-opacity="${_foreign?0.13:0.2}" stroke="${_lc[1]}" stroke-width="500"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
         s+=`<text class="liftlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none">${this.esc(this._shapeLabel(w))}</text>`;});
       }
@@ -1653,8 +1722,8 @@ class Component extends DCLogic {
     this.svg.innerHTML=_uHtml+s;   /* 底图垫在最底层 */
     this.colLOD();
     if(_ulDrag){const im=this.svg.querySelector('.underlayimg');if(im)im.addEventListener('mousedown',ev=>{ev.stopPropagation();ev.preventDefault();const u=this._curUnderlay();if(!u)return;const r=this.svg.getBoundingClientRect();const sx=this.vb.w/r.width,sy=this.vb.h/r.height;let lx=ev.clientX,ly=ev.clientY;const mv=e=>{u.x+=(e.clientX-lx)*sx;u.y+=(e.clientY-ly)*sy;lx=e.clientX;ly=e.clientY;const cx=(u.x+u.w/2).toFixed(1),cy=(u.y+u.h/2).toFixed(1);im.setAttribute('x',u.x.toFixed(1));im.setAttribute('y',u.y.toFixed(1));im.setAttribute('transform',`rotate(${u.rot||0} ${cx} ${cy})`);};const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);this._saveUnderlay();};document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);});}
-    this.svg.querySelectorAll('.corewall').forEach(el=>el.addEventListener('click',ev=>{const idx=+el.dataset.cwi;const slv=el.dataset.cwlv||this.curLevel;ev.stopPropagation();if(this._drawingCore){this._shapeMenu('core',idx,slv);return;}this._openShape(this._shapeArr('core',slv)[idx],slv);}));   // 画模式=菜单(删/改名); 平时=按名字自动匹配的数据打开
-    this.svg.querySelectorAll('.liftwall').forEach(el=>el.addEventListener('click',ev=>{const idx=+el.dataset.lwi;const slv=el.dataset.lwlv||this.curLevel;ev.stopPropagation();if(this._drawingLift){this._shapeMenu('lift',idx,slv);return;}this._openShape(this._shapeArr('lift',slv)[idx],slv);}));
+    this.svg.querySelectorAll('.corewall').forEach(el=>el.addEventListener('click',ev=>{const idx=+el.dataset.cwi;const slv=el.dataset.cwlv||this.curLevel;ev.stopPropagation();if(this._drawingCore){this._shapeMenu('core',idx,slv);return;}this._openShape(this._shapeArr('core',slv)[idx],slv,'core');}));   // 画模式=菜单(删/改名); 平时=按名字自动匹配的数据打开
+    this.svg.querySelectorAll('.liftwall').forEach(el=>el.addEventListener('click',ev=>{const idx=+el.dataset.lwi;const slv=el.dataset.lwlv||this.curLevel;ev.stopPropagation();if(this._drawingLift){this._shapeMenu('lift',idx,slv);return;}this._openShape(this._shapeArr('lift',slv)[idx],slv,'stair');}));
     this.svg.querySelectorAll('.accessline').forEach(el=>el.addEventListener('click',ev=>{ev.stopPropagation();if(this._drawingAcc){this._delAccess(this.curLevel,+el.dataset.aci);}}));   // 画模式下点线=删除
     if(this._drawingAcc){ const _lv=this.curLevel,_H=this.DATA.levels[_lv].h,_mon=this._accMon();   // 画模式下: 拖动圆点微调点位
       const _cs=(e)=>{try{const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const p=pt.matrixTransform(this.svg.getScreenCTM().inverse());return [p.x,p.y];}catch(_){const r=this.svg.getBoundingClientRect();return [this.vb.x+(e.clientX-r.left)/r.width*this.vb.w,this.vb.y+(e.clientY-r.top)/r.height*this.vb.h];}};
@@ -1770,10 +1839,11 @@ class Component extends DCLogic {
     if(editable){
       // 直接复用 ZC 的完整分区面板(含 ACTIVITIES/月份切换/STATUS/日期/锁), 合成一个只属于此细分的分区
       const _mcols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?this._marineCol[e.label].map(c=>({id:c.id,sz:c.sz||'',c:c.c?1:0})):[];
+      const _mstairs=(kind==='P')?this._stairItemsFor(lv,lv+'|'+e.label):[];
       const sz={mk:lv+'|'+e.label,label:e.label,cat:'MA',area:(kind==='P'?0:e.a),   /* Podium(P)不需要 area 总量 → 置空; 加权仍用 SUBZONES 原始面积 */
         grp:(kind==='P'?e.label:''),fam:(kind==='P'?('Pour group '+e.label):'Marine sub-division'),
-        cols:_mcols,piles:[],beams:[],lifts:[],stairs:[],sub:[],
-        counts:{columns:_mcols.length,pilecap:0,mainbeam:0,steelbeam:0},crit:false,_pod:(kind==='P'),_mslab:(kind==='C')};
+        cols:_mcols,piles:[],beams:[],lifts:[],stairs:_mstairs,sub:[],
+        counts:{columns:_mcols.length,stair:_mstairs.length,pilecap:0,mainbeam:0,steelbeam:0},crit:false,_pod:(kind==='P'),_mslab:(kind==='C')};
       /* 顶部 SITE PROGRESS 用这个细分自己活动的完成度(和地图填色同一来源) */
       const _sp=this._subActPct(e.label);
       sz._p={pct:(_sp.pct==null?0:_sp.pct), status:(_sp.pct!=null&&_sp.pct>=100)?'done':(_sp.started?'wip':'todo'), source:_sp.hasPlan?(_sp.started?'act':'plan'):'none'};
@@ -1915,7 +1985,7 @@ class Component extends DCLogic {
     if(kind==='ZC'){
       const seen={};(this.DATA.levels.L1.zones||[]).forEach(z=>{if((z.cat||'NB')!=='MA')return;const k=this.zid(z);if(!seen[k]){seen[k]=1;zones.push(z);}});
     }else{
-      zones=(this.SUBZONES.L1[kind]||[]).map(e=>{const cols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?(this._marineCol[e.label]||[]):[];return {mk:'L1|'+e.label,label:e.label,cat:'MA',area:e.a||0,cols,piles:[],beams:[],lifts:[],stairs:[],cores:[],sub:[],counts:{columns:cols.length,pilecap:0,mainbeam:0,steelbeam:0},_pod:kind==='P',_mslab:kind==='C'};});
+      zones=(this.SUBZONES.L1[kind]||[]).map(e=>{const cols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?(this._marineCol[e.label]||[]):[],mk='L1|'+e.label,stairs=kind==='P'?this._stairItemsFor('L1',mk):[];return {mk,label:e.label,cat:'MA',area:e.a||0,cols,piles:[],beams:[],lifts:[],stairs,cores:[],sub:[],counts:{columns:cols.length,stair:stairs.length,pilecap:0,mainbeam:0,steelbeam:0},_pod:kind==='P',_mslab:kind==='C'};});
     }
     return {kind,label:{ZC:'Top slab',C:'Bottom slab',P:'Podium'}[kind],zones};
   }
@@ -2059,7 +2129,7 @@ class Component extends DCLogic {
     const save=(v)=>{arr.push({id:(v||'').trim()||defId,pts:rectPts,zone:zoneLabel});done2();};
     if(this._inputModal)this._inputModal({title:'Staircase 名称 / name',label:'编号(按名字自动匹配数据, 如 P1-ST-01B)',placeholder:defId,ok:'保存',onOk:save});else save(defId);}
   _liftCancel(){this._liftBuf=[];this._drawingLift=false;if(this.svg)this.svg.style.cursor='';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
-  _saveLifts(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','lifts',this._appCfg.lifts||{},null,null);}
+  _saveLifts(){this._reconcileZoneStairs();try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','lifts',this._appCfg.lifts||{},null,null);}
   /* ---- 在图上画 Access(带箭头的折线, 可多点拐弯, admin) —— 存 settings, 云端同步 ---- */
   toggleDrawAcc(){if(!this.rwsIsAdmin())return;this._drawingAcc=!this._drawingAcc;this._accBuf=[];
     if(this._drawingAcc){this._placingCol=false;this._hidingCol=false;this._drawingCore=false;this._drawingLift=false;
@@ -2141,15 +2211,24 @@ class Component extends DCLogic {
     if(!out.length){const zmk=this._shapeZmk(w,lv);const z=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(z){[['lift',z.lifts],['stair',z.stairs],['core',z.cores]].forEach(([type,arr])=>{(arr||[]).forEach(x=>{const id=idOf(x);const k=zmk+'|'+type+'|'+id;if(!seen.has(k)){seen.add(k);out.push({lv,zmk,type,id});}});});}}
     return out;}
   _shapeLinks(w,lv){if(w&&w.links&&w.links.length)return w.links;if(w&&w.link)return[w.link];return this._autoLinks(w,lv);}
-  _shapeLinkColor(w,baseFill,baseStroke,lv){const ls=this._shapeLinks(w,lv);if(!ls.length)return[baseFill,baseStroke];const sts=ls.map(l=>this.elemStatus(l.lv+'||'+l.zmk+'||'+l.type+'||'+l.id));if(sts.every(s=>s==='done'))return['#35c08e','#218a5c'];if(sts.some(s=>s==='done'||s==='wip'))return['#e2b45c','#b8801f'];return[baseFill,baseStroke];}
+  _stairLinksForLevel(w,lv){const target=this._stairTarget(lv,w);if(!target)return[];const items=target.sub?this._stairItemsFor(lv,target.zmk):((target.z&&target.z.stairs)||[]),name=this._shapeLabel(w);let hit=items.filter(x=>this._idSameGroup(typeof x==='string'?x:x.id,name));if(!hit.length&&items.length===1)hit=items.slice();if(!hit.length&&name)hit=[{id:name}];return hit.map(x=>({lv,zmk:target.zmk,type:'stair',id:typeof x==='string'?x:x.id,target}));}
+  _shapeLinkColor(w,baseFill,baseStroke,lv,kind){const ls=kind==='stair'?this._stairLinksForLevel(w,lv):this._shapeLinks(w,lv);if(!ls.length)return[baseFill,baseStroke];const sts=ls.map(l=>this.elemStatus(l.lv+'||'+l.zmk+'||'+l.type+'||'+l.id));if(sts.every(s=>s==='done'))return['#35c08e','#218a5c'];if(sts.some(s=>s==='done'||s==='wip'))return['#e2b45c','#b8801f'];return[baseFill,baseStroke];}
   _linksFloorRange(w,lv){
     /* 楼层范围跟着组里 lift/staircase 走 = 已匹配成员 f→t 的并集 */
     const ls=this._shapeLinks(w,lv);let lo=null,hi=null;ls.forEach(l=>{const r=this._linkFloorRange(l);if(r){lo=(lo==null?r[0]:Math.min(lo,r[0]));hi=(hi==null?r[1]:Math.max(hi,r[1]));}});if(lo!=null)return [lo,hi];
     /* 没匹配到成员时才退回主表写死的 f/t */
     const name=(w&&w.id||'').trim();const g=(name&&typeof window!=='undefined'&&window.CW_GROUPS)?window.CW_GROUPS[name]:null;if(g&&g.f&&g.t){const a=this._floorOrd(g.f),b=this._floorOrd(g.t);if(a!=null&&b!=null)return [Math.min(a,b),Math.max(a,b)];}
     return null;}
-  _openShape(w,lv){const ls=this._shapeLinks(w,lv);if(!ls.length){this._toast&&this._toast('名字 "'+this._shapeLabel(w)+'" 没对上数据 / no match');return;}
-    /* 不弹清单窗 —— 直接跳到这个区的 Core/Lift/Stair Wall 清单(成员在那里带 CW 标签) */
+  _openShape(w,lv,kind){
+    /* Staircase 可能从 L1 图形跨层显示，但点击必须留在当前楼层。当前层重新按
+       图形位置找 Zone；Marine L1 则进入 Podium 的 P 区 Staircase list。 */
+    if(kind==='stair'){
+      const links=this._stairLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;if(!link||!target){this._toast&&this._toast('当前楼层没有找到这个 Staircase 对应的 Zone');return;}const id=link.id;
+      if(target.sub){this.selectSubzone(target.sub.kind,target.sub.i);setTimeout(()=>this._focusSideElement(target.lv,target.zmk,'stair',id),80);return;}
+      this._openLink({lv:target.lv,zmk:target.zmk,type:'stair',id});return;
+    }
+    const ls=this._shapeLinks(w,lv);if(!ls.length){this._toast&&this._toast('名字 "'+this._shapeLabel(w)+'" 没对上数据 / no match');return;}
+    /* Core Wall 保留原来的按名字匹配逻辑。 */
     this._openLink(ls[0]);}
   /* 楼层名 → 序号(B2最低). L4=…, 'M'夹层+0.5, 忽略'(Shaft only)'等括注 */
   _floorOrd(name){if(name==null)return null;let s=String(name).replace(/\([^)]*\)/g,'').trim().toUpperCase();if(s==='B2')return -2;if(s==='B1')return -1;if(s==='B1M')return -0.5;const m=s.match(/^L(\d+)(M)?$/);if(m)return (parseInt(m[1],10)-1)+(m[2]?0.5:0);return null;}
@@ -2168,10 +2247,10 @@ class Component extends DCLogic {
     ov.querySelector('#__sm_cancel').addEventListener('click',close);
     ov.querySelector('#__sm_ren').addEventListener('click',()=>{close();if(this._inputModal)this._inputModal({title:'改名 / rename',label:'编号(按名字自动匹配数据)',placeholder:w.id||'',ok:'保存',onOk:(v)=>{w.id=(v||'').trim()||w.id;delete w.link;delete w.links;if(kind==='core')this._saveCoreWalls();else this._saveLifts();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});});
     ov.querySelector('#__sm_del').addEventListener('click',()=>{close();if(kind==='core')this._delCoreWall(lv,idx);else this._delLift(lv,idx);});}
+  _focusSideElement(lv,zmk,type,id){const key=lv+'||'+zmk+'||'+type+'||'+id,sb=this.root.querySelector('#sidebody');if(!sb)return;const det=sb.querySelector('details.sec[data-sec="'+type+'"]');if(det)det.open=true;const chip=sb.querySelector(`.elchip[data-key="${(window.CSS&&CSS.escape)?CSS.escape(key):key}"]`);if(chip){chip.scrollIntoView({block:'center',behavior:'smooth'});chip.classList.add('hlrow');setTimeout(()=>chip.classList.remove('hlrow'),1800);}}
   _openLink(link){if(!link)return;const lv=link.lv;if(this.curLevel!==lv){this.curLevel=lv;this._applyOvlForLevel&&this._applyOvlForLevel(lv);this.syncRail&&this.syncRail();this.buildMetrics&&this.buildMetrics();this.render();}
     const z=((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===link.zmk);if(!z)return;this.selKey=this.zid(z);this.selectZone(z);this.paintSel&&this.paintSel();
-    const key=this.ekey(lv,z,link.type,link.id);
-    setTimeout(()=>{const sb=this.root.querySelector('#sidebody');if(!sb)return;const det=sb.querySelector('details.sec[data-sec="'+link.type+'"]');if(det)det.open=true;const chip=sb.querySelector(`.elchip[data-key="${(window.CSS&&CSS.escape)?CSS.escape(key):key}"]`);if(chip){chip.scrollIntoView({block:'center',behavior:'smooth'});chip.classList.add('hlrow');setTimeout(()=>chip.classList.remove('hlrow'),1800);}},80);}
+    setTimeout(()=>this._focusSideElement(lv,link.zmk,link.type,link.id),80);}
   /* ---- 描图底图(本地图片, 垫在地图下方, 只本地不同步) ---- */
   _curUnderlay(){return this._underlay&&this._underlay[this.curLevel];}
   underlayPick(){if(!this.rwsIsAdmin())return;const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.onchange=()=>{const f=inp.files&&inp.files[0];if(f)this._underlayLoad(f);};inp.click();}
@@ -2449,6 +2528,7 @@ class Component extends DCLogic {
   }
   flashOk(el){if(!el)return;el.classList.remove('flash-ok');void el.offsetWidth;el.classList.add('flash-ok');setTimeout(()=>{el.classList.remove('flash-ok');},900);}
   selectZone(z,sub){
+    this._rememberOpenSections();
     this._subOpen=sub||null;   // 细分(C/P)时保留上下文, 正常分区置空
     const c=z.counts,ct=this.CAT[z.cat]||this.CAT.NB,p=z._p||{pct:0,status:'todo',seq:'-',start:0,end:0};
     const st=this.STATUS[p.status];
@@ -2521,7 +2601,7 @@ class Component extends DCLogic {
       ${this._custSecHtml(lv,z,this.rwsIsAdmin())}
       </div>`;
     this.setSummaryVis();
-    this.root.querySelector('#back').addEventListener('click',()=>{this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
+    this.root.querySelector('#back').addEventListener('click',()=>{this._discardOpenSections(lv,z);this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
     {const mp=this.root.querySelector('.mp-in');if(mp)mp.addEventListener('change',()=>{const k=lv+'||'+(z.mk||z.lid);const raw=mp.value.trim();const v=raw===''?null:Math.max(0,Math.round(+raw||0));this._manpower=this._manpower||{};if(v==null)delete this._manpower[k];else this._manpower[k]=v;try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,z.mk||z.lid);});}
     const ck=this.root.querySelector('#critChk');if(ck)ck.addEventListener('change',()=>{const _vb={...this.vb};this.setCrit(this.curLevel,z,ck.checked);this.render();this.vb=_vb;this._vbLevel=this.curLevel;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();this.selectZone(z);this.paintSel();});
     const sv=this.root.querySelector('#in_save');
@@ -2534,6 +2614,7 @@ class Component extends DCLogic {
       this.addUpdate(z.mk,{pct,status,date,note,crew,level:this.curLevel,zone:z.label});
     });
     const sb=this.root.querySelector('#sidebody');
+    this._restoreOpenSections(sb,lv,z);
     sb.querySelectorAll('.elchip').forEach(el=>el.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();this.cycleElem(el.dataset.key);}));
     sb.querySelectorAll('.eldate').forEach(el=>{el.addEventListener('click',e=>e.stopPropagation());el.addEventListener('change',()=>{const key=el.dataset.key;if(!this.rwsCanEditElement(key)){this.rwsDeny('You can only update items inside your assigned zones.');this.selectZone(z);return;}this._flashSel='.eldate[data-key="'+key+'"]';this.setElemDate(key,el.value);this.commitElem();});});
     sb.querySelectorAll('.lnk[data-jump]').forEach(_jl=>_jl.addEventListener('click',()=>{const d=sb.querySelector('details.sec[data-sec="'+_jl.dataset.jump+'"]');if(!d)return;d.open=true;const sm=d.querySelector('summary');setTimeout(()=>{d.scrollIntoView({block:'start',behavior:'smooth'});if(sm){sm.classList.add('hlrow');setTimeout(()=>sm.classList.remove('hlrow'),1800);}},30);}));
@@ -2595,12 +2676,12 @@ class Component extends DCLogic {
      sb.querySelectorAll('.act-vis').forEach(el=>el.addEventListener('change',()=>this.setActVis(_zk[0],_zk[1],el.dataset.a,el.value,z)));
      sb.querySelectorAll('.actadd').forEach(el=>el.addEventListener('click',()=>this._actAddModal(z)));
      sb.querySelectorAll('.actdel').forEach(el=>el.addEventListener('click',ev=>{ev.stopPropagation();this.delCustomAct(el.dataset.a);}));
-     const _am=sb.querySelector('.act-month');if(_am)_am.addEventListener('change',()=>{this._actMonth=_am.value;this._planMonth=_am.value;this.render();this.selectZone(z,sub);});
-     sb.querySelectorAll('.zpm-nav').forEach(b=>b.addEventListener('click',()=>{const sel=sb.querySelector('.act-month');if(!sel)return;const i=sel.selectedIndex+(+b.dataset.dir);if(i<0||i>=sel.options.length)return;this._actMonth=sel.options[i].value;this._planMonth=this._actMonth;this.render();this.selectZone(z,sub);}));}
+     const _am=sb.querySelector('.act-month');if(_am)_am.addEventListener('change',()=>{this._discardOpenSections(lv,z);this._actMonth=_am.value;this._planMonth=_am.value;this.render();this.selectZone(z,sub);});
+     sb.querySelectorAll('.zpm-nav').forEach(b=>b.addEventListener('click',()=>{const sel=sb.querySelector('.act-month');if(!sel)return;const i=sel.selectedIndex+(+b.dataset.dir);if(i<0||i>=sel.options.length)return;this._discardOpenSections(lv,z);this._actMonth=sel.options[i].value;this._planMonth=this._actMonth;this.render();this.selectZone(z,sub);}));}
     this._focusColScroll(sb);   /* 点地图柱子后, 自动滚动/高亮到清单里的那一行 */
     {const _msel=sb.querySelector('.zp-month-sel');
-     if(_msel){_msel.addEventListener('change',()=>{this._zpMonthSel=this._zpMonthSel||{};this._zpMonthSel[_msel.dataset.z]=_msel.value;this.selectZone(z,sub);});}
-     sb.querySelectorAll('.zpm-nav').forEach(b=>b.addEventListener('click',()=>{const sel=sb.querySelector('.zp-month-sel');if(!sel)return;const i=sel.selectedIndex+ (+b.dataset.dir); if(i<0||i>=sel.options.length)return; this._zpMonthSel=this._zpMonthSel||{}; this._zpMonthSel[sel.dataset.z]=sel.options[i].value; this.selectZone(z,sub);}));}
+     if(_msel){_msel.addEventListener('change',()=>{this._discardOpenSections(lv,z);this._zpMonthSel=this._zpMonthSel||{};this._zpMonthSel[_msel.dataset.z]=_msel.value;this.selectZone(z,sub);});}
+     sb.querySelectorAll('.zpm-nav').forEach(b=>b.addEventListener('click',()=>{const sel=sb.querySelector('.zp-month-sel');if(!sel)return;const i=sel.selectedIndex+ (+b.dataset.dir); if(i<0||i>=sel.options.length)return; this._discardOpenSections(lv,z);this._zpMonthSel=this._zpMonthSel||{}; this._zpMonthSel[sel.dataset.z]=sel.options[i].value; this.selectZone(z,sub);}));}
     const _zsb=sb.querySelector('#zpSaveBtn');if(_zsb)_zsb.addEventListener('click',()=>{
       const lv=this.curLevel,zmk=z.mk||z.lid;
       sb.querySelectorAll('.zp-plan-in').forEach(el=>{
