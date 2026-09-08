@@ -42,7 +42,7 @@ begin
         elsif comment_to = 'PM' and not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
           raise exception 'not permitted: PM comment outside assigned area';
         elsif comment_to not in ('PM','Planning') then
-          raise exception 'not permitted: unassigned comment';
+          null; -- 旧的 Unassigned 评论所有已登录账号可查看并回复；前端仍禁止普通账号改正文或勾 Done
         end if;
       end if;
     elsif not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
