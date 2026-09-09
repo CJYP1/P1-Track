@@ -68,6 +68,7 @@ class Component extends DCLogic {
        Column List、区域完成量和地图点击分别使用不同的 Zone。 */
     this._reconcileZoneCols();
     this._reconcileZoneStairs();
+    this._reconcileZoneCores();
     this.deriveProgress();
     this.svg = this.root.querySelector('#svg');
     this.tip = this.root.querySelector('#tip');
@@ -199,6 +200,11 @@ class Component extends DCLogic {
     return z?{lv,zmk,label:z.label,z}:null;
   }
   _stairItemsFor(lv,zmk){return (((this._stairZoneItems||{})[lv]||{})[zmk]||[]);}
+  _coreTarget(lv,w){if(!w)return null;const name=String(w.id||'').trim().toUpperCase(),fixed={LW10:'P12',LW9:'P5-2',CW01:'P11'},label=fixed[name];
+    if(lv==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){const P=this.SUBZONES.L1.P;let i=label?P.findIndex(e=>e.label===label):-1;if(i<0&&w.pts&&w.pts.length){const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;i=P.findIndex(e=>e.pts&&this.ptIn(e.pts,cx,cy));}if(i>=0)return {lv,zmk:'L1|'+P[i].label,label:P[i].label,sub:{kind:'P',i}};}
+    return null;}
+  _coreItemsFor(lv,zmk){return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]);}
+  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(lv=>(store[lv]||[]).forEach(w=>{const target=this._coreTarget(lv,w),id=String(w&&w.id||'').trim();if(!target||!id)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});}));}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -384,26 +390,18 @@ class Component extends DCLogic {
     const dates=Object.keys(byDay).sort(); const peak=dates.reduce((m,d)=>Math.max(m,byDay[d].c+byDay[d].r),0);
     const dayRows=dates.length?dates.map(d=>{const o=byDay[d];return `<tr><td style="padding:3px 10px">${this._fmtD(d)}</td><td style="padding:3px 10px;text-align:right;font-family:'IBM Plex Mono',monospace">${o.c||'—'}</td><td style="padding:3px 10px;text-align:right;font-family:'IBM Plex Mono',monospace">${o.r||'—'}</td><td style="padding:3px 10px;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:800">${o.c+o.r}</td></tr>`;}).join(''):'<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--faint)">还没有录入任何每日工人数。到某个 zone 的活动里按天填写。</td></tr>';
     const zAgg=zones.map(zk=>{const zd=byZoneDay[zk];let tc=0,tr=0,pk=0;Object.keys(zd).forEach(d=>{tc+=zd[d].c;tr+=zd[d].r;pk=Math.max(pk,zd[d].c+zd[d].r);});const zi=this._manpowerZoneInfo(zk);return {zk,lv:zi.lv,label:zi.label,cat:zi.cat,tc,tr,pk};}).sort((a,b)=>(b.tc+b.tr)-(a.tc+a.tr));
-    const groups=[{cat:'NB',label:'NB · New Basement',color:'#e4a06a'},{cat:'EB',label:'EB · Existing Basement',color:'#d95d92'},{cat:'MA',label:'MR · Marine',color:'#3478c9'}];
+    const groups=[{cat:'NB',label:'NB · New Basement',color:'#e4a06a'},{cat:'EB',label:'EB · Existing Basement',color:'#d95d92'},{cat:'MA',label:'MA · Marine',color:'#3478c9'}];
     const groupAgg=groups.map(g=>{const zs=zAgg.filter(z=>z.cat===g.cat);let tc=0,tr=0,pk=0;zs.forEach(z=>{tc+=z.tc;tr+=z.tr;pk=Math.max(pk,z.pk);});return {...g,zs,tc,tr,pk};});
-    const zoneRows=groupAgg.map(g=>`<tr style="background:var(--panel2);border-top:2px solid ${g.color}"><td style="padding:6px 10px;font-weight:900;color:${g.color}">${g.label}</td><td style="padding:6px 10px;text-align:right;font-weight:800">${g.tc}</td><td style="padding:6px 10px;text-align:right;font-weight:800">${g.tr}</td><td style="padding:6px 10px;text-align:right;font-weight:900">${g.tc+g.tr}</td><td style="padding:6px 10px;text-align:right;font-weight:800">${g.pk}</td></tr>`+g.zs.map(z=>`<tr><td style="padding:3px 10px 3px 20px">${this.esc(z.lv)} · ${this.esc(z.label)}</td><td style="padding:3px 10px;text-align:right;font-family:'IBM Plex Mono',monospace">${z.tc}</td><td style="padding:3px 10px;text-align:right;font-family:'IBM Plex Mono',monospace">${z.tr}</td><td style="padding:3px 10px;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:800">${z.tc+z.tr}</td><td style="padding:3px 10px;text-align:right;font-family:'IBM Plex Mono',monospace">${z.pk}</td></tr>`).join('')).join('');
-    const groupCards=groupAgg.map(g=>`<div style="border:1px solid var(--line);border-top:4px solid ${g.color};border-radius:10px;padding:10px 12px;background:var(--panel)"><div style="font-size:12px;font-weight:900;color:${g.color}">${g.label}</div><div style="display:flex;gap:16px;margin-top:5px;font-size:11px;color:var(--dim)"><span>Man-days <b style="font-size:17px;color:var(--txt)">${g.tc+g.tr}</b></span><span>C <b>${g.tc}</b></span><span>R <b>${g.tr}</b></span><span>Peak/day <b>${g.pk}</b></span></div></div>`).join('');
     const th='color:var(--faint);font-size:10px;text-transform:uppercase;text-align:right;padding:5px 10px';
+    const groupTables=groupAgg.map(g=>{const rows=g.zs.map(z=>`<tr><td style="padding:4px 9px">${this.esc(z.lv)} · ${this.esc(z.label)}</td><td style="padding:4px 9px;text-align:right;font-family:'IBM Plex Mono',monospace">${z.tc}</td><td style="padding:4px 9px;text-align:right;font-family:'IBM Plex Mono',monospace">${z.tr}</td><td style="padding:4px 9px;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:800">${z.tc+z.tr}</td><td style="padding:4px 9px;text-align:right;font-family:'IBM Plex Mono',monospace">${z.pk}</td></tr>`).join('')||'<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--faint)">No manpower entered</td></tr>';return `<section style="border:1px solid var(--line);border-top:4px solid ${g.color};border-radius:11px;background:var(--panel);overflow:hidden"><div style="padding:10px 11px 8px;background:var(--panel2)"><div style="font-size:14px;font-weight:900;color:${g.color}">${g.label}</div><div style="display:flex;gap:13px;margin-top:4px;font-size:10.5px;color:var(--dim)"><span>Man-days <b style="font-size:16px;color:var(--txt)">${g.tc+g.tr}</b></span><span>C <b>${g.tc}</b></span><span>R <b>${g.tr}</b></span><span>Peak/day <b>${g.pk}</b></span></div></div><div style="overflow:auto;max-height:55vh"><table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr><th style="${th};text-align:left">Zone</th><th style="${th}">C</th><th style="${th}">R</th><th style="${th}">Man-days</th><th style="${th}">Peak/day</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;}).join('');
     let ov=this.root.querySelector('#manpowerOverlay'); if(!ov){ov=document.createElement('div');ov.id='manpowerOverlay';this.root.appendChild(ov);}
     ov.style.cssText='position:fixed;inset:0;z-index:210;background:var(--bg);overflow:auto;padding:22px 26px 60px';
-    ov.innerHTML=`<div style="max-width:1000px;margin:0 auto">
+    ov.innerHTML=`<div style="max-width:1450px;margin:0 auto">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="font-size:20px;font-weight:800">👷 Manpower summary · 全项目每日工人</div><div style="flex:1"></div><button class="hbtn" id="mpwClose">Close ✕</button></div>
       <div style="font-size:12px;color:var(--dim);margin-bottom:12px">按天汇总所有 zone / 活动里录入的工人数 · C=木工 R=铁工 · 全场峰值 <b>${peak}</b> 人</div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px">${groupCards}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
-        <div><div style="font-size:13px;font-weight:800;margin-bottom:6px">By day · 全场每天</div><div style="border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:60vh"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="${th};text-align:left">Date</th><th style="${th}">C 木工</th><th style="${th}">R 铁工</th><th style="${th}">Total</th></tr></thead><tbody>${dayRows}</tbody></table></div></div>
-        <div><div style="font-size:13px;font-weight:800;margin-bottom:6px">By zone · 各区合计</div><div style="border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:60vh"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="${th};text-align:left">Zone</th><th style="${th}">C</th><th style="${th}">R</th><th style="${th}">Man-days</th><th style="${th}">Peak/day</th></tr></thead><tbody>${zoneRows||'<tr><td colspan=5 style="padding:20px;text-align:center;color:var(--faint)">—</td></tr>'}</tbody></table></div></div>
-      </div></div>`;
+      <details style="margin-bottom:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800">全场每天 · By day</summary><div style="border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:260px;margin-top:7px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="${th};text-align:left">Date</th><th style="${th}">C 木工</th><th style="${th}">R 铁工</th><th style="${th}">Total</th></tr></thead><tbody>${dayRows}</tbody></table></div></details>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:14px;align-items:start">${groupTables}</div></div>`;
     ov.style.display='block'; const cl=ov.querySelector('#mpwClose'); if(cl)cl.onclick=()=>{ov.style.display='none';}; }
-  _dailyManpowerSec(lv,z){ const rows=this._zoneDailyManpower(lv,z); if(!rows.length)return '';
-    const peak=rows.reduce((m,d)=>Math.max(m,d.c+d.r),0);
-    const body=rows.map(d=>`<tr><td style="padding:2px 9px">${this._fmtD(d.date)}</td><td style="padding:2px 9px;text-align:right;font-family:'IBM Plex Mono',monospace">${d.c||'—'}</td><td style="padding:2px 9px;text-align:right;font-family:'IBM Plex Mono',monospace">${d.r||'—'}</td><td style="padding:2px 9px;text-align:right;font-family:'IBM Plex Mono',monospace;font-weight:800">${d.c+d.r}</td></tr>`).join('');
-    return `<details class="sec" style="margin-top:10px"><summary style="cursor:pointer;font-weight:800;font-size:14px">👷 Daily manpower <span style="font-weight:600;color:var(--faint);font-size:10.5px">· ${rows.length} days · peak ${peak} · C=木工 R=铁工</span></summary><div style="max-height:300px;overflow:auto;margin-top:8px;border:1px solid var(--line);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr style="position:sticky;top:0;background:var(--panel);color:var(--faint);font-size:9.5px;text-transform:uppercase"><th style="text-align:left;padding:4px 9px">Date</th><th style="text-align:right;padding:4px 9px">C 木工</th><th style="text-align:right;padding:4px 9px">R 铁工</th><th style="text-align:right;padding:4px 9px">Total</th></tr></thead><tbody>${body}</tbody></table></div></details>`; }
   saveEdited(){try{localStorage.setItem('rws_edited_keys',JSON.stringify(this._editedKeys||{}));}catch(e){}}
   saveActUpd(){try{localStorage.setItem('rws_act_upd',JSON.stringify(this._actUpd||{}));}catch(e){}}
   _updUser(){const u=this._rwsUser||{};return u.display_name||u.displayName||u.username||u.name||'someone';}
@@ -896,6 +894,7 @@ class Component extends DCLogic {
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
       if(own('settings')){this._appCfg={...(state.settings||{})};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
       this._reconcileZoneStairs();
+      this._reconcileZoneCores();
       if(own('manpower')){this._manpower={...(state.manpower||{})};try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}}
       if(Array.isArray(state.custom_cats)){const seen={};this._catAdd=[];state.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;this._catAdd.push({code:c.code,label:c.label});}});}
       if(Array.isArray(state.custom_items)){this._elemAdd={};state.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(this._elemAdd[k]=this._elemAdd[k]||[]).push(it.elem_id);});}
@@ -950,7 +949,7 @@ class Component extends DCLogic {
         if(changed){
           this.saveAct&&this.saveAct();this.saveDates&&this.saveDates();this.saveActCmt&&this.saveActCmt();this.saveActUpd&&this.saveActUpd();this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();this.saveEdited&&this.saveEdited();
           try{localStorage.setItem('rws_zp_ov',JSON.stringify(this._zpOv||{}));localStorage.setItem('rws_qty_ov',JSON.stringify(this._qtyOv||{}));localStorage.setItem('rws_zp_plan_ov',JSON.stringify(this._zpPlanOv||{}));localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg||{}));localStorage.setItem('rws_manpower',JSON.stringify(this._manpower||{}));}catch(e){}
-          this.zpApplyOv&&this.zpApplyOv();this.applyQtyOv&&this.applyQtyOv();this._reconcileZoneStairs&&this._reconcileZoneStairs();
+          this.zpApplyOv&&this.zpApplyOv();this.applyQtyOv&&this.applyQtyOv();this._reconcileZoneStairs&&this._reconcileZoneStairs();this._reconcileZoneCores&&this._reconcileZoneCores();
           this.applyUpdates&&this.applyUpdates();
           this.render&&this.render();
           if(this.selKey){const z=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z)this.selectZone(z);}
@@ -1369,7 +1368,7 @@ class Component extends DCLogic {
   _reportDateLabel(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?(+m[3])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+' '+m[1].slice(2):String(iso||'');}
   _reportMonthBounds(label){if(label==="Before Apr'26")return {s:Date.UTC(2000,0,1),e:Date.UTC(2026,2,31)};const m=String(label||'').match(/^([A-Z][a-z]{2})'(\d{2})$/);if(!m)return null;const mi=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);if(mi<0)return null;const y=2000+(+m[2]);return {s:Date.UTC(y,mi,1),e:Date.UTC(y,mi+1,0)};}
   _reportPlanFraction(month,start,end,asOf){const b=this._reportMonthBounds(month);if(!b)return 0;let s=b.s,e=b.e;const ds=Date.parse(String(start||'')+'T00:00:00Z'),de=Date.parse(String(end||'')+'T00:00:00Z'),now=Date.parse(asOf+'T00:00:00Z');if(Number.isFinite(ds))s=Math.max(s,ds);if(Number.isFinite(de))e=Math.min(e,de);if(e<s||now<s)return 0;if(now>=e)return 1;return Math.max(0,Math.min(1,(now-s+86400000)/(e-s+86400000)));}
-  _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});const out=Object.values(by);if(cat==='MA'&&lv==='L1'){const S=this.SUBZONES&&this.SUBZONES.L1;['C','P'].forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
+  _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});const out=Object.values(by);if(cat==='MA'&&lv==='L1'){const S=this.SUBZONES&&this.SUBZONES.L1;['C','P'].forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
   /* m² Report activities use the full applicable zone area as their denominator.
      This includes not-yet-scheduled zones and keeps Marine Top/Bottom/Podium scopes separate. */
@@ -1693,7 +1692,7 @@ class Component extends DCLogic {
     if(!_focusOnly&&this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length, cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length; const lq=this.proj([cx,cy],H);
-        const _cc=this._shapeLinkColor(w,'#22c55e','#15803d',swlv); const _foreign=(swlv!==this.curLevel);   /* 未开始=亮绿底色; 做完=深绿, 在做=黄(按成员状态) */
+        const _cc=this._shapeLinkColor(w,'#22c55e','#15803d',this.curLevel,'core'); const _foreign=(swlv!==this.curLevel);   /* 未开始=亮绿底色; 做完=深绿, 在做=黄(按成员状态) */
         s+=`<polygon class="corewall" data-cwi="${wi}" data-cwlv="${swlv}" points="${pp}" fill="${_cc[0]}" fill-opacity="${_foreign?0.14:0.22}" stroke="${_cc[1]}" stroke-width="520"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
         s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none">${this.esc(this._shapeLabel(w))}</text>`;});
       }
@@ -1849,9 +1848,10 @@ class Component extends DCLogic {
       // 直接复用 ZC 的完整分区面板(含 ACTIVITIES/月份切换/STATUS/日期/锁), 合成一个只属于此细分的分区
       const _mcols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?this._marineCol[e.label].map(c=>({id:c.id,sz:c.sz||'',c:c.c?1:0})):[];
       const _mstairs=(kind==='P')?this._stairItemsFor(lv,lv+'|'+e.label):[];
+      const _mcores=(kind==='P')?this._coreItemsFor(lv,lv+'|'+e.label):[];
       const sz={mk:lv+'|'+e.label,label:e.label,cat:'MA',area:(kind==='P'?0:e.a),   /* Podium(P)不需要 area 总量 → 置空; 加权仍用 SUBZONES 原始面积 */
         grp:(kind==='P'?e.label:''),fam:(kind==='P'?('Pour group '+e.label):'Marine sub-division'),
-        cols:_mcols,piles:[],beams:[],lifts:[],stairs:_mstairs,sub:[],
+        cols:_mcols,piles:[],beams:[],lifts:[],stairs:_mstairs,cores:_mcores,sub:[],
         counts:{columns:_mcols.length,stair:_mstairs.length,pilecap:0,mainbeam:0,steelbeam:0},crit:false,_pod:(kind==='P'),_mslab:(kind==='C')};
       /* 顶部 SITE PROGRESS 用这个细分自己活动的完成度(和地图填色同一来源) */
       const _sp=this._subActPct(e.label);
@@ -2106,7 +2106,7 @@ class Component extends DCLogic {
     this._coreBuf=this._coreBuf||[];this._coreBuf.push([sx,H-sy]);this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   _coreUndo(){if(this._coreBuf&&this._coreBuf.length){this._coreBuf.pop();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}}
   _coreCancel(){this._coreBuf=[];this._drawingCore=false;if(this.svg)this.svg.style.cursor='';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
-  _saveCoreWalls(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','coreWalls',this._appCfg.coreWalls||{},null,null);}
+  _saveCoreWalls(){this._reconcileZoneCores();try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','coreWalls',this._appCfg.coreWalls||{},null,null);}
   _coreFinish(){if(!this._coreBuf||this._coreBuf.length<3){this._toast('至少点 3 个点围成一块 / need ≥3 points');return;}
     const lv=this.curLevel,L=this.DATA.levels[lv];const pts=this._coreBuf.slice();
     const cx=pts.reduce((a,p)=>a+p[0],0)/pts.length, cy=pts.reduce((a,p)=>a+p[1],0)/pts.length;
@@ -2221,7 +2221,8 @@ class Component extends DCLogic {
     return out;}
   _shapeLinks(w,lv){if(w&&w.links&&w.links.length)return w.links;if(w&&w.link)return[w.link];return this._autoLinks(w,lv);}
   _stairLinksForLevel(w,lv){const target=this._stairTarget(lv,w);if(!target)return[];const items=target.sub?this._stairItemsFor(lv,target.zmk):((target.z&&target.z.stairs)||[]),name=this._shapeLabel(w);let hit=items.filter(x=>this._idSameGroup(typeof x==='string'?x:x.id,name));if(!hit.length&&items.length===1)hit=items.slice();if(!hit.length&&name)hit=[{id:name}];return hit.map(x=>({lv,zmk:target.zmk,type:'stair',id:typeof x==='string'?x:x.id,target}));}
-  _shapeLinkColor(w,baseFill,baseStroke,lv,kind){const ls=kind==='stair'?this._stairLinksForLevel(w,lv):this._shapeLinks(w,lv);if(!ls.length)return[baseFill,baseStroke];const sts=ls.map(l=>this.elemStatus(l.lv+'||'+l.zmk+'||'+l.type+'||'+l.id));if(sts.every(s=>s==='done'))return['#35c08e','#218a5c'];if(sts.some(s=>s==='done'||s==='wip'))return['#e2b45c','#b8801f'];return[baseFill,baseStroke];}
+  _coreLinksForLevel(w,lv){const target=this._coreTarget(lv,w);if(!target)return this._shapeLinks(w,lv);const items=this._coreItemsFor(lv,target.zmk),name=this._shapeLabel(w);let hit=items.filter(x=>this._idSameGroup(typeof x==='string'?x:x.id,name));if(!hit.length&&name)hit=[{id:name}];return hit.map(x=>({lv,zmk:target.zmk,type:'core',id:typeof x==='string'?x:x.id,target}));}
+  _shapeLinkColor(w,baseFill,baseStroke,lv,kind){const ls=kind==='stair'?this._stairLinksForLevel(w,lv):(kind==='core'?this._coreLinksForLevel(w,lv):this._shapeLinks(w,lv));if(!ls.length)return[baseFill,baseStroke];const sts=ls.map(l=>this.elemStatus(l.lv+'||'+l.zmk+'||'+l.type+'||'+l.id));if(sts.every(s=>s==='done'))return['#35c08e','#218a5c'];if(sts.some(s=>s==='done'||s==='wip'))return['#e2b45c','#b8801f'];return[baseFill,baseStroke];}
   _linksFloorRange(w,lv){
     /* 楼层范围跟着组里 lift/staircase 走 = 已匹配成员 f→t 的并集 */
     const ls=this._shapeLinks(w,lv);let lo=null,hi=null;ls.forEach(l=>{const r=this._linkFloorRange(l);if(r){lo=(lo==null?r[0]:Math.min(lo,r[0]));hi=(hi==null?r[1]:Math.max(hi,r[1]));}});if(lo!=null)return [lo,hi];
@@ -2235,6 +2236,9 @@ class Component extends DCLogic {
       const links=this._stairLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;if(!link||!target){this._toast&&this._toast('当前楼层没有找到这个 Staircase 对应的 Zone');return;}const id=link.id;
       if(target.sub){this.selectSubzone(target.sub.kind,target.sub.i);setTimeout(()=>this._focusSideElement(target.lv,target.zmk,'stair',id),80);return;}
       this._openLink({lv:target.lv,zmk:target.zmk,type:'stair',id});return;
+    }
+    if(kind==='core'){
+      const links=this._coreLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;if(target&&target.sub){this.selectSubzone(target.sub.kind,target.sub.i);setTimeout(()=>this._focusSideElement(target.lv,target.zmk,'core',link.id),80);return;}
     }
     const ls=this._shapeLinks(w,lv);if(!ls.length){this._toast&&this._toast('名字 "'+this._shapeLabel(w)+'" 没对上数据 / no match');return;}
     /* Core Wall 保留原来的按名字匹配逻辑。 */
@@ -2514,7 +2518,8 @@ class Component extends DCLogic {
         return `<div style="font-size:11px;margin:1px 0"><b style="font-family:'IBM Plex Mono',monospace">${this._fmtD(dt)}</b> · C ${c==null?'—':c} · R ${r==null?'—':r} · 合计 <b>${(c||0)+(r||0)}</b></div>`; }).join('');
       const _addRow=canEdit?`<div style="display:flex;align-items:center;gap:5px;margin-top:4px"><input type="date" class="actday-add-dt" data-a="${a.id}" style="font-size:11px;padding:2px 4px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--txt);font-family:inherit"><span class="am2">C</span><input class="actday-add-c" data-a="${a.id}" placeholder="0" style="width:34px;text-align:center;border:1px dashed var(--accent);border-radius:5px;padding:1px 3px;font-size:12px;background:var(--panel);color:var(--accent);font-family:inherit"><span class="am2">R</span><input class="actday-add-r" data-a="${a.id}" placeholder="0" style="width:34px;text-align:center;border:1px dashed var(--accent);border-radius:5px;padding:1px 3px;font-size:12px;background:var(--panel);color:var(--accent);font-family:inherit"><span class="lnk actday-addbtn" data-a="${a.id}" style="color:var(--accent);cursor:pointer;font-weight:700;font-size:11px">+ Add day</span></div>`:'';
       const _dayTotal=_days.reduce((n,dt)=>n+(this.actDayRes(lv,zmk,a.id,'c',dt)||0)+(this.actDayRes(lv,zmk,a.id,'r',dt)||0),0);
-      const _resRow=(canEdit||_dayRows)?`<details class="sec actres" data-sec="workers:${this.esc(a.id)}" style="margin:1px 0 8px 2px"><summary class="t" style="margin:0;display:flex;align-items:center"><span title="每天实际需要的工人数(手动按天录入) · C=木工 R=铁工">👷 Daily workers</span><span style="margin-left:auto;text-transform:none">${_days.length?`${_days.length} days · ${_dayTotal} man-days`:'Add daily workers'}</span></summary><div class="actsub" style="display:flex;flex-direction:column;align-items:stretch;gap:0;margin:6px 0 0 17px">${_dayRows}${_addRow}</div></details>`:'';
+      const _enteredRows=_dayRows?`<details class="sec" data-sec="workers:${this.esc(a.id)}" style="margin:1px 0 4px"><summary class="t" style="margin:0;display:flex;align-items:center"><span title="已录入的每日工人数，可展开或收起">👷 Daily workers entered</span><span style="margin-left:auto;text-transform:none">${_days.length} days · ${_dayTotal} man-days</span></summary><div class="actsub" style="display:flex;flex-direction:column;align-items:stretch;gap:0;margin:6px 0 0 17px">${_dayRows}</div></details>`:'';
+      const _resRow=(canEdit||_dayRows)?`<div class="actres" style="margin:1px 0 8px 2px">${_enteredRows}${canEdit?`<div class="actsub" style="margin:2px 0 0 17px">${_addRow}</div>`:''}</div>`:'';
       return `<div class="actcard ${hidden?'act-off':''}${_noWorkThisMonth?' act-nowork':''}"><div class="actrow">${chk}<span class="actlbl">${a.label}${(admin&&(total==null||total<=0)&&cumThrough>0)?' <span class="needscopetag" title="填了 Done, 但这个活动没有总量、也没有任何月份的计划 → 算不出百分比。请补一个总量(Total)或计划量(Plan)。" style="background:#fdecec;color:#c8102e;border:1px solid #f3b5b5;border-radius:6px;padding:1px 6px;font-size:9px;font-weight:800;margin-left:4px">⚠ 缺总量/计划</span>':''}${_noWorkThisMonth?' <span class="noworktag" title="No planned or done quantity for '+this.esc(sm)+' — this activity isn\'t scheduled for this zone this month">— no work this month</span>':''}${(admin&&hidden)?' <span class="hiddentag">hidden from users</span>':''}${(a.custom&&admin)?' <span class="lnk actdel" data-a="'+a.id+'" style="color:var(--crit);cursor:pointer" title="Delete custom activity">✕</span>':''}</span><span class="actbar"><i style="width:${Math.min(pct||0,100)}%;background:${bc}"></i></span><span class="actpct" style="color:${bc}">${pct==null?'—':pct+'%'}</span>${this._cmtBtn(lv,zmk,a.id)}${this._updBadge(lv,zmk,a.id)}</div>`+
         (a.info?`<div class="actinfotext">&#9432; ${this.esc(a.info)}</div>`:``)+
         pourRow+`<div class="actsub"><span class="am">${sm}</span><span class="am2">Plan</span>${planCell}${_ub}${_editBadge(_planEdited)}${this._lockIco('act_plan',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="asep">|</span><span class="am2">Done</span>${doneCell}${_ub}${_editBadge(_doneEdited)}${this._lockIco('act_done_m',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="acum">${sm}: ${this.fmt(cg.done)}${plan==null?'':' / '+this.fmt(plan)} ${this.esc(_u)}</span></div>`+_resRow+actDateLine+carryLine+mn+this._cmtPanel(lv,zmk,a.id)+_coreListHtml+this._actElemSecFull(lv,z,a.id)+'</div>';
@@ -2606,7 +2611,6 @@ class Component extends DCLogic {
       </div>
       ${this.rwsIsAdmin()?'<div style="font-size:9.5px;color:var(--faint);margin:-6px 0 9px">Dashed boxes above are editable (admin) — press Enter or click away to save. Lift/Stair count isn\'t editable here.</div>':''}
       ${this.zpSection(z)}
-      ${this._dailyManpowerSec(lv,z)}
       ${this._custSecHtml(lv,z,this.rwsIsAdmin())}
       </div>`;
     this.setSummaryVis();
