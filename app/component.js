@@ -2232,8 +2232,14 @@ class Component extends DCLogic {
   _linksFloorRange(w,lv){
     /* 楼层范围跟着组里 lift/staircase 走 = 已匹配成员 f→t 的并集 */
     const ls=this._shapeLinks(w,lv);let lo=null,hi=null;ls.forEach(l=>{const r=this._linkFloorRange(l);if(r){lo=(lo==null?r[0]:Math.min(lo,r[0]));hi=(hi==null?r[1]:Math.max(hi,r[1]));}});if(lo!=null)return [lo,hi];
+    /* Staircase 清单按当前楼层/Zone 重新归区后，旧的手工 link 可能已经找不到
+       原对象。此时必须按图形编号从实时清单及原始 stair 台账反查 f→t，
+       否则画在 L1 的楼梯会错误地只在 L1 显示。 */
+    const name=this._shapeLabel(w),take=e=>{if(!e||typeof e==='string'||!this._idSameGroup(e.id,name))return;const a=this._floorOrd(e.f),b=this._floorOrd(e.t);if(a==null||b==null)return;lo=lo==null?Math.min(a,b):Math.min(lo,a,b);hi=hi==null?Math.max(a,b):Math.max(hi,a,b);};
+    if(name){(this.DATA.order||[]).forEach(fl=>{const L=this.DATA.levels[fl];(L&&L.zones||[]).forEach(z=>{[...(z.lifts||[]),...(z.stairs||[]),...(z.cores||[])].forEach(take);});const base=(this._baseZoneStairs||{})[fl]||{};Object.values(base).forEach(arr=>(arr||[]).forEach(take));});}
+    if(lo!=null)return [lo,hi];
     /* 没匹配到成员时才退回主表写死的 f/t */
-    const name=(w&&w.id||'').trim();const g=(name&&typeof window!=='undefined'&&window.CW_GROUPS)?window.CW_GROUPS[name]:null;if(g&&g.f&&g.t){const a=this._floorOrd(g.f),b=this._floorOrd(g.t);if(a!=null&&b!=null)return [Math.min(a,b),Math.max(a,b)];}
+    const cwName=(w&&w.id||'').trim();const g=(cwName&&typeof window!=='undefined'&&window.CW_GROUPS)?window.CW_GROUPS[cwName]:null;if(g&&g.f&&g.t){const a=this._floorOrd(g.f),b=this._floorOrd(g.t);if(a!=null&&b!=null)return [Math.min(a,b),Math.max(a,b)];}
     return null;}
   _openShape(w,lv,kind){
     /* Staircase 可能从 L1 图形跨层显示，但点击必须留在当前楼层。当前层重新按
