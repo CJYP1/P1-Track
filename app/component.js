@@ -2480,6 +2480,26 @@ class Component extends DCLogic {
     if(z.cat==='MA') return new Set(['piling','slab_top','mep_acmv','mep_fps','mep_elec','mep_bms']); // Top slab (ZC 真实分区)
     return null;
   }
+  /* Admin-only audit view for one clicked Zone on the current floor.  Monthly
+     achievement and progress against the full Zone scope are deliberately
+     shown side-by-side so 100% of this month's plan is never mistaken for
+     100% of the whole activity. */
+  _adminZoneProgressPanel(lv,z){
+    if(!this.rwsIsAdmin())return '';
+    const zmk=z.mk||z.lid,M=this.ACT_MONTHS||[],sm=(this._actMonth&&M.includes(this._actMonth))?this._actMonth:this.actDefaultMonth(),mi=Math.max(0,M.indexOf(sm)),fmtN=v=>this.fmt(Math.round(Number(v)||0));
+    const rows=(this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).map(a=>{
+      const total=Number(a.total),monthPlan=this.actPlan(lv,zmk,a.id,sm),monthDone=this.actDoneMonth(lv,zmk,a.id,sm),cum=M.slice(0,mi+1).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),pour=(a.id==='ls'||a.id==='act_corewall')?this.actPourPct(lv,zmk,a.id):null;
+      const hasTotal=Number.isFinite(total)&&total>0,has=hasTotal||cum>0||monthPlan!=null||monthDone!=null||pour!=null;if(!has)return null;
+      const scopePct=pour!=null?pour:(hasTotal?Math.min(100,Math.round(cum/total*100)):null),monthPct=(monthPlan!=null&&Number(monthPlan)>0)?Math.min(100,Math.round((Number(monthDone)||0)/Number(monthPlan)*100)):null,unit=a.unit||this._actUnit(a.id);
+      const monthTxt=monthPlan!=null?`${fmtN(monthDone)} / ${fmtN(monthPlan)} ${this.esc(unit)}${monthPct==null?'':` = ${monthPct}%`}`:(monthDone!=null?`${fmtN(monthDone)} ${this.esc(unit)} done`:'No work entered');
+      const scopeTxt=pour!=null?`${pour===0?'0':pour===33?'1':pour===67?'2':'3'} / 3 pours = ${pour}%`:(hasTotal?`${fmtN(cum)} / ${fmtN(total)} ${this.esc(unit)} = ${scopePct}%`:'Total not set');
+      return {a,scopePct,monthTxt,scopeTxt};
+    }).filter(Boolean);
+    if(!rows.length)return `<div style="border:1px solid #f0c36a;background:#fff9e8;border-radius:10px;padding:10px 12px;margin:0 0 10px"><div style="font-size:11px;font-weight:900;color:#875400">ADMIN · ZONE TOTAL-SCOPE PROGRESS</div><div style="font-size:10px;color:var(--dim);margin-top:4px">${this.esc(lv)} · ${this.esc(z.label)} has no activity totals or completed quantities yet.</div></div>`;
+    const ph=this._zonePhases(lv,z),W=this._pw(),present=Object.keys(ph).filter(k=>(W[k]||0)>0);let overall=null;if(present.length){let n=0,d=0;present.forEach(k=>{n+=ph[k]*W[k];d+=W[k];});if(d)overall=Math.min(100,Math.round(n/d*100));}if(overall==null){const rr=rows.filter(r=>r.scopePct!=null);if(rr.length)overall=Math.round(rr.reduce((n,r)=>n+r.scopePct,0)/rr.length);}
+    const body=rows.map(r=>{const pc=r.scopePct==null?'var(--faint)':this.progColor(r.scopePct);return `<div style="display:grid;grid-template-columns:minmax(105px,1fr) minmax(145px,1.35fr) minmax(175px,1.6fr);gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(120,130,150,.18);font-size:10.5px"><b>${this.esc(r.a.label)}</b><span><small style="display:block;color:var(--faint);font-size:8px;text-transform:uppercase">${this.esc(sm)} plan</small>${r.monthTxt}</span><span style="color:${pc};font-weight:800"><small style="display:block;color:var(--faint);font-size:8px;text-transform:uppercase">Full Zone scope</small>${r.scopeTxt}</span></div>`;}).join('');
+    return `<div style="border:1px solid #e2b24d;background:linear-gradient(135deg,#fffaf0,#fff);border-radius:10px;padding:10px 12px;margin:0 0 10px;box-shadow:0 2px 8px rgba(99,70,15,.06)"><div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:5px"><div><div style="font-size:11px;font-weight:900;color:#875400">ADMIN · ZONE TOTAL-SCOPE PROGRESS</div><div style="font-size:9px;color:var(--dim);margin-top:2px">${this.esc(lv)} · ${this.esc(z.label)} only · cumulative through ${this.esc(sm)}</div></div><div style="font-size:25px;line-height:1;font-weight:900;color:${overall==null?'var(--faint)':this.progColor(overall)}">${overall==null?'—':overall+'%'}</div></div>${body}<div style="font-size:8.5px;color:var(--faint);margin-top:6px">Overall uses the configured work-stage proportions. Different units (m³, m² and nos) are normalized before weighting.</div></div>`;
+  }
   zpSection(z){
     const lv=this.curLevel, zmk=z.mk||z.lid;
     const canEdit=this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk), admin=this.rwsIsAdmin();
@@ -2620,6 +2640,7 @@ class Component extends DCLogic {
           ${p.udate?`<div class="pr"><span>Updated</span><b>${p.udate}</b></div>`:''}
         </div>
       </div>
+      ${this._adminZoneProgressPanel(lv,z)}
       <div class="statgrid">
         ${z.area?this.statCell(lv,z.mk||z.lid,'area','Area m²',z.area):''}
         ${!(z.cat==='NB'&&(lv==='B2'||lv==='B1'))?'':this.excAuto(lv,z)!=null?`<div class="stat" title="Auto-computed for new basement: area \u00d7 depth"><div class="n">${this.fmt(this.excTotal(lv,z))}</div><div class="l">Excavation m\u00b3</div><div class="statcalc">${this.fmt(z.area||0)} m\u00b2 \u00d7 ${this.excDepth(lv)} m</div></div>`:(this.rwsIsAdmin()?`<div class="stat"><input class="exc-ov-in" value="${this.actTotal(lv,z.mk||z.lid,'exc','')}" placeholder="\u2014" title="Excavation total m\u00b3 (admin)" style="width:100%;background:var(--panel);border:1px dashed var(--accent);border-radius:5px;padding:2px 5px;font-size:15px;font-weight:700;color:var(--accent);text-align:left"><div class="l">Excavation m\u00b3</div></div>`:(this.actTotal(lv,z.mk||z.lid,'exc',0)?`<div class="stat"><div class="n">${this.fmt(this.actTotal(lv,z.mk||z.lid,'exc',0))}</div><div class="l">Excavation m\u00b3</div></div>`:''))}
