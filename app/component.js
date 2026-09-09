@@ -2221,7 +2221,13 @@ class Component extends DCLogic {
     return out;}
   _shapeLinks(w,lv){if(w&&w.links&&w.links.length)return w.links;if(w&&w.link)return[w.link];return this._autoLinks(w,lv);}
   _stairLinksForLevel(w,lv){const target=this._stairTarget(lv,w);if(!target)return[];const items=target.sub?this._stairItemsFor(lv,target.zmk):((target.z&&target.z.stairs)||[]),name=this._shapeLabel(w);let hit=items.filter(x=>this._idSameGroup(typeof x==='string'?x:x.id,name));if(!hit.length&&items.length===1)hit=items.slice();if(!hit.length&&name)hit=[{id:name}];return hit.map(x=>({lv,zmk:target.zmk,type:'stair',id:typeof x==='string'?x:x.id,target}));}
-  _coreLinksForLevel(w,lv){const target=this._coreTarget(lv,w);if(!target)return this._shapeLinks(w,lv);const items=this._coreItemsFor(lv,target.zmk),name=this._shapeLabel(w);let hit=items.filter(x=>this._idSameGroup(typeof x==='string'?x:x.id,name));if(!hit.length&&name)hit=[{id:name}];return hit.map(x=>({lv,zmk:target.zmk,type:'core',id:typeof x==='string'?x:x.id,target}));}
+  _coreLinksForLevel(w,lv){const target=this._coreTarget(lv,w);if(target){const items=this._coreItemsFor(lv,target.zmk),name=this._shapeLabel(w);let hit=items.filter(x=>this._idSameGroup(typeof x==='string'?x:x.id,name));if(!hit.length&&name)hit=[{id:name}];return hit.map(x=>({lv,zmk:target.zmk,type:'core',id:typeof x==='string'?x:x.id,target}));}
+    let links=this._shapeLinks(w,lv).filter(x=>x.lv===lv);
+    /* A manually saved link may still point to the source floor.  Ignore that
+       saved source link when resolving an upper-floor click and rematch the CW
+       name against the current floor's live lists. */
+    if(!links.length){const probe={...w};delete probe.link;delete probe.links;links=this._autoLinks(probe,lv).filter(x=>x.lv===lv);}
+    return links;}
   _shapeLinkColor(w,baseFill,baseStroke,lv,kind){const ls=kind==='stair'?this._stairLinksForLevel(w,lv):(kind==='core'?this._coreLinksForLevel(w,lv):this._shapeLinks(w,lv));if(!ls.length)return[baseFill,baseStroke];const sts=ls.map(l=>this.elemStatus(l.lv+'||'+l.zmk+'||'+l.type+'||'+l.id));if(sts.every(s=>s==='done'))return['#35c08e','#218a5c'];if(sts.some(s=>s==='done'||s==='wip'))return['#e2b45c','#b8801f'];return[baseFill,baseStroke];}
   _linksFloorRange(w,lv){
     /* 楼层范围跟着组里 lift/staircase 走 = 已匹配成员 f→t 的并集 */
@@ -2238,7 +2244,13 @@ class Component extends DCLogic {
       this._openLink({lv:target.lv,zmk:target.zmk,type:'stair',id});return;
     }
     if(kind==='core'){
-      const links=this._coreLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;if(target&&target.sub){this.selectSubzone(target.sub.kind,target.sub.i);setTimeout(()=>this._focusSideElement(target.lv,target.zmk,'core',link.id),80);return;}
+      /* Core shapes can be drawn on L1 and projected onto upper floors.  Resolve
+         the link again on the floor currently being viewed; never fall back to
+         the source shape's floor, otherwise an L2 click unexpectedly opens L1. */
+      const links=this._coreLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;
+      if(target&&target.sub){this.selectSubzone(target.sub.kind,target.sub.i);setTimeout(()=>this._focusSideElement(target.lv,target.zmk,'core',link.id),80);return;}
+      if(link){this._openLink(link);return;}
+      this._toast&&this._toast('当前楼层没有找到这个 Core Wall 对应的 Zone');return;
     }
     const ls=this._shapeLinks(w,lv);if(!ls.length){this._toast&&this._toast('名字 "'+this._shapeLabel(w)+'" 没对上数据 / no match');return;}
     /* Core Wall 保留原来的按名字匹配逻辑。 */
