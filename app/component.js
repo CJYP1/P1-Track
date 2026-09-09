@@ -1506,7 +1506,8 @@ class Component extends DCLogic {
       if(vis&&this.colorMode==='castdate'){ if(this._castLayer==='col'){op=0.28;} else {const _ci=this._zoneCastInfo(this.curLevel,z); if(_ci.done)op=0.5;} }   /* 浇筑完成的板: 半透明黑, 跟按月上色的板区分 */
       const _maL1=(this.curLevel==='L1'&&z.cat==='MA');   // L1 Marine 父区(ZC): ZC 层关只留边界线; 开则保持正常蓝色填充
       if(_maL1&&!this.showSubZC)op=0;
-      s+=`<polygon class="zone${vis?'':' dim'}${crit}${planst}" data-i="${i}" points="${pts}" fill="${this.zoneFill(z)}" fill-opacity="${op}"/>`;
+      const _aggPicked=this.rwsIsAdmin()&&this._adminAggLevel===this.curLevel&&this._adminAggSet&&this._adminAggSet.has(String(z.mk||z.lid));
+      s+=`<polygon class="zone${vis?'':' dim'}${crit}${planst}${_aggPicked?' aggpick':''}" data-i="${i}" points="${pts}" fill="${this.zoneFill(z)}" fill-opacity="${op}"/>`;
     });
     {const _hk=['podcis','podium','transfer'].filter(k=>this.showOvl[k]);
      const _HS={podium:{rot:45,sp:2800,sw:300,op:0.22,cross:false},transfer:{rot:-45,sp:1700,sw:300,op:0.26,cross:false},podcis:{rot:0,sp:2400,sw:260,op:0.20,cross:true}};
@@ -1740,7 +1741,7 @@ class Component extends DCLogic {
     this.svg.querySelectorAll('.zone').forEach(el=>{
       el.addEventListener('mousemove',ev=>this.showTip(ev,+el.dataset.i));
       el.addEventListener('mouseleave',()=>this.tip.style.opacity=0);
-      el.addEventListener('click',()=>{if(this._placingCol)return;const z=L.zones[+el.dataset.i];if(!this.zoneVisible(z))return;this.selKey=this.zid(z);this.selectZone(z);this.paintSel();this.paintTimelineSel();});
+      el.addEventListener('click',()=>{if(this._placingCol)return;const z=L.zones[+el.dataset.i];if(!this.zoneVisible(z))return;if(this.rwsIsAdmin()&&this._adminAggMode){this._adminAggToggle(this.curLevel,z);this.render();}this.selKey=this.zid(z);this.selectZone(z);this.paintSel();this.paintTimelineSel();});
     });
     this.svg.querySelectorAll('.subz').forEach(el=>{
       el.addEventListener('mousemove',ev=>{const [cls,i]=el.dataset.sk.split('|');const kind=cls.replace('sub','');const e=this.SUBZONES[this.curLevel][kind][+i];
@@ -2480,25 +2481,22 @@ class Component extends DCLogic {
     if(z.cat==='MA') return new Set(['piling','slab_top','mep_acmv','mep_fps','mep_elec','mep_bms']); // Top slab (ZC 真实分区)
     return null;
   }
-  /* Admin-only audit view for one clicked Zone on the current floor.  Monthly
-     achievement and progress against the full Zone scope are deliberately
-     shown side-by-side so 100% of this month's plan is never mistaken for
-     100% of the whole activity. */
+  _adminAggZones(lv,z){const set=(this._adminAggLevel===lv&&this._adminAggSet)?this._adminAggSet:null;if(!set||!set.size)return[z];const L=this.DATA.levels[lv];const out=(L&&L.zones||[]).filter(x=>set.has(String(x.mk||x.lid)));return out.length?out:[z];}
+  _adminAggToggle(lv,z){if(this._adminAggLevel!==lv||!this._adminAggSet){this._adminAggLevel=lv;this._adminAggSet=new Set();}const k=String(z.mk||z.lid);if(this._adminAggSet.has(k))this._adminAggSet.delete(k);else this._adminAggSet.add(k);}
+  /* Admin-only audit view for one or several selected Zones on this floor.
+     Monthly achievement and progress against the full scope are deliberately
+     shown side-by-side so 100% of a month's plan is not mistaken for 100% of
+     the overall activity. Different units are normalized before weighting. */
   _adminZoneProgressPanel(lv,z){
     if(!this.rwsIsAdmin())return '';
-    const zmk=z.mk||z.lid,M=this.ACT_MONTHS||[],sm=(this._actMonth&&M.includes(this._actMonth))?this._actMonth:this.actDefaultMonth(),mi=Math.max(0,M.indexOf(sm)),fmtN=v=>this.fmt(Math.round(Number(v)||0));
-    const rows=(this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).map(a=>{
-      const total=Number(a.total),monthPlan=this.actPlan(lv,zmk,a.id,sm),monthDone=this.actDoneMonth(lv,zmk,a.id,sm),cum=M.slice(0,mi+1).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),pour=(a.id==='ls'||a.id==='act_corewall')?this.actPourPct(lv,zmk,a.id):null;
-      const hasTotal=Number.isFinite(total)&&total>0,has=hasTotal||cum>0||monthPlan!=null||monthDone!=null||pour!=null;if(!has)return null;
-      const scopePct=pour!=null?pour:(hasTotal?Math.min(100,Math.round(cum/total*100)):null),monthPct=(monthPlan!=null&&Number(monthPlan)>0)?Math.min(100,Math.round((Number(monthDone)||0)/Number(monthPlan)*100)):null,unit=a.unit||this._actUnit(a.id);
-      const monthTxt=monthPlan!=null?`${fmtN(monthDone)} / ${fmtN(monthPlan)} ${this.esc(unit)}${monthPct==null?'':` = ${monthPct}%`}`:(monthDone!=null?`${fmtN(monthDone)} ${this.esc(unit)} done`:'No work entered');
-      const scopeTxt=pour!=null?`${pour===0?'0':pour===33?'1':pour===67?'2':'3'} / 3 pours = ${pour}%`:(hasTotal?`${fmtN(cum)} / ${fmtN(total)} ${this.esc(unit)} = ${scopePct}%`:'Total not set');
-      return {a,scopePct,monthTxt,scopeTxt};
-    }).filter(Boolean);
-    if(!rows.length)return `<div style="border:1px solid #f0c36a;background:#fff9e8;border-radius:10px;padding:10px 12px;margin:0 0 10px"><div style="font-size:11px;font-weight:900;color:#875400">ADMIN · ZONE TOTAL-SCOPE PROGRESS</div><div style="font-size:10px;color:var(--dim);margin-top:4px">${this.esc(lv)} · ${this.esc(z.label)} has no activity totals or completed quantities yet.</div></div>`;
-    const ph=this._zonePhases(lv,z),W=this._pw(),present=Object.keys(ph).filter(k=>(W[k]||0)>0);let overall=null;if(present.length){let n=0,d=0;present.forEach(k=>{n+=ph[k]*W[k];d+=W[k];});if(d)overall=Math.min(100,Math.round(n/d*100));}if(overall==null){const rr=rows.filter(r=>r.scopePct!=null);if(rr.length)overall=Math.round(rr.reduce((n,r)=>n+r.scopePct,0)/rr.length);}
+    const zones=this._adminAggZones(lv,z),multi=!!(this._adminAggLevel===lv&&this._adminAggSet&&this._adminAggSet.size),M=this.ACT_MONTHS||[],sm=(this._actMonth&&M.includes(this._actMonth))?this._actMonth:this.actDefaultMonth(),mi=Math.max(0,M.indexOf(sm)),fmtN=v=>this.fmt(Math.round(Number(v)||0)),by={};
+    zones.forEach(zz=>{const zmk=zz.mk||zz.lid;(this._actList(lv,zz)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,zz)).forEach(a=>{const r=by[a.id]||(by[a.id]={a,total:0,cum:0,monthPlan:0,monthDone:0,hasPlan:false,hasDone:false,missing:0,pours:[]}),total=Number(a.total),hasTotal=Number.isFinite(total)&&total>0,cum=M.slice(0,mi+1).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),mp=this.actPlan(lv,zmk,a.id,sm),md=this.actDoneMonth(lv,zmk,a.id,sm),pour=(a.id==='ls'||a.id==='act_corewall')?this.actPourPct(lv,zmk,a.id):null;r.cum+=cum;if(hasTotal)r.total+=total;else if(cum>0||mp!=null||md!=null)r.missing++;if(mp!=null){r.monthPlan+=Number(mp)||0;r.hasPlan=true;}if(md!=null){r.monthDone+=Number(md)||0;r.hasDone=true;}if(pour!=null)r.pours.push(pour);});});
+    const rows=Object.values(by).map(r=>{const unit=r.a.unit||this._actUnit(r.a.id),pourPct=r.pours.length?Math.round(r.pours.reduce((n,v)=>n+v,0)/r.pours.length):null,scopePct=pourPct!=null?pourPct:(r.total>0?Math.min(100,Math.round(r.cum/r.total*100)):null),monthPct=r.hasPlan&&r.monthPlan>0?Math.min(100,Math.round(r.monthDone/r.monthPlan*100)):null,has=r.total>0||r.cum>0||r.hasPlan||r.hasDone||pourPct!=null;if(!has)return null;const monthTxt=r.hasPlan?`${fmtN(r.monthDone)} / ${fmtN(r.monthPlan)} ${this.esc(unit)} = ${monthPct||0}%`:(r.hasDone?`${fmtN(r.monthDone)} ${this.esc(unit)} done`:'No work entered'),scopeTxt=pourPct!=null?`${r.pours.length} zone${r.pours.length===1?'':'s'} pouring avg = ${pourPct}%`:(r.total>0?`${fmtN(r.cum)} / ${fmtN(r.total)} ${this.esc(unit)} = ${scopePct}%${r.missing?` · ${r.missing} missing total`:''}`:'Total not set');return {...r,scopePct,monthTxt,scopeTxt};}).filter(Boolean);
+    const controls=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px"><button class="hbtn admin-agg-mode${this._adminAggMode?' primary':''}" style="padding:4px 9px;font-size:9.5px">${this._adminAggMode?'✓ 大区多选中':'＋ 大区多选'}</button><span style="font-size:9px;color:var(--dim)">${multi?`已选 ${zones.length} 个 Zone`:'当前单个 Zone'}</span>${this._adminAggSet&&this._adminAggSet.size?'<button class="hbtn admin-agg-clear" style="padding:4px 8px;font-size:9px">清空多选</button>':''}</div>`;
+    if(!rows.length)return `<div style="border:1px solid #f0c36a;background:#fff9e8;border-radius:10px;padding:10px 12px;margin:0 0 10px"><div style="font-size:11px;font-weight:900;color:#875400">ADMIN · ${multi?'MULTI-ZONE':'ZONE'} TOTAL-SCOPE PROGRESS</div>${controls}<div style="font-size:10px;color:var(--dim);margin-top:6px">${this.esc(lv)} · no activity totals or completed quantities yet.</div></div>`;
+    const W=this._pw(),phase={};rows.forEach(r=>{const p=this._actPhase(r.a.id,lv);if(p&&r.scopePct!=null)(phase[p]=phase[p]||[]).push(r.scopePct/100);});const present=Object.keys(phase).filter(k=>(W[k]||0)>0);let overall=null;if(present.length){let n=0,d=0;present.forEach(k=>{const avg=phase[k].reduce((x,y)=>x+y,0)/phase[k].length;n+=avg*W[k];d+=W[k];});if(d)overall=Math.min(100,Math.round(n/d*100));}if(overall==null){const rr=rows.filter(r=>r.scopePct!=null);if(rr.length)overall=Math.round(rr.reduce((n,r)=>n+r.scopePct,0)/rr.length);}
     const body=rows.map(r=>{const pc=r.scopePct==null?'var(--faint)':this.progColor(r.scopePct);return `<div style="display:grid;grid-template-columns:minmax(105px,1fr) minmax(145px,1.35fr) minmax(175px,1.6fr);gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(120,130,150,.18);font-size:10.5px"><b>${this.esc(r.a.label)}</b><span><small style="display:block;color:var(--faint);font-size:8px;text-transform:uppercase">${this.esc(sm)} plan</small>${r.monthTxt}</span><span style="color:${pc};font-weight:800"><small style="display:block;color:var(--faint);font-size:8px;text-transform:uppercase">Full Zone scope</small>${r.scopeTxt}</span></div>`;}).join('');
-    return `<div style="border:1px solid #e2b24d;background:linear-gradient(135deg,#fffaf0,#fff);border-radius:10px;padding:10px 12px;margin:0 0 10px;box-shadow:0 2px 8px rgba(99,70,15,.06)"><div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:5px"><div><div style="font-size:11px;font-weight:900;color:#875400">ADMIN · ZONE TOTAL-SCOPE PROGRESS</div><div style="font-size:9px;color:var(--dim);margin-top:2px">${this.esc(lv)} · ${this.esc(z.label)} only · cumulative through ${this.esc(sm)}</div></div><div style="font-size:25px;line-height:1;font-weight:900;color:${overall==null?'var(--faint)':this.progColor(overall)}">${overall==null?'—':overall+'%'}</div></div>${body}<div style="font-size:8.5px;color:var(--faint);margin-top:6px">Overall uses the configured work-stage proportions. Different units (m³, m² and nos) are normalized before weighting.</div></div>`;
+    return `<div style="border:1px solid #e2b24d;background:linear-gradient(135deg,#fffaf0,#fff);border-radius:10px;padding:10px 12px;margin:0 0 10px;box-shadow:0 2px 8px rgba(99,70,15,.06)"><div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:5px"><div><div style="font-size:11px;font-weight:900;color:#875400">ADMIN · ${multi?'MULTI-ZONE':'ZONE'} TOTAL-SCOPE PROGRESS</div><div style="font-size:9px;color:var(--dim);margin-top:2px">${this.esc(lv)} only · ${multi?zones.map(x=>this.esc(x.label)).join(' + '):this.esc(z.label)} · cumulative through ${this.esc(sm)}</div>${controls}</div><div style="font-size:25px;line-height:1;font-weight:900;color:${overall==null?'var(--faint)':this.progColor(overall)}">${overall==null?'—':overall+'%'}</div></div>${body}<div style="font-size:8.5px;color:var(--faint);margin-top:6px">Overall uses the configured work-stage proportions. Quantities are summed by Activity across the selected Zones; different units are normalized before weighting.</div></div>`;
   }
   zpSection(z){
     const lv=this.curLevel, zmk=z.mk||z.lid;
@@ -2653,6 +2651,8 @@ class Component extends DCLogic {
       ${this._custSecHtml(lv,z,this.rwsIsAdmin())}
       </div>`;
     this.setSummaryVis();
+    const _aggMode=this.root.querySelector('.admin-agg-mode');if(_aggMode)_aggMode.addEventListener('click',()=>{if(this._adminAggLevel!==lv){this._adminAggLevel=lv;this._adminAggSet=new Set();}this._adminAggMode=!this._adminAggMode;if(this._adminAggMode&&this._adminAggSet&&!this._adminAggSet.size)this._adminAggSet.add(String(z.mk||z.lid));this.render();this.selectZone(z,sub);this.paintSel();});
+    const _aggClear=this.root.querySelector('.admin-agg-clear');if(_aggClear)_aggClear.addEventListener('click',()=>{this._adminAggMode=false;this._adminAggSet=new Set();this._adminAggLevel=lv;this.render();this.selectZone(z,sub);this.paintSel();});
     this.root.querySelector('#back').addEventListener('click',()=>{this._discardOpenSections(lv,z);this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
     const ck=this.root.querySelector('#critChk');if(ck)ck.addEventListener('change',()=>{const _vb={...this.vb};this.setCrit(this.curLevel,z,ck.checked);this.render();this.vb=_vb;this._vbLevel=this.curLevel;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();this.selectZone(z);this.paintSel();});
     const sv=this.root.querySelector('#in_save');

@@ -83,6 +83,7 @@ header .hbtn.focus-tool.on{background:#6d1327;border-color:#6d1327;color:#fff;bo
 .zone{stroke:var(--line);stroke-width:120;cursor:pointer;transition:fill-opacity .15s}
 .zone:hover{stroke:var(--accent);stroke-width:340}
 .zone.sel{stroke:#111;stroke-width:520}@keyframes zfl{0%,100%{fill-opacity:.55}50%{fill-opacity:1}}.zone.zflash{animation:zfl .55s ease-in-out 3;stroke:#ff2d55;stroke-width:640}
+.zone.aggpick{stroke:#7c3aed!important;stroke-width:1100!important;stroke-dasharray:1800 700!important;stroke-opacity:1!important}
 .zone.critln{stroke:var(--crit);stroke-width:900;stroke-opacity:1;stroke-dasharray:none}
 .zone.planwip{stroke:var(--wip);stroke-width:1100;stroke-opacity:1;stroke-dasharray:none}
 .zone.plandone{stroke:var(--done);stroke-width:1000;stroke-opacity:1;stroke-dasharray:none}
