@@ -417,6 +417,24 @@ class Component extends DCLogic {
       <details style="margin-bottom:16px"><summary style="cursor:pointer;font-size:13px;font-weight:800">全场每天 · By day</summary><div style="border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:260px;margin-top:7px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th style="${th};text-align:left">Date</th><th style="${th}">C 木工</th><th style="${th}">R 铁工</th><th style="${th}">Total</th></tr></thead><tbody>${dayRows}</tbody></table></div></details>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:14px;align-items:start">${groupTables}</div></div>`;
     ov.style.display='block'; const cl=ov.querySelector('#mpwClose'); if(cl)cl.onclick=()=>{ov.style.display='none';}; }
+  _monthlySummaryRows(cat,mon){
+    const M=this.ACT_MONTHS||[],mi=M.indexOf(mon),prev=mi>0?M[mi-1]:null,by={};if(mi<0)return {rows:[],prev};
+    (this.DATA.order||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;(this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{
+        const plan=Number(this.actPlan(lv,zmk,a.id,mon))||0,prevDone=prev?(Number(this.actDoneMonth(lv,zmk,a.id,prev))||0):0,done=Number(this.actDoneMonth(lv,zmk,a.id,mon))||0,cg=this.actCarry(lv,zmk,a.id,mi);
+        if(!plan&&!prevDone&&!done&&!cg.carryIn&&!(cg.balance>0))return;
+        const unit=a.unit||this._actUnit(a.id)||'',key=a.id+'||'+unit,r=by[key]||(by[key]={id:a.id,label:a.label,unit,plan:0,prevDone:0,carryIn:0,done:0,owe:0,zones:new Set()});
+        r.plan+=plan;r.prevDone+=prevDone;r.carryIn+=Math.max(0,Number(cg.carryIn)||0);r.done+=done;r.owe+=Math.max(0,Number(cg.balance)||0);r.zones.add(lv+'||'+zmk);
+      });});});
+    return {prev,rows:Object.values(by).sort((a,b)=>(b.owe-a.owe)||(b.carryIn-a.carryIn)||String(a.label).localeCompare(String(b.label)))};
+  }
+  openMonthlySummary(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can view the monthly summary.');return;}
+    const M=(this.ACT_MONTHS||[]).filter(m=>m!=="Before Apr'26"),def=this.actCurLabel(),mon=(this._monthlySummaryMonth&&M.includes(this._monthlySummaryMonth))?this._monthlySummaryMonth:(M.includes(def)?def:M[M.length-1]),cat=['EB','NB','MA'].includes(this._monthlySummaryCat)?this._monthlySummaryCat:'EB',data=this._monthlySummaryRows(cat,mon),prev=data.prev||'Previous month',fmt=v=>this.fmt(Math.round((Number(v)||0)*100)/100),colors={EB:'#d95d92',NB:'#e58b35',MA:'#3478c9'},labels={EB:'EB · Existing Basement',NB:'NB · New Basement',MA:'MR · Marine'};
+    const rows=data.rows.length?data.rows.map(r=>`<tr><td><b>${this.esc(r.label)}</b><small>${r.zones.size} zone${r.zones.size===1?'':'s'}</small></td><td class="num">${fmt(r.plan)} <small>${this.esc(r.unit)}</small></td><td class="num">${fmt(r.prevDone)} <small>${this.esc(r.unit)}</small></td><td class="num backlog">${fmt(r.carryIn)} <small>${this.esc(r.unit)}</small></td><td class="num done">${fmt(r.done)} <small>${this.esc(r.unit)}</small></td><td class="num ${r.owe>0?'owe':'clear'}">${fmt(r.owe)} <small>${this.esc(r.unit)}</small></td></tr>`).join(''):`<tr><td colspan="6" class="monthly-empty">No plan, actual or backlog data for ${this.esc(mon)}.</td></tr>`;
+    let ov=this.root.querySelector('#monthlySummaryOverlay');if(!ov){ov=document.createElement('div');ov.id='monthlySummaryOverlay';this.root.appendChild(ov);}
+    ov.innerHTML=`<div class="monthly-summary-shell"><div class="monthly-summary-head"><div><h2>Monthly Work Summary</h2><p>Admin only · quantities use the live online Activity Plan, Done and Backlog data.</p></div><div class="monthly-summary-actions"><select id="monthlySummaryMonth">${M.map(m=>`<option value="${this.esc(m)}"${m===mon?' selected':''}>${this.esc(m)}</option>`).join('')}</select><button class="hbtn" id="monthlySummaryClose">Close ✕</button></div></div><div class="monthly-summary-tabs">${['EB','NB','MA'].map(c=>`<button data-cat="${c}" class="${c===cat?'on':''}" style="--tab:${colors[c]}">${labels[c]}</button>`).join('')}</div><div class="monthly-summary-title"><b style="color:${colors[cat]}">${labels[cat]}</b><span>${this.esc(mon)} · ${data.rows.length} activities</span></div><div class="monthly-summary-table"><table><thead><tr><th>Activity</th><th>${this.esc(mon)} Plan</th><th>${this.esc(prev)} Actual</th><th>Backlog into ${this.esc(mon)}</th><th>${this.esc(mon)} Actual</th><th>Owed after ${this.esc(mon)}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="monthly-summary-note">Backlog and owed quantities are calculated per Zone first, then summed by Activity. Over-performance in one Zone does not hide outstanding work in another Zone.</div></div>`;
+    ov.style.display='block';ov.querySelector('#monthlySummaryClose').onclick=()=>{ov.style.display='none';};ov.querySelector('#monthlySummaryMonth').onchange=e=>{this._monthlySummaryMonth=e.target.value;this.openMonthlySummary();};ov.querySelectorAll('.monthly-summary-tabs button').forEach(b=>b.onclick=()=>{this._monthlySummaryCat=b.dataset.cat;this.openMonthlySummary();});
+  }
   saveEdited(){try{localStorage.setItem('rws_edited_keys',JSON.stringify(this._editedKeys||{}));}catch(e){}}
   saveActUpd(){try{localStorage.setItem('rws_act_upd',JSON.stringify(this._actUpd||{}));}catch(e){}}
   _updUser(){const u=this._rwsUser||{};return u.display_name||u.displayName||u.username||u.name||'someone';}
@@ -818,7 +836,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower','#openDelayAdmin'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 全项目 Manpower 汇总及数据管理仅 admin 可见；Zone 内每日人数仍对所有账号只读可见 */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower','#openMonthlySummary','#openDelayAdmin'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 全项目 Manpower / Monthly Summary 及数据管理仅 admin 可见；Zone 内每日人数仍对所有账号只读可见 */
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
     try{if(this.DATA&&this.root.querySelector('#rail'))this.buildRail();}catch(_e){}
@@ -3192,6 +3210,7 @@ class Component extends DCLogic {
     this.root.querySelector('#openTable').addEventListener('click',()=>this.openTable());
     {const _m28=this.root.querySelector('#openM28');if(_m28)_m28.addEventListener('click',()=>window.open('m28-dashboard.html','_blank'));}
     {const _mpw=this.root.querySelector('#openManpower');if(_mpw)_mpw.addEventListener('click',()=>this.openManpower());}
+    {const _msu=this.root.querySelector('#openMonthlySummary');if(_msu)_msu.addEventListener('click',()=>this.openMonthlySummary());}
     {const _cv=this.root.querySelector('#openCastView');if(_cv)_cv.addEventListener('click',()=>{this.colorMode=(this.colorMode==='castdate')?'area':'castdate';this.buildMetrics();this.render();});}
     {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>this.openLookAhead());}
     {const _d=this.root.querySelector('#toggleDelayTop');if(_d)_d.addEventListener('click',()=>this._toggleFocus('delay'));}
