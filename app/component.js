@@ -1186,7 +1186,7 @@ class Component extends DCLogic {
   progCategoryActive(){const t=this.catTypesFor(this.curMetric);if(!t)return false;return this.DATA.levels[this.curLevel].zones.some(z=>this.catStats(this.curLevel,z,t).total>0);}
 
   /* ---- Monthly-plan overview: which zones have planned work in a given month ---- */
-  _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',pcbeam:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',temp_stair:'nos',act_cyclical:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
+  _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',pcbeam:'m²',act_cyclical:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',temp_stair:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
   _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Wall Demolition'},{id:'demo',label:'Slab Demolition'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
   planMonth(){if(!this._planMonth||this.visMonths().indexOf(this._planMonth)<0)this._planMonth=this.actDefaultMonthVis();return this._planMonth;}
   zonePlanItems(lv,z,m){const zmk=z.mk||z.lid;const out=[];this._actMeta().forEach(a=>{if(this.actHidden(lv,zmk,a.id))return;const p=this.actPlan(lv,zmk,a.id,m);if(p!=null&&p>0)out.push({label:a.label,qty:p,unit:a.unit});});return out;}
@@ -2460,7 +2460,7 @@ class Component extends DCLogic {
       {id:'rc',label:'RC Works',unit:'m³',total:this.actTotal(lv,zmk,'rc',this.actAutoTotal(lv,zmk,'rc'))},
       {id:'pcbeam',label:'Precast Beam Installation',unit:'m²',total:this.actTotal(lv,zmk,'pcbeam',this.actAutoTotal(lv,zmk,'pcbeam'))},
       {id:'temp_stair',label:'Temp Staircase',unit:'nos',total:this.actTotal(lv,zmk,'temp_stair',this.actAutoTotal(lv,zmk,'temp_stair'))},
-      {id:'act_cyclical',label:'Cyclical Works',unit:'nos',total:this.actTotal(lv,zmk,'act_cyclical',this.actAutoTotal(lv,zmk,'act_cyclical'))},
+      {id:'act_cyclical',label:'Cyclical Works',unit:'m²',total:this.actTotal(lv,zmk,'act_cyclical',this.actAutoTotal(lv,zmk,'act_cyclical'))},
       {id:'mep_acmv',label:'ACMV',unit:'%',total:this.actTotal(lv,zmk,'mep_acmv',this.actAutoTotal(lv,zmk,'mep_acmv'))},
       {id:'mep_fps',label:'FPS',unit:'%',total:this.actTotal(lv,zmk,'mep_fps',this.actAutoTotal(lv,zmk,'mep_fps'))},
       {id:'mep_elec',label:'ELEC',unit:'%',total:this.actTotal(lv,zmk,'mep_elec',this.actAutoTotal(lv,zmk,'mep_elec'))},
