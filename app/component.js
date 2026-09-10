@@ -260,7 +260,8 @@ class Component extends DCLogic {
   saveActCmt(){try{localStorage.setItem('rws_act_cmt',JSON.stringify(this._actCmt||{}));}catch(e){}}
   actCmts(lv,zmk,aid){const pre=lv+'||'+zmk+'||'+aid+'||';const o=this._actCmt||{};return Object.keys(o).filter(k=>k.indexOf(pre)===0).map(k=>({k,...o[k]})).sort((a,b)=>String(a.ts||'').localeCompare(String(b.ts||'')));}
   rwsIsPlanning(){return this.rwsIsAdmin()||this.rwsHasScope('PLAN');}
-  _canSeeActCmt(c,lv,zmk){if(this.rwsIsAdmin())return true;if(!c||!this._rwsUser)return false;if(c.to==='Planning')return this.rwsIsPlanning();if(c.to==='PM')return ['NB','EB','MA'].some(s=>this.rwsHasScope(s));return true;}   // To PM 给 NB/EB/MR 团队共同查看；旧的 To Unassigned 继续让所有已登录账号看到
+  _ownActCmt(c){if(!c||!this._rwsUser)return false;const u=this._rwsUser,ids=[u.username,u.display_name].map(x=>String(x||'').trim().toLowerCase()).filter(Boolean),own=x=>ids.indexOf(String(x||'').trim().toLowerCase())>=0;if(own(c.by))return true;return (Array.isArray(c.replies)?c.replies:[]).some(r=>own(r&&r.by));}
+  _canSeeActCmt(c,lv,zmk){if(this.rwsIsAdmin())return true;if(!c||!this._rwsUser)return false;if(this._ownActCmt(c))return true;if(c.to==='Planning')return this.rwsIsPlanning();if(c.to==='PM')return ['NB','EB','MA'].some(s=>this.rwsHasScope(s));return true;}   // 作者本人(RSP/RWS 等)永远可看自己写过或回复过的评论；To PM 给 NB/EB/MR 团队共同查看；旧 To Unassigned 所有人可看
   _canResolveActCmt(c,lv,zmk){if(this.rwsIsAdmin())return true;if(!c||!c.to)return false;if(c.to==='Planning')return this.rwsIsPlanning();if(c.to==='PM')return ['NB','EB','MA'].some(s=>this.rwsHasScope(s));return false;}
   visibleActCmts(lv,zmk,aid){return this.actCmts(lv,zmk,aid).filter(c=>this._canSeeActCmt(c,lv,zmk));}
   addActCmt(lv,zmk,aid,text,to,meta){text=(text||'').trim();if(!text)return;to=String(to||'');if(to!=='PM'&&to!=='Planning'){this._toast&&this._toast('Please choose To PM or To Planning');return;}const allowed=this.rwsIsAdmin()||this.rwsCanComment(lv,zmk);if(!allowed){this.rwsDeny('Comment permission is required.');return;}const s=(typeof rwsGetSession==='function'&&rwsGetSession())||{};const ts=new Date().toISOString();const k=lv+'||'+zmk+'||'+aid+'||'+ts+'_'+Math.random().toString(36).slice(2,6);const v={t:text,to,by:s.username||'user',ts,...(meta||{})};this._actCmt=this._actCmt||{};this._actCmt[k]=v;this.saveActCmt();if(typeof rwsSyncKV==='function')rwsSyncKV('act_cmt',k,v,lv,zmk);this._actRerender(this._selZone());}
@@ -815,7 +816,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower','#openDelayAdmin'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* Delay Table 及数据管理仅 admin 可见 */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openManpower','#openDelayAdmin'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 全项目 Manpower 汇总及数据管理仅 admin 可见；Zone 内每日人数仍对所有账号只读可见 */
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
     try{if(this.DATA&&this.root.querySelector('#rail'))this.buildRail();}catch(_e){}
