@@ -1676,7 +1676,8 @@ class Component extends DCLogic {
           fill=(_p==null)?'#ffffff':this.progColor(_p); fo=(_p==null)?0:0.6;
         }
       }
-      s+=base+`<polygon class="subz ${cls}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
+      const _aggZone=this._marineSubCalcZone(cls.replace('sub',''),i),_aggKey=_aggZone&&String(_aggZone.mk||_aggZone.lid),_aggPicked=this.rwsIsAdmin()&&this._adminAggLevel===this.curLevel&&this._adminAggSet&&this._adminAggSet.has(_aggKey);
+      s+=base+`<polygon class="subz ${cls}${_aggPicked?' aggpick':''}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
       if(!_focusOnly&&this.colorMode==='castdate'&&cls!=='subP'&&this._castLayer!=='col'&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=cls==='subZC'?this._marineCastInfo(this.curLevel,_z2):this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
       if(!_focusOnly&&this.colorMode==='castdate'&&cls==='subP'&&this._castLayer==='col'&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.end||_cd.start); if(_mo){const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_mo.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_mo,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">${this.esc(_mo)}</text>`;} }
@@ -1750,7 +1751,8 @@ class Component extends DCLogic {
         this.tip.style.left=x+'px';this.tip.style.top=y+'px';this.tip.style.opacity=1;});
       el.addEventListener('mouseleave',()=>this.tip.style.opacity=0);
       el.addEventListener('click',ev=>{if(this._placingCol)return;ev.stopPropagation();const [cls,i]=el.dataset.sk.split('|');const kind=cls.replace('sub','');
-        if(kind==='ZC'){const e=this.SUBZONES[this.curLevel].ZC[+i];const z=(this.DATA.levels[this.curLevel].zones||[]).find(x=>x.label===e.label);if(z){this._subOpen=null;this.selKey=this.zid(z);this.selectZone(z);this.paintSel();return;}}
+        const pick=this._marineSubCalcZone(kind,+i);if(this.rwsIsAdmin()&&this._adminAggMode&&pick){this._adminAggToggle(this.curLevel,pick);this.render();}
+        if(kind==='ZC'){const z=pick;if(z){this._subOpen=null;this.selKey=this.zid(z);this.selectZone(z);this.paintSel();return;}}
         this.selectSubzone(kind,+i);});
     });
     this.svg.querySelectorAll('.colmk[data-ci]').forEach(el=>{
@@ -1831,6 +1833,7 @@ class Component extends DCLogic {
     }catch(e){ return {pct:null,started:false,hasPlan:false}; }
   }
   _subZoneProg(label){const r=this._subActPct(label); return r.started?r.pct:null;}   /* 地图填色: 有做才上色 */
+  _marineSubCalcZone(kind,i){const e=this.SUBZONES&&this.SUBZONES[this.curLevel]&&this.SUBZONES[this.curLevel][kind]&&this.SUBZONES[this.curLevel][kind][i];if(!e)return null;if(kind==='ZC')return ((this.DATA.levels[this.curLevel]||{}).zones||[]).find(x=>x.label===e.label)||null;const lv=this.curLevel,_mcols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?this._marineCol[e.label].map(c=>({id:c.id,sz:c.sz||'',c:c.c?1:0})):[],_mstairs=kind==='P'?this._stairItemsFor(lv,lv+'|'+e.label):[],_mcores=kind==='P'?this._coreItemsFor(lv,lv+'|'+e.label):[];return {mk:lv+'|'+e.label,label:e.label,cat:'MA',area:(kind==='P'?0:e.a),grp:(kind==='P'?e.label:''),fam:(kind==='P'?('Pour group '+e.label):'Marine sub-division'),cols:_mcols,piles:[],beams:[],lifts:[],stairs:_mstairs,cores:_mcores,sub:[],counts:{columns:_mcols.length,stair:_mstairs.length,pilecap:0,mainbeam:0,steelbeam:0},crit:false,_pod:(kind==='P'),_mslab:(kind==='C')};}
   selectSubzone(kind,i){
     const e=this.SUBZONES[this.curLevel][kind][i]; const L=this.SUBLINKS||{}; const rows=[];
     if(kind==='C'){ const par=(L.c2zc||{})[e.label]; if(par)rows.push(['Parent zone',par]);
@@ -1847,13 +1850,7 @@ class Component extends DCLogic {
     const editable=(kind==='C'||kind==='P')&&_subScope;   // C/P 细分可录入(管理员或有 MA 权限的用户); 数据独立记在细分自己的键上
     if(editable){
       // 直接复用 ZC 的完整分区面板(含 ACTIVITIES/月份切换/STATUS/日期/锁), 合成一个只属于此细分的分区
-      const _mcols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?this._marineCol[e.label].map(c=>({id:c.id,sz:c.sz||'',c:c.c?1:0})):[];
-      const _mstairs=(kind==='P')?this._stairItemsFor(lv,lv+'|'+e.label):[];
-      const _mcores=(kind==='P')?this._coreItemsFor(lv,lv+'|'+e.label):[];
-      const sz={mk:lv+'|'+e.label,label:e.label,cat:'MA',area:(kind==='P'?0:e.a),   /* Podium(P)不需要 area 总量 → 置空; 加权仍用 SUBZONES 原始面积 */
-        grp:(kind==='P'?e.label:''),fam:(kind==='P'?('Pour group '+e.label):'Marine sub-division'),
-        cols:_mcols,piles:[],beams:[],lifts:[],stairs:_mstairs,cores:_mcores,sub:[],
-        counts:{columns:_mcols.length,stair:_mstairs.length,pilecap:0,mainbeam:0,steelbeam:0},crit:false,_pod:(kind==='P'),_mslab:(kind==='C')};
+      const sz=this._marineSubCalcZone(kind,i);
       /* 顶部 SITE PROGRESS 用这个细分自己活动的完成度(和地图填色同一来源) */
       const _sp=this._subActPct(e.label);
       sz._p={pct:(_sp.pct==null?0:_sp.pct), status:(_sp.pct!=null&&_sp.pct>=100)?'done':(_sp.started?'wip':'todo'), source:_sp.hasPlan?(_sp.started?'act':'plan'):'none'};
@@ -2481,8 +2478,8 @@ class Component extends DCLogic {
     if(z.cat==='MA') return new Set(['piling','slab_top','mep_acmv','mep_fps','mep_elec','mep_bms']); // Top slab (ZC 真实分区)
     return null;
   }
-  _adminAggZones(lv,z){const set=(this._adminAggLevel===lv&&this._adminAggSet)?this._adminAggSet:null;if(!set||!set.size)return[z];const L=this.DATA.levels[lv];const out=(L&&L.zones||[]).filter(x=>set.has(String(x.mk||x.lid)));return out.length?out:[z];}
-  _adminAggToggle(lv,z){if(this._adminAggLevel!==lv||!this._adminAggSet){this._adminAggLevel=lv;this._adminAggSet=new Set();}const k=String(z.mk||z.lid);if(this._adminAggSet.has(k))this._adminAggSet.delete(k);else this._adminAggSet.add(k);}
+  _adminAggZones(lv,z){const set=(this._adminAggLevel===lv&&this._adminAggSet)?this._adminAggSet:null;if(!set||!set.size)return[z];const L=this.DATA.levels[lv],out=[];set.forEach(k=>{const saved=this._adminAggObjs&&this._adminAggObjs.get(k),live=(L&&L.zones||[]).find(x=>String(x.mk||x.lid)===k);if(saved||live)out.push(saved||live);});return out.length?out:[z];}
+  _adminAggToggle(lv,z){if(this._adminAggLevel!==lv||!this._adminAggSet){this._adminAggLevel=lv;this._adminAggSet=new Set();this._adminAggObjs=new Map();}this._adminAggObjs=this._adminAggObjs||new Map();const k=String(z.mk||z.lid);if(this._adminAggSet.has(k)){this._adminAggSet.delete(k);this._adminAggObjs.delete(k);}else{this._adminAggSet.add(k);this._adminAggObjs.set(k,z);}}
   /* Admin-only audit view for one or several selected Zones on this floor.
      Monthly achievement and progress against the full scope are deliberately
      shown side-by-side so 100% of a month's plan is not mistaken for 100% of
@@ -2651,8 +2648,8 @@ class Component extends DCLogic {
       ${this._custSecHtml(lv,z,this.rwsIsAdmin())}
       </div>`;
     this.setSummaryVis();
-    const _aggMode=this.root.querySelector('.admin-agg-mode');if(_aggMode)_aggMode.addEventListener('click',()=>{if(this._adminAggLevel!==lv){this._adminAggLevel=lv;this._adminAggSet=new Set();}this._adminAggMode=!this._adminAggMode;if(this._adminAggMode&&this._adminAggSet&&!this._adminAggSet.size)this._adminAggSet.add(String(z.mk||z.lid));this.render();this.selectZone(z,sub);this.paintSel();});
-    const _aggClear=this.root.querySelector('.admin-agg-clear');if(_aggClear)_aggClear.addEventListener('click',()=>{this._adminAggMode=false;this._adminAggSet=new Set();this._adminAggLevel=lv;this.render();this.selectZone(z,sub);this.paintSel();});
+    const _aggMode=this.root.querySelector('.admin-agg-mode');if(_aggMode)_aggMode.addEventListener('click',()=>{if(this._adminAggLevel!==lv){this._adminAggLevel=lv;this._adminAggSet=new Set();this._adminAggObjs=new Map();}this._adminAggMode=!this._adminAggMode;if(this._adminAggMode&&this._adminAggSet&&!this._adminAggSet.size)this._adminAggToggle(lv,z);this.render();this.selectZone(z,sub);this.paintSel();});
+    const _aggClear=this.root.querySelector('.admin-agg-clear');if(_aggClear)_aggClear.addEventListener('click',()=>{this._adminAggMode=false;this._adminAggSet=new Set();this._adminAggObjs=new Map();this._adminAggLevel=lv;this.render();this.selectZone(z,sub);this.paintSel();});
     this.root.querySelector('#back').addEventListener('click',()=>{this._discardOpenSections(lv,z);this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
     const ck=this.root.querySelector('#critChk');if(ck)ck.addEventListener('change',()=>{const _vb={...this.vb};this.setCrit(this.curLevel,z,ck.checked);this.render();this.vb=_vb;this._vbLevel=this.curLevel;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();this.selectZone(z);this.paintSel();});
     const sv=this.root.querySelector('#in_save');
