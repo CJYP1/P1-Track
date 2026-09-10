@@ -185,9 +185,19 @@ class Component extends DCLogic {
   _stairTarget(lv,w){
     const L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];if(!L||!w||!w.pts||!w.pts.length)return null;
     const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;
-    /* L1 Marine 的 staircase 属于 Podium：P 区覆盖在 Marine 主区上，所以必须
-       先查 P polygon，不能先被底下的 ZC/top/bottom slab 主区截走。 */
-    if(lv==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){
+    const name=this._shapeLabel(w),base=(this._baseZoneStairs&&this._baseZoneStairs[lv])||{};
+    const owners=(L.zones||[]).filter(z=>(base[z.mk||z.lid]||[]).some(x=>this._idSameGroup(typeof x==='string'?x:x.id,name)));
+    /* L1 的 P polygons 会和 EB/NB 的图面范围重叠。只有当前 HTML 台账明确属于
+       Marine 的 staircase 才能优先挂到 Podium；否则像 P1-ST-28/29 这种 EB 楼梯
+       会被错误截走，连同原 Zone 的 Lift list / progress 一起看不到。 */
+    const marineOwned=owners.some(z=>(z.cat||'NB')==='MA');
+    if(owners.length&&!marineOwned){
+      /* 同一 construction area 内仍以图上重心决定具体 Zone；若图形刚好压线，
+         回退当前 HTML 清单的唯一归属，绝不跨进 Marine/Podium。 */
+      const mapped=(L.zones||[]).find(z=>(z.cat||'NB')!=='MA'&&z.ring&&this.ptIn(z.ring,cx,cy))||owners[0];
+      return {lv,zmk:mapped.mk||mapped.lid,label:mapped.label,z:mapped};
+    }
+    if(lv==='L1'&&marineOwned&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){
       const i=this.SUBZONES.L1.P.findIndex(e=>e.pts&&this.ptIn(e.pts,cx,cy));
       if(i>=0){const e=this.SUBZONES.L1.P[i];return {lv,zmk:'L1|'+e.label,label:e.label,sub:{kind:'P',i}};}
     }
@@ -1156,7 +1166,7 @@ class Component extends DCLogic {
   _syncElemDate(key,st){if(st==='done'){if(!this.elemDate(key))this.setElemDate(key,this.todayISOStr());}else{this.setElemDate(key,'');}}
   cycleElem(key){
     if(!this.rwsCanEditElement(key)){this.rwsDeny('You can only update status inside your assigned zones.');return;}
-    const o=['todo','wip','done'];const nx=o[(o.indexOf(this.elemStatus(key))+1)%3];if(nx==='todo')delete this.elem[key];else this.elem[key]=nx;this._syncElemDate(key,nx);this.commitElem();
+    const o=['todo','wip','done'];const nx=o[(o.indexOf(this.elemStatus(key))+1)%3];if(nx==='todo')delete this.elem[key];else this.elem[key]=nx;this._syncElemDate(key,nx);this.commitElem(key);
     rwsSyncElementStatus(key,nx);
   }
   setZoneElems(lv,z,st){
@@ -1169,11 +1179,13 @@ class Component extends DCLogic {
     });
     this.commitElem();
   }
-  commitElem(){const _scEl=this.root.querySelector('#sidebody');const _sy=_scEl?_scEl.scrollTop:0;const _open=[...(this.root.querySelectorAll('#sidebody details.sec[open]'))].map(d=>d.dataset.sec);const _sub=this._subOpen?{kind:this._subOpen.kind,i:this._subOpen.i}:null;
+  commitElem(anchorKey){const _scEl=this.root.querySelector('#sidebody');const _sy=_scEl?_scEl.scrollTop:0;const _anchor=anchorKey&&_scEl?_scEl.querySelector(`.elchip[data-key="${(window.CSS&&CSS.escape)?CSS.escape(anchorKey):anchorKey}"]`):null,_anchorY=(_anchor&&_scEl)?(_anchor.getBoundingClientRect().top-_scEl.getBoundingClientRect().top):null;const _open=[...(this.root.querySelectorAll('#sidebody details.sec[open]'))].map(d=>d.dataset.sec);const _sub=this._subOpen?{kind:this._subOpen.kind,i:this._subOpen.i}:null,_lv=this.curLevel,_sel=this.selKey,_vb=this.vb?{...this.vb}:null;
     this.saveElem();this.applyUpdates();this.buildRail();this.buildTimeline();this.render();
+    /* Element status updates must never navigate: keep the same level/zone/sub-zone and map view. */
+    this.curLevel=_lv;this.selKey=_sel;if(_vb){this.vb={..._vb};this._vbLevel=_lv;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();}
     if(_sub){this._subOpen=_sub;this.selectSubzone(_sub.kind,_sub.i);this.paintSel();this.paintTimelineSel();}
     else {const z=this.selKey&&this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z){this.selectZone(z);this.paintSel();this.paintTimelineSel();}}
-    const _sc2=this.root.querySelector('#sidebody');if(_sc2){_open.forEach(t=>{const d=_sc2.querySelector('details.sec[data-sec="'+t+'"]');if(d)d.open=true;});_sc2.scrollTop=_sy;}
+    const _sc2=this.root.querySelector('#sidebody');if(_sc2){_open.forEach(t=>{const d=_sc2.querySelector('details.sec[data-sec="'+t+'"]');if(d)d.open=true;});_sc2.scrollTop=_sy;if(anchorKey&&_anchorY!=null){const keep=()=>{if(!this.root||this.root.querySelector('#sidebody')!==_sc2)return;const el=_sc2.querySelector(`.elchip[data-key="${(window.CSS&&CSS.escape)?CSS.escape(anchorKey):anchorKey}"]`);if(el)_sc2.scrollTop+=el.getBoundingClientRect().top-_sc2.getBoundingClientRect().top-_anchorY;};keep();requestAnimationFrame(keep);}}
     this.refreshUpdBadge();if(this.root.querySelector('#modal').classList.contains('open'))this.openTable();}
 
   levelMax(){let m=0;this.DATA.levels[this.curLevel].zones.forEach(z=>m=Math.max(m,this.mval(z,this.curMetric)));return m||1;}
