@@ -804,6 +804,8 @@ class Component extends DCLogic {
   }
   rwsIsAdmin(){return !window.__RWS_LOCKED_VIEW && !!this._rwsUser && this._rwsUser.role==='admin';}   /* 只读快照里永远不是 admin → 隐藏并禁止一切编辑 */
   rwsHasScope(code){const u=this._rwsUser;if(!u)return false;if(u.role==='admin')return true;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[];return a.indexOf(code)>=0;}
+  rwsIsRWS(){const u=this._rwsUser;if(!u)return false;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[],who=String(u.username||u.display_name||'').trim().toUpperCase();return u.role==='admin'||a.indexOf('RWS')>=0||who==='RWS';}
+  rwsIsRSP(){const u=this._rwsUser;if(!u)return false;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[],who=String(u.username||u.display_name||'').trim().toUpperCase();return u.role==='admin'||a.indexOf('RSP')>=0||who==='RSP';}
   /* 评论权限: 必须有 CMT。范围跟随被授权的区域 —— 勾了区域就只能评论那些区; 只勾 CMT(没勾任何区)= 全区可评 */
   rwsCanSnapshot(){const u=this._rwsUser;if(!u)return false;if(u.role==='admin')return true;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[];return a.indexOf('HIST')>=0;}   /* 谁能看历史快照: admin 或有 HIST 权限 */
   rwsCanComment(lv,zmk){const u=this._rwsUser;if(!u)return false;if(u.role==='admin')return true;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[];if(a.indexOf('CMT')<0)return false;const AREAS=['EB','NB','MA','M28_OTHER'];const hasArea=AREAS.some(c=>a.indexOf(c)>=0);if(!hasArea)return true;return a.indexOf(this.zoneCat(lv,zmk))>=0;}
@@ -1863,9 +1865,10 @@ class Component extends DCLogic {
       const ps=(L.l2p||{})[e.label]||[]; if(ps.length)rows.push(['Pour groups (P)',ps.join(', ')]); }
     const t={'C':'Marine sub-division','CZ':'Casting zone','P':'Pour group','L2':'L2 zone (above)'}[kind];
     const lv=this.curLevel, admin=this.rwsIsAdmin();
-    const _subScope=admin||this.rwsScopeOk(lv,lv+'|'+e.label);   // 有本区(MA)编辑权限的非管理员也算
-    const editable=(kind==='C'||kind==='P')&&_subScope;   // C/P 细分可录入(管理员或有 MA 权限的用户); 数据独立记在细分自己的键上
-    if(editable){
+    const _subScope=admin||this.rwsScopeOk(lv,lv+'|'+e.label);   // 有本区(MA)权限才可编辑
+    const editable=(kind==='C'||kind==='P')&&_subScope;
+    const fullDetail=(kind==='C'||kind==='P')&&(editable||this.rwsIsRWS()||this.rwsIsRSP());   // RWS/RSP 可看全部 Marine 明细，但编辑仍由 MA 权限控制
+    if(fullDetail){
       // 直接复用 ZC 的完整分区面板(含 ACTIVITIES/月份切换/STATUS/日期/锁), 合成一个只属于此细分的分区
       const sz=this._marineSubCalcZone(kind,i);
       /* 顶部 SITE PROGRESS 用这个细分自己活动的完成度(和地图填色同一来源) */
