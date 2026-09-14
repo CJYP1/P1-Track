@@ -776,6 +776,8 @@ class Component extends DCLogic {
       /* 分母优先用总量(全 scope): "做在计划前面"(done 已录, plan 还排在后面月份)也照样算进度; 没总量再退回累计计划, 再退回已完成量 */
       const _tot=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));
       const denom=(_tot!=null&&_tot>0)?_tot:(cumPlan>0?cumPlan:cumDone);
+      const pourPct=(aid==='ls'||aid==='act_corewall')?this.actPourPct(lv,zmk,aid):null;
+      if(pourPct!=null){(ph[p]=ph[p]||[]).push(this.clamp(pourPct/100,0,1));return;}   /* Core/Lift/Stair 以逐构件浇筑百分比为准 */
       if(denom<=0)return;
       (ph[p]=ph[p]||[]).push(this.clamp(cumDone/denom,0,1));});
     const out={};Object.keys(ph).forEach(k=>{out[k]=ph[k].reduce((a,b)=>a+b,0)/ph[k].length;});return out;}
@@ -791,7 +793,7 @@ class Component extends DCLogic {
      Each activity is first normalized to its own completion %, so unlike raw
      quantities (m³/nos/%), different units are never added together. */
   _zoneAllActivityPct(lv,z){const zmk=z.mk||z.lid,M=this.ACT_MONTHS||[],ratios=[];let started=false;
-    (this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{let done=0,plan=0;M.forEach(m=>{const d=this.actDoneMonth(lv,zmk,a.id,m),p=this.actPlan(lv,zmk,a.id,m);if(d!=null)done+=(+d||0);if(p!=null)plan+=(+p||0);});let total=this.actTotal(lv,zmk,a.id,a.total);if(total==null||total<=0)total=plan>0?plan:(done>0?done:0);if(total<=0||(!plan&&!done))return;const ratio=Math.max(0,Math.min(1,done/total));ratios.push(ratio);if(done>0)started=true;});
+    (this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{let done=0,plan=0;M.forEach(m=>{const d=this.actDoneMonth(lv,zmk,a.id,m),p=this.actPlan(lv,zmk,a.id,m);if(d!=null)done+=(+d||0);if(p!=null)plan+=(+p||0);});const pourPct=(a.id==='ls'||a.id==='act_corewall')?this.actPourPct(lv,zmk,a.id):null;if(pourPct!=null){const ratio=Math.max(0,Math.min(1,pourPct/100));ratios.push(ratio);if(pourPct>0)started=true;return;}let total=this.actTotal(lv,zmk,a.id,a.total);if(total==null||total<=0)total=plan>0?plan:(done>0?done:0);if(total<=0||(!plan&&!done))return;const ratio=Math.max(0,Math.min(1,done/total));ratios.push(ratio);if(done>0)started=true;});
     if(!ratios.length)return null;const complete=ratios.every(r=>r>=1),raw=ratios.reduce((a,b)=>a+b,0)/ratios.length,pct=complete?100:Math.min(99,Math.round(raw*100));return {pct,n:ratios.length,started,complete};}
   zoneActPct(lv,z){
     if(lv==='L1'&&z&&z.cat==='MA'&&z.ring&&this.SUBLINKS){const _c=this._marineComboPct(lv,z);if(_c)return _c;}   /* marine 父区: ZC+C+P 合并 */
