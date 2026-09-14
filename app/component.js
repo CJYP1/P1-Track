@@ -314,6 +314,15 @@ class Component extends DCLogic {
 
   applyCritOv(){const ov=this._critOv||{};this.DATA.order.forEach(lv=>this.DATA.levels[lv].zones.forEach(z=>{z.crit=!!ov[lv+'|'+this.zid(z)];}));this._critPlanSet=null;}
   setCrit(lv,z,on){const k=lv+'|'+this.zid(z);if(on)this._critOv[k]=true;else delete this._critOv[k];try{localStorage.setItem('rws_crit_ov',JSON.stringify(this._critOv));}catch(e){}this.applyCritOv();this._critPlanSet=null;if(typeof rwsSyncKV==='function')rwsSyncKV('crit',k,(on?true:null),null,null);}
+  _slabCompleteOverrideMonth(lv,z){const k=lv+'||'+(z.mk||z.lid);return this._appCfg&&this._appCfg.slabComplete&&this._appCfg.slabComplete[k]||null;}
+  setSlabCompleteOverride(lv,z,month){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the slab colour status.');return;}
+    const k=lv+'||'+(z.mk||z.lid);this._appCfg=this._appCfg||{};const all=this._appCfg.slabComplete=this._appCfg.slabComplete||{};
+    if(month)all[k]=month;else delete all[k];
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','slabComplete',all,null,null);
+    this._actRerender(z);
+  }
   /* ---------- zone quantity overrides (admin-editable totals: area/columns/pilecap/mainbeam/steelbeam/lift-stair) ---------- */
   applyQtyOv(){
     // snapshot the original baked-in values once, so clearing an override
@@ -1256,6 +1265,8 @@ class Component extends DCLogic {
   _blendWhite(hex,a){try{const n=parseInt(String(hex).replace('#',''),16),r=(n>>16)&255,g=(n>>8)&255,b=n&255,m=v=>Math.round(v*a+255*(1-a));return `rgb(${m(r)},${m(g)},${m(b)})`;}catch(e){return hex;}}
   _slabFinishMonthIndex(lv,z){
     const zmk=z.mk||z.lid,AM=this.ACT_MONTHS,ids=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];
+    /* Admin colour-only confirmation: the zone may intentionally have no Slab activity at all. */
+    const ovm=this._slabCompleteOverrideMonth(lv,z),ovi=AM.indexOf(ovm);if(ovi>=0)return ovi;
     for(const aid of ids){
       let totalPlan=0,totalDone=0;const doneByMonth=[];
       for(let i=0;i<AM.length;i++){const p=+(this.actPlan(lv,zmk,aid,AM[i])||0),d=+(this.actDoneMonth(lv,zmk,aid,AM[i])||0);totalPlan+=p;totalDone+=d;doneByMonth.push(d);}
@@ -2610,10 +2621,7 @@ class Component extends DCLogic {
         const _vm=this.visMonths?this.visMonths():this.ACT_MONTHS;   /* 有计划 或 做过(任意月份) 就显示这个活动 */
         const _anyPlan=(_vm||[]).some(mm=>{const p=this.actPlan(lv,zmk,a.id,mm);return p!=null&&p>0;});
         const _anyDone=(this.ACT_MONTHS||[]).some(mm=>{const d=this.actDoneMonth(lv,zmk,a.id,mm);return d!=null&&d>0;});
-        /* B2 Existing Basement 有些板已实际 cast，但原进度表没有 Slab plan。
-           对有 EB 编辑权限的账号保留 Slab 实际录入口；不要为它虚构计划。 */
-        const _b2EbManualSlab=(lv==='B2'&&z.cat==='EB'&&a.id==='slab'&&canEdit&&+(z.area||z.a||0)>0);
-        if(_vis!=='show' && !_anyPlan && !_anyDone && cg.balance<=0 && !_b2EbManualSlab) return ''; }
+        if(_vis!=='show' && !_anyPlan && !_anyDone && cg.balance<=0) return ''; }
       const _u=a.unit||this._actUnit(a.id),_ub=_u?`<span class="actunit">${this.esc(_u)}</span>`:'';
       const _balTxt=cg.balance>0?('<b style="color:var(--crit)">owe '+this.fmt(cg.balance)+'</b>'):(cg.balance<0?('<b style="color:var(--done)">ahead '+this.fmt(-cg.balance)+'</b>'):'<b style="color:var(--done)">on track</b>');
       const carryLine=cg.hasData?`<div class="actsub actcarry"><span class="am2" title="Backlog carried in from earlier months = cumulative plan − cumulative done">Backlog in</span> <b>${this.fmt(cg.carryIn)}</b>${_ub}<span class="asep">|</span><span class="am2" title="What to do this month = this-month plan">Target</span> <b>${this.fmt(cg.required)}</b>${_ub}<span class="asep">|</span><span class="am2">Balance</span> ${_balTxt}${_ub}${(cg.carryIn>0&&cg.done>0)?`<span class="acum" title="Of what you did this month: cleared old backlog + this-month share">did ${this.fmt(cg.done)} = ${this.fmt(cg.cleared)} backlog + ${this.fmt(cg.current)} this-mo</span>`:''}</div>`:'';
@@ -2632,7 +2640,8 @@ class Component extends DCLogic {
       const doneCell=_derived?`<span class="act-derived" title="Auto-counted from the ${_ea.label} list below (by completion date) — stays in sync with the checklist">${dm==null?0:this.fmt(dm)}<span class="lnk" data-jump="${_ea.sec}" title="Jump to the ${_ea.label} list to mark each one complete">✎ Update ${_ea.label}</span></span>`:(canEdit?`<input class="act-donem" data-a="${a.id}" value="${dm==null?'':dm}" placeholder="—" title="Done in ${sm}"${canEdit?'':' disabled'}>`:`${dm==null?'—':this.fmt(dm)}`);
       const _doneBefore=M.slice(0,mi).reduce((sx,mm)=>sx+(+(this.actDoneMonth(lv,zmk,a.id,mm)||0)),0);
       const _castFill=(total!=null&&total>0)?Math.max(0,total-_doneBefore):0;
-      const _castQuick=(_isSlabCast&&canEdit&&!_derived&&_castFill>0&&cumThrough<total)?`<button class="hbtn slab-cast-complete" data-a="${a.id}" data-v="${_castFill}" title="Record enough actual work in ${sm} to complete this slab; no plan is required" style="margin:2px 0 5px 17px;padding:3px 8px;font-size:10px;color:#4f555c;border-color:#aeb4bb">✓ Mark cast complete</button>`:'';
+      const _castHasActivity=(a.total!=null&&a.total>0)||(this.ACT_MONTHS||[]).some(mm=>this.actPlan(lv,zmk,a.id,mm)!=null||this.actDoneMonth(lv,zmk,a.id,mm)!=null);
+      const _castQuick=(_isSlabCast&&_castHasActivity&&canEdit&&!_derived&&_castFill>0&&cumThrough<total)?`<button class="hbtn slab-cast-complete" data-a="${a.id}" data-v="${_castFill}" title="Record enough actual work in ${sm} to complete this slab" style="margin:2px 0 5px 17px;padding:3px 8px;font-size:10px;color:#4f555c;border-color:#aeb4bb">✓ Mark cast complete</button>`:'';
       const pourRow='';   /* 浇筑进度改为 Core/Lift/Staircase 清单中每个构件独立填写，不再共用总下拉框。 */
       const mn='';  /* Done/Plan单月行已移除(与 by累计 重复) */
       const _adv=(this._actDate||{})[lv+'||'+zmk+'||'+a.id]||{};
@@ -2703,6 +2712,8 @@ class Component extends DCLogic {
     const todayISO=new Date().toISOString().slice(0,10);
     const last=hist.length?hist[hist.length-1]:null;
     const dPct=last?last.pct:p.pct, dStatus=last&&last.status?last.status:p.status, dNote=last?last.note||'':'', dDate=last?last.date:todayISO;
+    const _slabColourMonth=this._slabCompleteOverrideMonth(lv,z);
+    const _slabColourCtl=(this.rwsIsAdmin()&&!this._subOpen&&z.area&&!z._pod)?`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid ${_slabColourMonth?'#8d949b':'var(--line)'};background:${_slabColourMonth?'rgba(95,99,104,.08)':'var(--panel2)'};border-radius:9px;padding:8px 10px;margin:0 0 10px"><div><div style="font-size:10.5px;font-weight:900;color:${_slabColourMonth?'#5f6368':'var(--dim)'}">SLAB COMPLETED COLOUR</div><div style="font-size:9px;color:var(--faint);margin-top:2px">Colour-only status · does not create a Slab activity, Plan or Done</div></div><div style="display:flex;align-items:center;gap:7px;flex-shrink:0">${_slabColourMonth?`<b style="font-size:10px;color:#5f6368">Completed · ${this.esc(_slabColourMonth)}</b><button class="hbtn" id="slabColourDone" data-clear="1" style="padding:4px 8px;font-size:10px">Remove</button>`:`<button class="hbtn" id="slabColourDone" style="padding:4px 8px;font-size:10px;font-weight:800">Mark completed in ${this.esc(this._actMonth)}</button>`}</div></div>`:'';
     const opt=(v,l)=>`<option value="${v}" ${dStatus===v?'selected':''}>${l}</option>`;
     const histHtml=hist.length?`<div class="updhist"><div class="uh">Update history · ${hist.length}</div>${hist.slice().reverse().map(u=>`<div class="ur"><b>${this.esc(u.date||'')}</b><span>${u.pct}% · ${this.STATUS[u.status]?this.STATUS[u.status].label:''}${u.note?' · '+this.esc(u.note):''}</span></div>`).join('')}</div>`:'';
     const formHtml=`<div class="updform">
@@ -2732,6 +2743,7 @@ class Component extends DCLogic {
           ${p.udate?`<div class="pr"><span>Updated</span><b>${p.udate}</b></div>`:''}
         </div>
       </div>
+      ${_slabColourCtl}
       ${this._adminZoneProgressPanel(lv,z)}
       <div class="statgrid">
         ${z.area?this.statCell(lv,z.mk||z.lid,'area','Area m²',z.area):''}
@@ -2749,6 +2761,7 @@ class Component extends DCLogic {
     const _aggClear=this.root.querySelector('.admin-agg-clear');if(_aggClear)_aggClear.addEventListener('click',()=>{this._adminAggMode=false;this._adminAggSet=new Set();this._adminAggObjs=new Map();this._adminAggLevel=lv;this.render();this.selectZone(z,sub);this.paintSel();});
     this.root.querySelector('#back').addEventListener('click',()=>{this._discardOpenSections(lv,z);this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
     const ck=this.root.querySelector('#critChk');if(ck)ck.addEventListener('change',()=>{const _vb={...this.vb};this.setCrit(this.curLevel,z,ck.checked);this.render();this.vb=_vb;this._vbLevel=this.curLevel;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();this.selectZone(z);this.paintSel();});
+    const _scb=this.root.querySelector('#slabColourDone');if(_scb)_scb.addEventListener('click',()=>this.setSlabCompleteOverride(lv,z,_scb.dataset.clear?'':this._actMonth));
     const sv=this.root.querySelector('#in_save');
     if(sv)sv.addEventListener('click',()=>{
       const pct=this.clamp(Math.round(+this.root.querySelector('#in_pct').value||0),0,100);
@@ -3428,7 +3441,7 @@ class Component extends DCLogic {
         totals:{area_m2:z.area||0,columns:c.columns||0,pilecap:c.pilecap||0,mainbeam:c.mainbeam||0,steelbeam:c.steelbeam||0,lift:z.lifts?z.lifts.length:0,stair:z.stairs?z.stairs.length:0},
         progress_pct:p.pct==null?null:p.pct,status:p.status||'todo'});});});
     const out={meta:{project:'RWS P1 CJ',exported_at:new Date().toISOString(),exported_by:(this._rwsUser&&this._rwsUser.username)||'',project_pct:this.projPct,act_months:this.ACT_MONTHS},
-      current_state:{element_status:this.elem,element_dates:this._elemDate||{},act_total:this._actTotal||{},act_plan:this._actPlan||{},act_done_m:this._actDoneM||{},act_hidden:this._actHidden||{},act_defs:this._actDefs||[],custom_categories:this._catAdd||[],custom_items:this._elemAdd||{},slab_actual_qty:this._zpOv||{},quantity_overrides:this._qtyOv||{},plan_qty_overrides:this._zpPlanOv||{},critical:this._critOv||{},zone_updates:this.updates||{},edited_keys:this._editedKeys||{},act_date:this._actDate||{},col_month:this._colMonth||{},zone_delay:(this._appCfg&&this._appCfg.zoneDelay)||{},act_cmt:this._actCmt||{},act_upd:this._actUpd||{}},
+      current_state:{element_status:this.elem,element_dates:this._elemDate||{},act_total:this._actTotal||{},act_plan:this._actPlan||{},act_done_m:this._actDoneM||{},act_hidden:this._actHidden||{},act_defs:this._actDefs||[],custom_categories:this._catAdd||[],custom_items:this._elemAdd||{},slab_actual_qty:this._zpOv||{},quantity_overrides:this._qtyOv||{},plan_qty_overrides:this._zpPlanOv||{},critical:this._critOv||{},zone_updates:this.updates||{},edited_keys:this._editedKeys||{},act_date:this._actDate||{},col_month:this._colMonth||{},settings:this._appCfg||{},zone_delay:(this._appCfg&&this._appCfg.zoneDelay)||{},act_cmt:this._actCmt||{},act_upd:this._actUpd||{}},
       zones};
     if(this.rwsIsAdmin()){ try{out.accounts=await rwsAdminListUsers();}catch(e){out.accounts_error=e.message;} try{out.activity_log=await rwsAdminActivityLog(5000);}catch(e){out.activity_log_error=e.message;} }
     return out;
@@ -3447,6 +3460,7 @@ class Component extends DCLogic {
     return false;}
   async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
+    if(st.settings)this._appCfg={...(st.settings||{})};
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
     this._critOv={...(st.crit||{})};this._critPlanSet=null;this.applyCritOv&&this.applyCritOv();
     this._zpOv={...(st.slab_qty||{})};this.zpApplyOv&&this.zpApplyOv();
@@ -3487,7 +3501,7 @@ class Component extends DCLogic {
       body.querySelectorAll('.__snapView').forEach(el=>el.addEventListener('click',()=>this.rwsViewSnapshot(+el.dataset.id)));
       body.querySelectorAll('.__snapDel').forEach(el=>el.addEventListener('click',()=>{this._confirmModal&&this._confirmModal('删除这个快照?',async()=>{await rwsSnapshotDelete(+el.dataset.id);this.rwsOpenHistory();});}));
     }catch(e){body.innerHTML='<div class="empty">加载失败</div>';}}
-  snapshot(){return {v:2,project:'RWS P1 CJ',savedAt:new Date().toISOString(),elem:this.elem,elemDate:this._elemDate,updates:this.updates,zpOv:this._zpOv,crit:this._critOv,actTotal:this._actTotal,actPlan:this._actPlan,actDoneM:this._actDoneM,actHidden:this._actHidden,actDefs:this._actDefs,catAdd:this._catAdd,elemAdd:this._elemAdd,editedKeys:this._editedKeys,actDate:this._actDate,colMonth:this._colMonth,zoneDelay:(this._appCfg&&this._appCfg.zoneDelay)||{},actCmt:this._actCmt};}
+  snapshot(){return {v:2,project:'RWS P1 CJ',savedAt:new Date().toISOString(),elem:this.elem,elemDate:this._elemDate,updates:this.updates,zpOv:this._zpOv,crit:this._critOv,actTotal:this._actTotal,actPlan:this._actPlan,actDoneM:this._actDoneM,actHidden:this._actHidden,actDefs:this._actDefs,catAdd:this._catAdd,elemAdd:this._elemAdd,editedKeys:this._editedKeys,actDate:this._actDate,colMonth:this._colMonth,settings:this._appCfg||{},zoneDelay:(this._appCfg&&this._appCfg.zoneDelay)||{},actCmt:this._actCmt};}
   async saveLock(){
     if(this._locking)return; this._locking=true; setTimeout(()=>{this._locking=false;},4000);
     const isExt=u=>!u||/^(https?:)?\/\//i.test(u)||/^data:/i.test(u);
