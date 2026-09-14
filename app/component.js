@@ -1238,7 +1238,7 @@ class Component extends DCLogic {
   /* 月度地图状态 — 计划线(CSV 各月计划量)和实际线(各月实际完成量)分开算, 实际优先于计划。
      返回 state: fin_earlier(更早已完成,灰绿保留) / act_finish(本月实际完成) / act_prog(实际进行中)
                 / plan_finish(本月计划完成) / plan_this(本月计划开始或在做) / none(本月无工作) */
-  PLAN_COLORS(){return {fin_earlier:'#bcd7c3',act_finish:'#166b47',act_prog:'#e2b45c',plan_finish:'#3f38a6',plan_this:'#a7a2e8',none:'#ffffff'};}
+  PLAN_COLORS(){return {fin_earlier:'#5f6368',act_finish:'#5f6368',act_prog:'#d7ad58',plan_finish:'#6259bd',plan_this:'#2f7f61',none:'#ffffff'};}
   /* 图例色块和地图一致: 把颜色按地图的透明度叠在白底上(area=0.5, plan colored=0.62) */
   _blendWhite(hex,a){try{const n=parseInt(String(hex).replace('#',''),16),r=(n>>16)&255,g=(n>>8)&255,b=n&255,m=v=>Math.round(v*a+255*(1-a));return `rgb(${m(r)},${m(g)},${m(b)})`;}catch(e){return hex;}}
   _zoneMonthState(lv,z,M){
@@ -2007,12 +2007,11 @@ class Component extends DCLogic {
       s+=`<div style="font-weight:700;color:var(--txt);margin-bottom:4px">Planned (month) · as of ${this.planMonth()}</div>`;
       s+=`<div style="font-size:9px;color:var(--faint);margin-bottom:4px">Actual outranks plan — a planned zone switches to the actual colour once site enters real progress.</div>`;
       const _PC=this.PLAN_COLORS();
-      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.fin_earlier,0.62)}"></span>Finished earlier (stays)</div>`;
-      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.act_finish,0.62)}"></span>Actually finished this month</div>`;
-      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.act_prog,0.62)}"></span>Actually started / in progress</div>`;
-      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.plan_finish,0.62)}"></span>Planned to finish this month</div>`;
-      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.plan_this,0.62)}"></span>Planned this month (not started)</div>`;
-      s+=`<div class="lr"><span class="sw" style="background:#fff;border:1px solid var(--line);box-sizing:border-box"></span>No work this month</div>`;
+      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.fin_earlier,0.62)}"></span>Slab Completed</div>`;
+      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.act_prog,0.62)}"></span>Works In Progress</div>`;
+      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.plan_this,0.62)}"></span>Plans to start this month</div>`;
+      s+=`<div class="lr"><span class="sw" style="background:${this._blendWhite(_PC.plan_finish,0.62)}"></span>Planned to be finished this month</div>`;
+      s+=`<div class="lr"><span class="sw" style="background:#fff;border:1px solid var(--line);box-sizing:border-box"></span>No work scheduled this month</div>`;
       s+=`<div class="lr"><span style="width:13px;height:13px;border-radius:50%;background:#f5a623;box-shadow:inset 0 0 0 2px #fff;flex:0 0 auto;margin-right:5px"></span>Started marker (planned + real work begun)</div>`;
       s+=`<div class="lr"><span style="width:13px;height:13px;border-radius:50%;background:#e11d2a;box-shadow:inset 0 0 0 2px #fff;flex:0 0 auto;margin-right:5px"></span>Behind schedule (planned cumulative &gt; done)</div>`;
     } else {
