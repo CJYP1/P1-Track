@@ -1410,12 +1410,16 @@ class Component extends DCLogic {
     if(lv==='L4')return lab==='2.1'?0.9:(/^2\./.test(lab)?0:null);return null;}
   _rpActualPct(lv,z){const a=this.zoneActPct(lv,z);if(a&&Number.isFinite(a.pct))return Math.round(a.pct);return z&&z._p&&Number.isFinite(z._p.pct)?Math.round(z._p.pct):0;}
   _actCumDone(lv,zmk,aid){ let s=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m);if(d)s+=d;}); return s; }
-  _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid; const _try=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];   /* Bottom slab(C)以 RC Works 的时间为浇筑时间 */ let aid=_try[0]; _try.some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
+  _zoneCastInfo(lv,z){ const zmk=z.mk||z.lid;
+    /* Dashboard and Planned view share the same admin colour-only completion override. */
+    const ovm=this._slabCompleteOverrideMonth(lv,z);if(ovm)return {aid:'slab_colour_override',done:true,date:null,start:null,end:null,month:ovm,override:true};
+    const _try=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];   /* Bottom slab(C)以 RC Works 的时间为浇筑时间 */ let aid=_try[0]; _try.some(a=>{const d=this._actDateOf(lv,zmk,a);if(d.start||d.end){aid=a;return true;}return false;});
     const d=this._actDateOf(lv,zmk,aid); const tot=this.actTotal(lv,zmk,aid,null); const cd=this._actCumDone(lv,zmk,aid);
     let cumPlan=0; this.ACT_MONTHS.forEach(m=>{const p=this.actPlan(lv,zmk,aid,m);if(p)cumPlan+=(+p||0);});
     const done=(tot!=null&&tot>0)?(cd>=tot):(cumPlan>0&&cd>=cumPlan);   /* 有总量按总量; 无总量(靠计划跟踪)则累计完成≥累计计划即算完成 */
     const dt=d.end||d.start||null; return {aid,done,date:dt,start:d.start||null,end:d.end||null,month:this._dateToActMonth(dt)}; }
   _marineCastInfo(lv,z){const lab=String(z&&z.label||''),labs=[lab],L=this.SUBLINKS||{};
+    const ovm=this._slabCompleteOverrideMonth(lv,z);if(ovm)return {aid:'slab_colour_override',done:true,date:null,start:null,end:null,month:ovm,override:true};
     Object.keys(L.c2zc||{}).forEach(c=>{if(L.c2zc[c]===lab)labs.push(c);});Object.keys(L.p2zone||{}).forEach(p=>{if((L.p2zone[p]||[]).indexOf(lab)>=0)labs.push(p);});
     const inf=labs.map(x=>this._zoneCastInfo(lv,{mk:lv+'|'+x,label:x,cat:'MA',_mslab:/^C/i.test(x)})).filter(x=>x.start||x.end||x.date);if(!inf.length)return this._zoneCastInfo(lv,z);
     const starts=inf.map(x=>x.start).filter(Boolean).sort(),ends=inf.map(x=>x.end).filter(Boolean).sort(),start=starts[0]||null,end=ends[ends.length-1]||null,date=end||start;return {aid:'marine',done:inf.every(x=>x.done),date,start,end,month:this._dateToActMonth(date)};}
