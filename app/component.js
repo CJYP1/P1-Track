@@ -2713,7 +2713,8 @@ class Component extends DCLogic {
     const last=hist.length?hist[hist.length-1]:null;
     const dPct=last?last.pct:p.pct, dStatus=last&&last.status?last.status:p.status, dNote=last?last.note||'':'', dDate=last?last.date:todayISO;
     const _slabColourMonth=this._slabCompleteOverrideMonth(lv,z);
-    const _slabColourCtl=(this.rwsIsAdmin()&&!this._subOpen&&z.area&&!z._pod)?`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid ${_slabColourMonth?'#8d949b':'var(--line)'};background:${_slabColourMonth?'rgba(95,99,104,.08)':'var(--panel2)'};border-radius:9px;padding:8px 10px;margin:0 0 10px"><div><div style="font-size:10.5px;font-weight:900;color:${_slabColourMonth?'#5f6368':'var(--dim)'}">SLAB COMPLETED COLOUR</div><div style="font-size:9px;color:var(--faint);margin-top:2px">Colour-only status · does not create a Slab activity, Plan or Done</div></div><div style="display:flex;align-items:center;gap:7px;flex-shrink:0">${_slabColourMonth?`<b style="font-size:10px;color:#5f6368">Completed · ${this.esc(_slabColourMonth)}</b><button class="hbtn" id="slabColourDone" data-clear="1" style="padding:4px 8px;font-size:10px">Remove</button>`:`<button class="hbtn" id="slabColourDone" style="padding:4px 8px;font-size:10px;font-weight:800">Mark completed in ${this.esc(this._actMonth)}</button>`}</div></div>`:'';
+    /* Always visible to admin at the top of every Zone, including combined/sub-zone views. */
+    const _slabColourCtl=this.rwsIsAdmin()?`<div style="display:grid;grid-template-columns:1fr;gap:7px;border:2px solid ${_slabColourMonth?'#5f6368':'#6474df'};background:${_slabColourMonth?'rgba(95,99,104,.10)':'rgba(100,116,223,.07)'};border-radius:10px;padding:9px 11px;margin:7px 0 10px"><div><div style="font-size:11px;font-weight:900;color:${_slabColourMonth?'#5f6368':'#5060c9'}">SLAB COMPLETED COLOUR</div><div style="font-size:9px;color:var(--faint);margin-top:2px">Colour-only status · does not create a Slab activity, Plan or Done</div></div><div style="display:flex;align-items:center;justify-content:space-between;gap:7px;flex-wrap:wrap">${_slabColourMonth?`<b style="font-size:10.5px;color:#5f6368">Completed · ${this.esc(_slabColourMonth)}</b><button class="hbtn" id="slabColourDone" data-clear="1" style="padding:5px 10px;font-size:10px">Remove</button>`:`<span style="font-size:10px;color:var(--dim)">Not marked</span><button class="hbtn" id="slabColourDone" style="padding:5px 10px;font-size:10px;font-weight:900;background:#6474df;color:#fff;border-color:#6474df">Mark completed in ${this.esc(this._actMonth)}</button>`}</div></div>`:'';
     const opt=(v,l)=>`<option value="${v}" ${dStatus===v?'selected':''}>${l}</option>`;
     const histHtml=hist.length?`<div class="updhist"><div class="uh">Update history · ${hist.length}</div>${hist.slice().reverse().map(u=>`<div class="ur"><b>${this.esc(u.date||'')}</b><span>${u.pct}% · ${this.STATUS[u.status]?this.STATUS[u.status].label:''}${u.note?' · '+this.esc(u.note):''}</span></div>`).join('')}</div>`:'';
     const formHtml=`<div class="updform">
@@ -2734,6 +2735,7 @@ class Component extends DCLogic {
       <div class="g"><span class="cat" style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:9.5px;font-weight:700;color:#fff;background:${ct.c}">${ct.label}</span> · ${z.grp&&z.grp!=='Ungrouped'?'Pour group: '+this.esc(z.grp):'Family: '+this.esc(z.fam)} · ${this.curLevel}</div>
       ${this.rwsIsAdmin()&&!this._subOpen?`<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:${z.crit?'var(--crit)':'var(--dim)'};margin:2px 0 8px;cursor:pointer;user-select:none"><input type="checkbox" id="critChk" ${z.crit?'checked':''} style="width:15px;height:15px;accent-color:var(--crit);cursor:pointer">Critical zone <span style="font-weight:500;color:var(--faint)">· auto-saved</span></label>`:(z.crit?'<div style="font-size:11.5px;font-weight:700;color:var(--crit);margin:2px 0 8px">◆ Critical zone</div>':'')}
       ${subHtml}
+      ${_slabColourCtl}
       <div class="progblock">
         <div class="top"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--dim)">Site progress ${p.source==='none'?'<span style="color:var(--faint);font-weight:600;text-transform:none">No data yet</span>':''}</div><div class="pc" style="color:${this.progColor(p.pct)}">${p.pct}%</div></div>
         <div class="pbar"><i style="width:${p.pct}%;background:${this.progColor(p.pct)}"></i></div>
@@ -2743,7 +2745,6 @@ class Component extends DCLogic {
           ${p.udate?`<div class="pr"><span>Updated</span><b>${p.udate}</b></div>`:''}
         </div>
       </div>
-      ${_slabColourCtl}
       ${this._adminZoneProgressPanel(lv,z)}
       <div class="statgrid">
         ${z.area?this.statCell(lv,z.mk||z.lid,'area','Area m²',z.area):''}
