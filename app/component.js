@@ -1241,6 +1241,18 @@ class Component extends DCLogic {
   PLAN_COLORS(){return {fin_earlier:'#5f6368',act_finish:'#5f6368',act_prog:'#d7ad58',plan_finish:'#6259bd',plan_this:'#2f7f61',none:'#ffffff'};}
   /* 图例色块和地图一致: 把颜色按地图的透明度叠在白底上(area=0.5, plan colored=0.62) */
   _blendWhite(hex,a){try{const n=parseInt(String(hex).replace('#',''),16),r=(n>>16)&255,g=(n>>8)&255,b=n&255,m=v=>Math.round(v*a+255*(1-a));return `rgb(${m(r)},${m(g)},${m(b)})`;}catch(e){return hex;}}
+  _slabFinishMonthIndex(lv,z){
+    const zmk=z.mk||z.lid,AM=this.ACT_MONTHS,ids=(z&&z._mslab)?['rc','slab','slab_pile','pcbeam']:['slab','slab_top','slab_pile'];
+    for(const aid of ids){
+      let totalPlan=0,totalDone=0;const doneByMonth=[];
+      for(let i=0;i<AM.length;i++){const p=+(this.actPlan(lv,zmk,aid,AM[i])||0),d=+(this.actDoneMonth(lv,zmk,aid,AM[i])||0);totalPlan+=p;totalDone+=d;doneByMonth.push(d);}
+      let target=+(this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid))||0);if(target<=0)target=totalPlan;
+      /* 只有明确总量或完整计划量才判定 cast 完成；仅填一笔 Done 不能误判整块板完成。 */
+      if(target<=0||totalDone<target)continue;
+      let cum=0;for(let i=0;i<doneByMonth.length;i++){cum+=doneByMonth[i];if(cum>=target)return i;}
+    }
+    return -1;
+  }
   _zoneMonthState(lv,z,M){
     const zmk=z.mk||z.lid, AM=this.ACT_MONTHS, n=AM.length, mi=AM.indexOf(M);
     if(mi<0)return {state:'none',colored:false};
@@ -1265,10 +1277,11 @@ class Component extends DCLogic {
     });
     let cumDone=0; for(let i=0;i<=mi;i++)cumDone+=doneM[i];
     let planFinishMi=-1; for(let i=0;i<n;i++){if(planM[i]>0)planFinishMi=i;}   // 最后一个有计划量的月 = 计划完成月
-    const zoneFinished=scopedActs>0&&allCompleteAsOf;
+    /* 灰色完成只看 Slab cast，不再等待 Column 或其他 activity。 */
+    const slabFinishMi=this._slabFinishMonthIndex(lv,z),zoneFinished=slabFinishMi>=0&&slabFinishMi<=mi;
     let state;
-    if(zoneFinished&&actFinishMi>=0&&actFinishMi<mi) state='fin_earlier';   // 全部活动更早月份就做完 → 灰绿
-    else if(zoneFinished&&actFinishMi===mi)          state='act_finish';    // 全部活动在本月实际做完
+    if(zoneFinished&&slabFinishMi<mi) state='fin_earlier';   // Slab 更早月份已 cast 完 → 灰色保留
+    else if(zoneFinished&&slabFinishMi===mi) state='act_finish';    // Slab 本月 cast 完 → 灰色
     else if(cumDone>0)                   state='act_prog';      // 实际已开始/进行中(实际压过计划)
     else if(planFinishMi===mi)           state='plan_finish';   // 本月计划完成(还没动)
     else if(planM[mi]>0)                 state='plan_this';     // 本月计划开始/在做(还没动)
