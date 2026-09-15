@@ -1,11 +1,7 @@
 -- ============================================================
--- Report Edit + PM / Planning 评论分流权限
--- Report 编辑：给账号同时勾选 REPEDIT + NB / EB / MA。
--- Planning 评论：给 Planning 账号勾选 PLAN；PM 评论按 NB / EB / MA 区域分派。
--- 谁能填写评论仍由原来的 CMT（Comment main map + M28）权限控制。
--- 前端按 reportOverrides:NB / :EB / :MA 分开保存；数据库再次核对区域，
--- 防止一个区域的 Report 编辑人修改另一个区域。
--- 在 Supabase SQL Editor 整段运行一次（可重复运行）。
+-- BIM Links 权限补丁
+-- Admin 与拥有 PLAN 权限的账号可以修改 settings.bimLinks；其他账号只读。
+-- 其他 settings 仍然仅限 Admin。可在 Supabase SQL Editor 重复运行。
 -- ============================================================
 
 create or replace function public.rws_set_kv(p_token uuid, p_store text, p_k text, p_value jsonb, p_level text, p_zone_mk text)
@@ -46,7 +42,7 @@ begin
         elsif comment_to = 'PM' and not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
           raise exception 'not permitted: PM comment outside assigned area';
         elsif comment_to not in ('PM','Planning') then
-          null; -- 旧的 Unassigned 评论所有已登录账号可查看并回复；前端仍禁止普通账号改正文或勾 Done
+          null;
         end if;
       end if;
     elsif not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
@@ -57,7 +53,7 @@ begin
   if s.role <> 'admin' and p_store = 'act_done_m' and p_value is not null and old is not null
      and jsonb_typeof(p_value) = 'number' and jsonb_typeof(old) = 'number'
      and (p_value#>>'{}')::numeric < (old#>>'{}')::numeric then
-    raise exception 'not permitted: 已录入的 Done 不能改小(% -> %),要改小请找 admin', (old#>>'{}'), (p_value#>>'{}');
+    raise exception 'not permitted: entered Done cannot be reduced (% -> %); ask admin', (old#>>'{}'), (p_value#>>'{}');
   end if;
 
   if p_value is null then

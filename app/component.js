@@ -529,6 +529,30 @@ class Component extends DCLogic {
     ov.querySelector('#__im_ok').addEventListener('click',submit);
     ov.addEventListener('keydown',e=>{if(e.key==='Enter')submit();if(e.key==='Escape')close();});
   }
+  _bimLinkUrl(raw){let s=String(raw||'').trim();if(!s)return '';if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(s))s='https://'+s;try{const u=new URL(s);return (u.protocol==='https:'||u.protocol==='http:')?u.href:'';}catch(e){return '';}}
+  _bimAttr(s){return this.esc(String(s==null?'':s)).replace(/"/g,'&quot;');}
+  _bimCanManage(){return this.rwsIsAdmin()||this.rwsHasScope('PLAN');}
+  async _saveBimLinks(list){
+    if(!this._bimCanManage()){this.rwsDeny('Only Admin or Planning can edit BIM links.');return;}
+    this._appCfg=this._appCfg||{};const prev=this._appCfg.bimLinks;this._appCfg.bimLinks=list;
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function'){const r=await rwsSyncKV('settings','bimLinks',list,null,null);if(r&&!r.ok&&!r.offline){this._appCfg.bimLinks=prev;try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}return false;}}
+    return true;
+  }
+  openBimLinks(){
+    const old=document.getElementById('__bimLinks');if(old)old.remove();const manage=this._bimCanManage();
+    let links=Array.isArray(this._appCfg&&this._appCfg.bimLinks)?this._appCfg.bimLinks.map(x=>({...x})):[];
+    const ov=document.createElement('div');ov.id='__bimLinks';ov.style.cssText='position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:2147483200;display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;width:min(700px,96vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)"><div><div style="font-size:15px;font-weight:900">🔗 BIM Model Links</div><div style="font-size:9.5px;color:var(--faint);margin-top:2px">Saved online · ${manage?'Admin and Planning can add or edit':'select a model to open'}</div></div><button class="hbtn" id="__bimClose">Close ✕</button></div><div id="__bimBody" style="overflow:auto;padding:14px 18px"></div>${manage?`<div style="display:flex;justify-content:space-between;gap:8px;padding:12px 18px;border-top:1px solid var(--line)"><button class="hbtn" id="__bimAdd">+ Add link</button><button class="hbtn primary" id="__bimSave" style="padding:7px 18px">Save links</button></div>`:''}</div>`;
+    document.body.appendChild(ov);const body=ov.querySelector('#__bimBody'),close=()=>ov.remove();
+    const render=()=>{
+      if(manage){body.innerHTML=links.length?links.map((x,i)=>`<div class="bim-edit-row" data-i="${i}" style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--panel2)"><div style="display:grid;grid-template-columns:minmax(125px,.7fr) minmax(220px,1.5fr) auto;gap:7px;align-items:center"><input class="bim-name" value="${this._bimAttr(x.name||'')}" placeholder="Name, e.g. Structural BIM" style="min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);font:inherit"><input class="bim-url" value="${this._bimAttr(x.url||'')}" placeholder="https://…" style="min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);font:inherit"><button class="hbtn bim-remove" data-i="${i}" style="color:var(--crit);padding:5px 9px">Remove</button></div><textarea class="bim-note" placeholder="Description / notes (optional)" style="width:100%;min-height:44px;margin-top:7px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);font:inherit;resize:vertical">${this.esc(x.note||'')}</textarea>${this._bimLinkUrl(x.url)?`<a href="${this._bimAttr(this._bimLinkUrl(x.url))}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:5px;font-size:10px;font-weight:800;color:var(--accent)">Open current link ↗</a>`:''}</div>`).join(''):'<div class="empty">No BIM link yet. Select “+ Add link”.</div>';body.querySelectorAll('.bim-remove').forEach(b=>b.addEventListener('click',()=>{links.splice(+b.dataset.i,1);render();}));}
+      else{const good=links.map(x=>({...x,url:this._bimLinkUrl(x.url)})).filter(x=>x.url);body.innerHTML=good.length?good.map(x=>`<a href="${this._bimAttr(x.url)}" target="_blank" rel="noopener noreferrer" style="display:block;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px;background:var(--panel2)"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><b style="font-size:13px;color:var(--accent)">${this.esc(x.name||'BIM model')}</b><span style="font-size:12px;color:var(--accent)">Open ↗</span></div>${x.note?`<div style="font-size:10.5px;color:var(--dim);margin-top:4px">${this.esc(x.note)}</div>`:''}</a>`).join(''):'<div class="empty">No BIM links have been added yet.</div>';}
+    };
+    render();ov.querySelector('#__bimClose').onclick=close;ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    const add=ov.querySelector('#__bimAdd');if(add)add.onclick=()=>{links.push({id:'bim_'+Date.now().toString(36),name:'',url:'',note:''});render();const rows=body.querySelectorAll('.bim-edit-row');if(rows.length)rows[rows.length-1].querySelector('.bim-name').focus();};
+    const save=ov.querySelector('#__bimSave');if(save)save.onclick=async()=>{const out=[],rows=[...body.querySelectorAll('.bim-edit-row')];for(const row of rows){const i=+row.dataset.i,src=links[i]||{},name=row.querySelector('.bim-name').value.trim(),raw=row.querySelector('.bim-url').value.trim(),note=row.querySelector('.bim-note').value.trim();if(!name&&!raw&&!note)continue;const url=this._bimLinkUrl(raw);if(!url){const inp=row.querySelector('.bim-url');inp.style.borderColor='var(--crit)';inp.focus();this._toast('Please enter a valid http:// or https:// BIM link.');return;}out.push({id:src.id||('bim_'+Date.now().toString(36)+'_'+out.length),name:name||'BIM model',url,note});}save.disabled=true;save.textContent='Saving…';const ok=await this._saveBimLinks(out);save.disabled=false;save.textContent='Save links';if(ok){this._toast('BIM links saved ✓');close();}};
+  }
   /* 内置提示(替代浏览器 alert): 顶部居中小弹窗, 点一下或几秒后自动消失; 支持多行 */
   _toast(msg,ms){
     let host=document.getElementById('__toastHost');
@@ -3286,6 +3310,7 @@ class Component extends DCLogic {
     svg.addEventListener('dblclick',()=>{this.vb={...this.base};svg.setAttribute('viewBox',`${this.vb.x} ${this.vb.y} ${this.vb.w} ${this.vb.h}`);this.colLOD();});
     this.root.querySelector('#openTable').addEventListener('click',()=>this.openTable());
     {const _m28=this.root.querySelector('#openM28');if(_m28)_m28.addEventListener('click',()=>window.open('m28-dashboard.html','_blank'));}
+    {const _bim=this.root.querySelector('#openBimLinks');if(_bim)_bim.addEventListener('click',()=>this.openBimLinks());}
     {const _mpw=this.root.querySelector('#openManpower');if(_mpw)_mpw.addEventListener('click',()=>this.openManpower());}
     {const _msu=this.root.querySelector('#openMonthlySummary');if(_msu)_msu.addEventListener('click',()=>this.openMonthlySummary());}
     {const _cv=this.root.querySelector('#openCastView');if(_cv)_cv.addEventListener('click',()=>{this.colorMode=(this.colorMode==='castdate')?'area':'castdate';this.buildMetrics();this.render();});}

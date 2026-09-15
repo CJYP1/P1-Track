@@ -15,7 +15,9 @@ begin
   if p_store not in ('act_total','act_plan','act_done_m','act_hidden','elem_date','act_def','crit','zdate','act_date','col_month','act_cmt','settings','edited','manpower') then
     raise exception 'bad store'; end if;
   if s.role <> 'admin' then
-    if p_store in ('act_total','act_plan','act_hidden','act_def','crit','zdate','act_date','col_month','settings','edited') then
+    if p_store = 'settings' and p_k = 'bimLinks' then
+      if not (coalesce(s.allowed_scopes,'[]'::jsonb) ? 'PLAN') then raise exception 'not permitted: Admin or Planning required for BIM links'; end if;
+    elsif p_store in ('act_total','act_plan','act_hidden','act_def','crit','zdate','act_date','col_month','settings','edited') then
       raise exception 'admin only'; end if;
     if p_store = 'act_cmt' then
       if not ( (coalesce(s.allowed_scopes,'[]'::jsonb) ? 'CMT') or _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) ) then raise exception 'not permitted: no comment or area permission'; end if;
