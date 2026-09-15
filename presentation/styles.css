@@ -21,8 +21,9 @@ header .sub{font-size:9.5px;color:var(--dim);line-height:1.25;display:flex;align
 .header-account #autosave,.header-account #rwsQueueBadge{font-size:8.5px;color:var(--faint);font-weight:650;white-space:nowrap}
 .header-account #rwsQueueBadge{color:var(--crit);font-weight:700}
 .header-account #rwsUserInfo{font-size:9.5px;color:var(--dim);font-weight:650;white-space:nowrap}
-header .hbtn{padding:5px 8px;border-radius:7px;font-size:10px;gap:4px;line-height:1.2}
-header .hbtn.focus-tool{padding:7px 13px;font-size:11px;font-weight:850;border-width:1.5px}
+header .hbtn{height:34px;padding:0 11px;border-radius:9px;font-size:10.5px;gap:4px;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+header .hbtn.focus-tool{height:34px;padding:0 11px;font-size:10.5px;font-weight:850;border-width:1.5px}
+header .hbtn.bim-link-top{border-color:#5265d5;color:#4657c2;font-weight:850;background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
 header .hbtn.focus-tool.on{background:#6d1327;border-color:#6d1327;color:#fff;box-shadow:0 2px 8px rgba(109,19,39,.22)}
 #__delayAdmin{position:fixed;inset:0;z-index:2147483500;background:rgba(15,20,30,.5);display:flex;align-items:center;justify-content:center;padding:24px}
 .delay-admin-box{width:min(1050px,96vw);height:min(820px,92vh);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 65px rgba(0,0,0,.38);overflow:hidden}
@@ -34,7 +35,7 @@ header .hbtn.focus-tool.on{background:#6d1327;border-color:#6d1327;color:#fff;bo
 .delay-admin-scroll td{padding:6px 9px;border-bottom:1px solid var(--line);vertical-align:middle}.delay-admin-scroll tbody tr:hover{background:color-mix(in srgb,var(--accent) 5%,var(--panel))}.delay-admin-scroll td small{display:block;color:var(--faint);font-size:8.5px;margin-top:1px}
 .delay-edit{display:flex;align-items:center;gap:4px}.delay-edit input{width:72px;padding:4px 6px;text-align:right;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--txt);font-size:11px}.delay-edit span{font-size:9px;color:var(--faint)}.delay-edit button{border:0;background:transparent;color:var(--accent);font-size:15px;cursor:pointer;padding:1px 3px}.delay-result{font-weight:850;white-space:nowrap}.delay-admin-foot{border-top:1px solid var(--line);border-bottom:0}
 #zoneFindWrap{position:relative;display:inline-block;vertical-align:middle;flex:0 0 auto}
-#zoneFind{width:176px;font-size:10px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);text-align:left;font-family:inherit}
+#zoneFind{width:176px;height:34px;font-size:10px;padding:0 9px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--txt);text-align:left;font-family:inherit}
 @media(max-width:1500px){header .refresh-note{display:none}header h1{max-width:410px;overflow:hidden;text-overflow:ellipsis}}
 .spacer{flex:1}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-shrink:0}
