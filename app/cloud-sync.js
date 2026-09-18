@@ -68,9 +68,15 @@ async function rwsQueueFlush(){
 window.addEventListener('online', rwsQueueFlush);
 setInterval(rwsQueueFlush, 20000);
 /* 同步被后端拒绝(非离线)时提示一下 —— 以前是静默失败, 用户以为存了其实没进云端 */
+let _rwsLastFailMsg = '', _rwsLastFailAt = 0;
 function rwsNotifyFail(r){
   if (r && !r.ok && !r.offline && window.__rwsApp && window.__rwsApp._toast){
     var m = (r.error && r.error.message) ? r.error.message : 'change not saved to cloud';
+    var now = Date.now();
+    /* One UI action may sync status + completion date + monthly quantity. If the backend rejects
+       the shared zone permission, show one useful warning instead of stacking identical toasts. */
+    if (m === _rwsLastFailMsg && now - _rwsLastFailAt < 2500) return;
+    _rwsLastFailMsg = m; _rwsLastFailAt = now;
     window.__rwsApp._toast('⚠ 未同步 / not saved: ' + m);
   }
 }
