@@ -1,5 +1,5 @@
--- Fix area-account saves on L3/L4.
--- Root cause: rws_zone_area had no L3/L4 rows, so _rws_area_ok returned false.
+-- Fix area-account saves on L3/L4/L5.
+-- Root cause: rws_zone_area had no upper-floor rows, so _rws_area_ok returned false.
 -- Safe to run repeatedly (upsert).
 
 insert into public.rws_zone_area(level,zone_mk,area) values
@@ -24,11 +24,22 @@ insert into public.rws_zone_area(level,zone_mk,area) values
 ('L4','L4|2.1','NB'),('L4','L4|2.1CIS','NB'),('L4','L4|2.1CIST','NB'),
 ('L4','L4|4.2','EB'),('L4','L4|4.2T','EB'),('L4','L4|4.1','EB'),
 ('L4','L4|4.4','EB'),('L4','L4|4.1CIST','EB'),('L4','L4|4.3T','EB'),
-('L4','L4|4.3CIST','EB')
+('L4','L4|4.3CIST','EB'),
+('L5','L5|3.4','MA'),('L5','L5|3.2','MA'),('L5','L5|1.2','MA'),
+('L5','L5|3.4T','MA'),('L5','L5|3.2T','MA'),('L5','L5|P1.2T','MA'),
+('L5','L5|1.1','MA'),('L5','L5|3.3CIST','MA'),('L5','L5|3.3T','MA'),
+('L5','L5|3.1T','MA'),('L5','L5|3.1CIST','MA'),
+('L5','L5|2.4','NB'),('L5','L5|2.4T','NB'),('L5','L5|2.3T','NB'),
+('L5','L5|2.6CIST','NB'),('L5','L5|2.2','NB'),('L5','L5|2.6CIS','NB'),
+('L5','L5|2.3CIST','NB'),('L5','L5|2.2T','NB'),('L5','L5|2.1T','NB'),
+('L5','L5|2.1','NB'),('L5','L5|2.1CIS','NB'),('L5','L5|2.1CIST','NB'),
+('L5','L5|4.2','EB'),('L5','L5|4.2T','EB'),('L5','L5|4.1','EB'),
+('L5','L5|4.4','EB'),('L5','L5|4.1CIST','EB'),('L5','L5|4.3T','EB'),
+('L5','L5|4.3CIST','EB')
 on conflict (level,zone_mk) do update set area=excluded.area;
 
--- Quick verification: both rows should return NB.
+-- Quick verification: all rows should return NB.
 select level, zone_mk, area
 from public.rws_zone_area
-where (level, zone_mk) in (('L3','L3|2.1'),('L4','L4|2.1'))
+where (level, zone_mk) in (('L3','L3|2.1'),('L4','L4|2.1'),('L5','L5|2.1'))
 order by level;
