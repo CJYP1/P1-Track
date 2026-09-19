@@ -185,12 +185,17 @@ class Component extends DCLogic {
      再按当前地图柱心边界重新加入，避免旧清单多算、漏算或跨 Zone 重复。 */
   _reconcileZoneCols(){
     if(!this.COLUMNS||!this.DATA)return;
+    /* Marine's podium ledger is the ownership source for every mapped L1
+       column.  Some column centres also fall inside an overlapping NB M-SLAB
+       polygon; a pure point-in-polygon rebuild would then duplicate them in NB.
+       Keep their map markers, but attach mapped columns only to their P zone. */
+    const l1PodiumOnly=new Set();Object.values(this._marineCol||{}).forEach(arr=>(arr||[]).forEach(c=>l1PodiumOnly.add(String(c.id||'').trim().toUpperCase())));
     (this.DATA.order||[]).forEach(lv=>{
       const zones=((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]), ledger=((this.COLUMNS[lv])||[]);
       /* 当前 HTML 地图是唯一来源：旧 zone-data 清单可能还有已经移位或根本未画出的柱号，
          因此整层清空后只用 COLUMNS 中实际绘制的柱子重建。 */
       if(ledger.length)zones.forEach(z=>{z.cols=[];});
-      ledger.forEach(c=>{const z=this._resolvedColZone(lv,c,zones); if(!z)return; c.zone=z.label; z.cols=z.cols||[];
+      ledger.forEach(c=>{if(lv==='L1'&&l1PodiumOnly.has(String(c.id||'').trim().toUpperCase()))return;const z=this._resolvedColZone(lv,c,zones); if(!z)return; c.zone=z.label; z.cols=z.cols||[];
         if(!z.cols.some(x=>((typeof x==='string')?x:x.id)===c.id)) z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit});});
       zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
     });
@@ -205,7 +210,10 @@ class Component extends DCLogic {
     let ownerPool=owners;
     let pref=this.filterCat!=='all'?this.filterCat:null;
     if(!pref&&!this.rwsIsAdmin()&&this._rwsUser){const aa=(this._rwsUser.allowed_scopes||[]).filter(x=>x==='EB'||x==='NB'||x==='MA');if(aa.length===1)pref=aa[0];}
-    if(pref){const po=owners.filter(z=>(z.cat||'NB')===pref);if(po.length)ownerPool=po;}
+    /* An old owner entry from another area must not override the active/account
+       area.  An empty preferred owner set intentionally falls through to the
+       preferred-area geometry lookup below. */
+    if(pref)ownerPool=owners.filter(z=>(z.cat||'NB')===pref);
     /* L1 的 P polygons 会和 EB/NB 的图面范围重叠。只有当前 HTML 台账明确属于
        Marine 的 staircase 才能优先挂到 Podium；否则像 P1-ST-28/29 这种 EB 楼梯
        会被错误截走，连同原 Zone 的 Lift list / progress 一起看不到。 */
@@ -222,7 +230,15 @@ class Component extends DCLogic {
       if(i>=0){const e=this.SUBZONES.L1.P[i];return {lv,zmk:'L1|'+e.label,label:e.label,sub:{kind:'P',i}};}
     }
     if(ownerPool.length&&marineOwned){const mapped=ownerPool.find(z=>z.ring&&this.ptIn(z.ring,cx,cy))||ownerPool[0];return {lv,zmk:mapped.mk||mapped.lid,label:mapped.label,z:mapped};}
-    const zmk=this._shapeZmk(w,lv),z=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk);
+    /* If the staircase has no usable ledger owner, geometry is the fallback.  At
+       shared NB/EB/Marine boundaries several polygons can contain the same
+       centroid, so never take the first zone blindly: keep the target inside the
+       area currently displayed (or the normal user's only authorised area). */
+    const pointHits=(L.zones||[]).filter(x=>(!pref||(x.cat||'NB')===pref)&&x.ring&&this.ptIn(x.ring,cx,cy));
+    let z=pointHits[0]||null;
+    if(!z&&w.zone)z=(L.zones||[]).find(x=>(!pref||(x.cat||'NB')===pref)&&x.label===w.zone)||null;
+    if(!z&&!pref){const zmk=this._shapeZmk(w,lv);z=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk)||null;}
+    const zmk=z?(z.mk||z.lid):'';
     if(lv==='L1'&&z&&z.cat==='MA'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){
       const all=this.SUBZONES.L1.P,byZone=all.map((e,i)=>({e,i})).filter(o=>((((this.SUBLINKS||{}).p2zone||{})[o.e.label]||[]).indexOf(z.label)>=0)),cand=byZone.length?byZone:all.map((e,i)=>({e,i}));
       cand.sort((a,b)=>{const pa=a.e.lp||a.e.pts[0],pb=b.e.lp||b.e.pts[0];return Math.hypot(pa[0]-cx,pa[1]-cy)-Math.hypot(pb[0]-cx,pb[1]-cy);});
@@ -559,7 +575,7 @@ class Component extends DCLogic {
     const next=this.root&&this.root.querySelector('#lookAheadOverlay');
     if(next)requestAnimationFrame(()=>{next.scrollTop=y;});
   }
-  _actRerender(z){const oldSb=this.root&&this.root.querySelector('#sidebody'),scrollY=oldSb?oldSb.scrollTop:0;this._rememberOpenSections();this.applyUpdates();if(this.buildRail)this.buildRail();if(this.buildTimeline)this.buildTimeline();this.render();if(this._subOpen)this.selectSubzone(this._subOpen.kind,this._subOpen.i);else{const zz=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(zz)this.selectZone(zz);else if(z)this.selectZone(z);}const newSb=this.root&&this.root.querySelector('#sidebody');if(newSb)newSb.scrollTop=scrollY;}
+  _actRerender(z){const oldSb=this.root&&this.root.querySelector('#sidebody'),scrollY=oldSb?oldSb.scrollTop:0;this._rememberOpenSections();this.applyUpdates();if(this.buildRail)this.buildRail();if(this.buildTimeline)this.buildTimeline();this.render();if(this._subOpen)this.selectSubzone(this._subOpen.kind,this._subOpen.i);else{const zz=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(zz)this.selectZone(zz);else if(z)this.selectZone(z);}const newSb=this.root&&this.root.querySelector('#sidebody');if(newSb)newSb.scrollTop=scrollY;this._refreshOpenReport();}
   _numOrNull(raw){const s=String(raw==null?'':raw).replace(/,/g,'').trim();const v=s===''?null:parseFloat(s);if(v!=null&&(isNaN(v)||v<0))return undefined;return v;}
   setActTotal(lv,zmk,a,raw,z){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can set the total.');return;}const v=this._numOrNull(raw);if(v===undefined)return;const k=lv+'||'+zmk+'||'+a;this._actTotal=this._actTotal||{};if(v==null)delete this._actTotal[k];else this._actTotal[k]=v;this.saveAct();this.markEdited('act_total',k);rwsSyncKV('act_total',k,(v==null?null:v),lv,zmk);this._markUpd(lv,zmk,a);this._actRerender(z);}
   setActPlan(lv,zmk,a,m,raw,z){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can set the planned quantity.');return;}const v=this._numOrNull(raw);if(v===undefined)return;const k=lv+'||'+zmk+'||'+a+'||'+m;this._actPlan=this._actPlan||{};if(v==null)delete this._actPlan[k];else this._actPlan[k]=v;this.saveAct();this.markEdited('act_plan',k);rwsSyncKV('act_plan',k,(v==null?null:v),lv,zmk);this._markUpd(lv,zmk,a);this._actRerender(z);}
@@ -703,7 +719,8 @@ class Component extends DCLogic {
   addCustomAct(label,unit,phase){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can add activities.');return;}label=(label||'').trim();if(!label)return;const id='act_'+label.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20)+'_'+Math.random().toString(36).slice(2,5);this._actDefs=this._actDefs||[];const def={id,label,unit:(unit||'').trim()};if(phase)def.phase=phase;this._actDefs.push(def);this.saveAct();rwsSyncKV('act_def',id,{label,unit:(unit||'').trim(),...(phase?{phase}:{})},null,null);this._actRerender(this._selZone());}
   delCustomAct(id){if(!this.rwsIsAdmin())return;this._confirmModal('Delete this custom activity everywhere?',()=>{this._actDefs=(this._actDefs||[]).filter(d=>d.id!==id);this.saveAct();rwsSyncKV('act_def',id,null,null,null);this._actRerender(this._selZone());});}
   customCats(){return this._catAdd||(this._catAdd=[]);}
-  customItemsFor(lv,zmk,type){return (this._elemAdd&&this._elemAdd[lv+'||'+zmk+'||'+type])||[];}
+  _podiumColumnOutsideMarine(lv,zmk,id){return lv==='L1'&&this.zoneCat(lv,zmk)!=='MA'&&!!this._colPodLabel(id);}
+  customItemsFor(lv,zmk,type){const arr=(this._elemAdd&&this._elemAdd[lv+'||'+zmk+'||'+type])||[];return this._catAct({code:type})==='col'?arr.filter(id=>!this._podiumColumnOutsideMarine(lv,zmk,id)):arr;}
   saveCustom(){try{localStorage.setItem('rws_cat_add',JSON.stringify(this._catAdd||[]));localStorage.setItem('rws_elem_add',JSON.stringify(this._elemAdd||{}));}catch(e){}}
   _catAct(ct){if(!ct)return null;if(ct.act)return ct.act;const c=ct.code||'';return c.indexOf('cst~')===0?c.split('~')[1]||null:null;}
   _actItemsCode(aid){return 'cst~'+aid+'~items';}
@@ -861,7 +878,7 @@ class Component extends DCLogic {
   _activityElemRefs(lv,zmk,aid,z0){const out=[],seen=new Set(),push=(type,id,key,custom)=>{id=String(id||'').trim();if(!id||seen.has(key))return;seen.add(key);out.push({type,id,key,custom:!!custom});};let z=z0||((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
     if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:[],stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
     const ea=this._elemAct(aid);if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
-    if(this._actUnit(aid)==='nos')Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||'),code=p[2];if(p[0]!==lv||p[1]!==zmk||this._catAct({code})!==aid)return;(this._elemAdd[k]||[]).forEach(id=>push(code,id,lv+'||'+zmk+'||'+code+'||'+id,true));});return out;}
+    if(this._actUnit(aid)==='nos')Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||'),code=p[2];if(p[0]!==lv||p[1]!==zmk||this._catAct({code})!==aid)return;this.customItemsFor(lv,zmk,code).forEach(id=>push(code,id,lv+'||'+zmk+'||'+code+'||'+id,true));});return out;}
   /* Zone overall % = average of each applicable activity's cumulative done/total.
      Activities with no data at all (total<=0 and nothing done) do NOT participate. */
   _pw(){return {demo:8,pilewall:22,exc:11,pilecap:1,baseslab:1,beamslab:32,wallcol:25};}
@@ -1065,6 +1082,7 @@ class Component extends DCLogic {
       try{localStorage.setItem('rws_zp_ov',JSON.stringify(this._zpOv));}catch(e){}
       this.applyUpdates(); this.buildRail(); this.buildTimeline(); this.render(); this.refreshUpdBadge();
       if(this.selKey){const z=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z)this.selectZone(z);}
+      this._refreshOpenReport();
       try{this.rwsCheckChangesDot();}catch(e){}
     }catch(e){ console.warn('[rws] cloud state pull skipped (offline?)',e); }
     rwsQueueFlush();
@@ -1092,6 +1110,8 @@ class Component extends DCLogic {
         take('_zdate','zdate',B.zdate);take('_actDate','act_date',B.actDate);take('_colMonth','col_month',B.colMonth);
         take('_actCmt','act_cmt');take('_actUpd','act_upd');take('_editedKeys','edited');take('_zpOv','slab_qty');take('_qtyOv','qty_ov');take('_zpPlanOv','plan_qty_ov');take('_appCfg','settings');take('_manpower','manpower');
         if(own('act_def')){const defs=Object.keys(st.act_def||{}).map(id=>{const v=st.act_def[id]||{},o={id,label:v.label||id,unit:v.unit||''};if(v.phase)o.phase=v.phase;return o;});if(cmp(this._actDefs,defs)){this._actDefs=defs;changed=true;}}
+        if(Array.isArray(st.custom_cats)){const seen={},cats=[];st.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;cats.push({code:c.code,label:c.label});}});if(cmp(this._catAdd,cats)){this._catAdd=cats;changed=true;}}
+        if(Array.isArray(st.custom_items)){const items={};st.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(items[k]=items[k]||[]).push(it.elem_id);});if(cmp(this._elemAdd,items)){this._elemAdd=items;changed=true;}}
         if(own('crit')&&cmp(this._critOv,st.crit||{})){this._critOv={...(st.crit||{})};try{localStorage.setItem('rws_crit_ov',JSON.stringify(this._critOv));}catch(e){}this.applyCritOv&&this.applyCritOv();this._critPlanSet=null;changed=true;}
         if(st.zone_updates && st.zone_updates.length){   // 进度更新记录(Save update): 追加日志, 合并去重(按 ts+pct)
           let addedU=false;
@@ -1099,7 +1119,7 @@ class Component extends DCLogic {
           if(addedU){Object.keys(this.updates).forEach(mk=>this.updates[mk].sort((a,b)=>(a.ts||0)-(b.ts||0)));this.saveUpdatesStore&&this.saveUpdatesStore();changed=true;}
         }
         if(changed){
-          this.saveAct&&this.saveAct();this.saveDates&&this.saveDates();this.saveActCmt&&this.saveActCmt();this.saveActUpd&&this.saveActUpd();this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();this.saveEdited&&this.saveEdited();
+          this.saveAct&&this.saveAct();this.saveDates&&this.saveDates();this.saveActCmt&&this.saveActCmt();this.saveActUpd&&this.saveActUpd();this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();this.saveEdited&&this.saveEdited();this.saveCustom&&this.saveCustom();
           try{localStorage.setItem('rws_zp_ov',JSON.stringify(this._zpOv||{}));localStorage.setItem('rws_qty_ov',JSON.stringify(this._qtyOv||{}));localStorage.setItem('rws_zp_plan_ov',JSON.stringify(this._zpPlanOv||{}));localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg||{}));localStorage.setItem('rws_manpower',JSON.stringify(this._manpower||{}));}catch(e){}
           this.zpApplyOv&&this.zpApplyOv();this.applyQtyOv&&this.applyQtyOv();this._reconcileZoneStairs&&this._reconcileZoneStairs();this._reconcileZoneCores&&this._reconcileZoneCores();
           this.applyUpdates&&this.applyUpdates();
@@ -1298,7 +1318,7 @@ class Component extends DCLogic {
     (z.stairs||[]).forEach(x=>out.push({key:this.ekey(lv,z,'stair',x.id),type:'stair'}));
     (z.cores||[]).forEach(x=>out.push({key:this.ekey(lv,z,'core',x),type:'core'}));
     const zmk=this.zid(z),pre=lv+'||'+zmk+'||';
-    Object.keys(this._elemAdd||{}).forEach(k=>{if(k.indexOf(pre)!==0)return;const type=k.split('||')[2];(this._elemAdd[k]||[]).forEach(id=>out.push({key:pre+type+'||'+id,type}));});
+    Object.keys(this._elemAdd||{}).forEach(k=>{if(k.indexOf(pre)!==0)return;const type=k.split('||')[2];this.customItemsFor(lv,zmk,type).forEach(id=>out.push({key:pre+type+'||'+id,type}));});
     return out;
   }
   zoneElemStats(lv,z){const items=this.zoneElems(lv,z);let done=0,wip=0;items.forEach(it=>{const s=this.elemStatus(it.key);if(s==='done')done++;else if(s==='wip')wip++;});return{total:items.length,done,wip,todo:items.length-done-wip};}
@@ -1575,8 +1595,18 @@ class Component extends DCLogic {
       total+=zt;planned+=zp;if(d.end&&(!end||d.end>end))end=d.end;});});
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
-    const elems={},isPour=aid==='ls'||aid==='act_corewall';
-    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>{const uk=r.custom?r.key:(lv+'||'+r.type+'||'+r.id),o=elems[uk]||(elems[uk]={done:false,pct:0}),done=this.elemStatus(r.key)==='done',pv=isPour?this.elemPourPct(lv,zmk,aid,r.type,r.id):null;if(done)o.done=true;if(isPour)o.pct=Math.max(o.pct,pv==null?(done?100:0):pv);});});});
+    const elems={},isPour=aid==='ls'||aid==='act_corewall',refs=[];
+    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>refs.push({lv,zmk,r}));});});
+    /* Core/Lift/Stair is reported by core wall wherever a core exists.  Members
+       can sit in a different Zone from their core, so this must be resolved over
+       the whole selected report scope rather than one Zone at a time. */
+    const coreGroups=new Set();if(aid==='ls')refs.forEach(x=>{if(x.r.type!=='core')return;this._cwGroupKeys(x.r.id).forEach(k=>coreGroups.add(k));});
+    refs.forEach(x=>{const lv=x.lv,zmk=x.zmk,r=x.r;if(aid==='ls'&&r.type!=='core'){const groups=this._cwGroupKeys(r.id);if(groups.some(k=>coreGroups.has(k)))return;}
+      /* Report quantities count physical elements, not storage rows.  A legacy
+         custom-list row can point at the same item already present in the map
+         ledger (and an old Zone can also retain it), so key by the normalised
+         element identity.  Merge status/pouring progress from every occurrence. */
+      const uk=lv+'||'+aid+'||'+r.type+'||'+String(r.id||'').trim().toUpperCase(),o=elems[uk]||(elems[uk]={done:false,pct:0}),done=this.elemStatus(r.key)==='done',pv=isPour?this.elemPourPct(lv,zmk,aid,r.type,r.id):null;if(done)o.done=true;if(isPour)o.pct=Math.max(o.pct,pv==null?(done?100:0):pv);});
     if(Object.keys(elems).length){
       const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;return {done,total,pct:Math.min(100,Math.round(done/total*100)),pour:isPour};} }
     const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal; (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(areaTotal==null){const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));if(t)total+=(+t||0);} this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:total>0?Math.min(100,Math.round(done/total*100)):0}; }
@@ -1956,7 +1986,10 @@ class Component extends DCLogic {
         const _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',this.curLevel,'stair'); const _foreign=(swlv!==this.curLevel);
         s+=`<polygon class="liftwall" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="${_lc[0]}" fill-opacity="${_foreign?0.13:0.2}" stroke="${_lc[1]}" stroke-width="500"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
         s+=`<text class="liftlbl" data-lwi="${wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`;
-        _stairHitHtml+=`<polygon class="stairhit" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="#ffffff" fill-opacity="0.001" stroke="transparent" stroke-width="1100" pointer-events="all" style="cursor:pointer"><title>${this.esc(this._shapeLabel(w))} · Staircase</title></polygon>`;});
+        /* Large, almost-invisible top hit layer.  The staircase line sits on top
+           of zone/column shapes, and stopping mousedown prevents a small hand
+           movement from turning the intended click into map-pan. */
+        _stairHitHtml+=`<polygon class="stairhit" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="#ffffff" fill-opacity="0.002" stroke="#ffffff" stroke-opacity="0.002" stroke-width="2600" stroke-linejoin="round" pointer-events="all" style="cursor:pointer"><title>${this.esc(this._shapeLabel(w))} · Staircase</title></polygon>`;});
       }
       { const lfArr=[];
       if(this._drawingLift&&this._liftBuf&&this._liftBuf.length){
@@ -1982,7 +2015,11 @@ class Component extends DCLogic {
     this.colLOD();
     if(_ulDrag){const im=this.svg.querySelector('.underlayimg');if(im)im.addEventListener('mousedown',ev=>{ev.stopPropagation();ev.preventDefault();const u=this._curUnderlay();if(!u)return;const r=this.svg.getBoundingClientRect();const sx=this.vb.w/r.width,sy=this.vb.h/r.height;let lx=ev.clientX,ly=ev.clientY;const mv=e=>{u.x+=(e.clientX-lx)*sx;u.y+=(e.clientY-ly)*sy;lx=e.clientX;ly=e.clientY;const cx=(u.x+u.w/2).toFixed(1),cy=(u.y+u.h/2).toFixed(1);im.setAttribute('x',u.x.toFixed(1));im.setAttribute('y',u.y.toFixed(1));im.setAttribute('transform',`rotate(${u.rot||0} ${cx} ${cy})`);};const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);this._saveUnderlay();};document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);});}
     this.svg.querySelectorAll('.corewall').forEach(el=>el.addEventListener('click',ev=>{const idx=+el.dataset.cwi;const slv=el.dataset.cwlv||this.curLevel;ev.stopPropagation();if(this._drawingCore){this._shapeMenu('core',idx,slv);return;}this._openShape(this._shapeArr('core',slv)[idx],slv,'core');}));   // 画模式=菜单(删/改名); 平时=按名字自动匹配的数据打开
-    this.svg.querySelectorAll('.liftwall,.liftlbl[data-lwi],.stairhit').forEach(el=>el.addEventListener('click',ev=>{const idx=+el.dataset.lwi;const slv=el.dataset.lwlv||this.curLevel;ev.stopPropagation();if(this._drawingLift){this._shapeMenu('lift',idx,slv);return;}this._openShape(this._shapeArr('lift',slv)[idx],slv,'stair');}));
+    this.svg.querySelectorAll('.liftwall,.liftlbl[data-lwi],.stairhit').forEach(el=>{
+      el.addEventListener('mousedown',ev=>ev.stopPropagation());
+      el.addEventListener('touchstart',ev=>ev.stopPropagation(),{passive:true});
+      el.addEventListener('click',ev=>{const idx=+el.dataset.lwi;const slv=el.dataset.lwlv||this.curLevel,w=this._shapeArr('lift',slv)[idx];ev.stopPropagation();if(!w)return;if(this._drawingLift){this._shapeMenu('lift',idx,slv);return;}this._openShape(w,slv,'stair');});
+    });
     this.svg.querySelectorAll('.accessline').forEach(el=>el.addEventListener('click',ev=>{ev.stopPropagation();if(this._drawingAcc){this._delAccess(this.curLevel,+el.dataset.aci);}}));   // 画模式下点线=删除
     if(this._drawingAcc){ const _lv=this.curLevel,_H=this.DATA.levels[_lv].h,_mon=this._accMon();   // 画模式下: 拖动圆点微调点位
       const _cs=(e)=>{try{const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const p=pt.matrixTransform(this.svg.getScreenCTM().inverse());return [p.x,p.y];}catch(_){const r=this.svg.getBoundingClientRect();return [this.vb.x+(e.clientX-r.left)/r.width*this.vb.w,this.vb.y+(e.clientY-r.top)/r.height*this.vb.h];}};
