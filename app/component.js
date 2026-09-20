@@ -1308,17 +1308,17 @@ class Component extends DCLogic {
   elemStatus(k){return this.elem[k]||'todo';}
   doneCount(){return Object.values(this.elem).filter(v=>v==='done').length;}
   ekey(lv,z,type,id){return lv+'||'+(z.mk||z.lid)+'||'+type+'||'+id;}
-  levelTypeStats(){const seen={},st={col:{total:0,done:0,wip:0},pile:{total:0,done:0,wip:0},beam:{total:0,done:0,wip:0},lift:{total:0,done:0,wip:0},stair:{total:0,done:0,wip:0},core:{total:0,done:0,wip:0}};this.DATA.levels[this.curLevel].zones.forEach(z=>{if(!this.zoneVisible(z))return;const k=this.zid(z);if(seen[k])return;seen[k]=1;this.zoneElems(this.curLevel,z).forEach(it=>{const o=st[it.type];if(!o)return;o.total++;const s2=this.elemStatus(it.key);if(s2==='done')o.done++;else if(s2==='wip')o.wip++;});});return st;}
+  levelTypeStats(){const seen={},physical={},rank={todo:0,wip:1,done:2},st={col:{total:0,done:0,wip:0},pile:{total:0,done:0,wip:0},beam:{total:0,done:0,wip:0},lift:{total:0,done:0,wip:0},stair:{total:0,done:0,wip:0},core:{total:0,done:0,wip:0}};this.DATA.levels[this.curLevel].zones.forEach(z=>{if(!this.zoneVisible(z))return;const k=this.zid(z);if(seen[k])return;seen[k]=1;this.zoneElems(this.curLevel,z).forEach(it=>{if(!st[it.type])return;const id=String(it.id||it.key.split('||').pop()||'').trim().toUpperCase(),pk=it.type+'||'+id,s2=this.elemStatus(it.key),old=physical[pk];if(!old||rank[s2]>rank[old])physical[pk]=s2;});});Object.keys(physical).forEach(k=>{const type=k.split('||')[0],o=st[type],s2=physical[k];if(!o)return;o.total++;if(s2==='done')o.done++;else if(s2==='wip')o.wip++;});return st;}
   zoneElems(lv,z){
     const out=[];
-    (z.cols||[]).forEach(x=>out.push({key:this.ekey(lv,z,'col',x.id),type:'col'}));
-    (z.piles||[]).forEach(x=>out.push({key:this.ekey(lv,z,'pile',x.id),type:'pile'}));
-    (z.beams||[]).forEach(x=>out.push({key:this.ekey(lv,z,'beam',x.id),type:'beam'}));
-    (z.lifts||[]).forEach(x=>out.push({key:this.ekey(lv,z,'lift',x.id),type:'lift'}));
-    (z.stairs||[]).forEach(x=>out.push({key:this.ekey(lv,z,'stair',x.id),type:'stair'}));
-    (z.cores||[]).forEach(x=>out.push({key:this.ekey(lv,z,'core',x),type:'core'}));
+    (z.cols||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'col',id),type:'col',id});});
+    (z.piles||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'pile',id),type:'pile',id});});
+    (z.beams||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'beam',id),type:'beam',id});});
+    (z.lifts||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'lift',id),type:'lift',id});});
+    (z.stairs||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'stair',id),type:'stair',id});});
+    (z.cores||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'core',id),type:'core',id});});
     const zmk=this.zid(z),pre=lv+'||'+zmk+'||';
-    Object.keys(this._elemAdd||{}).forEach(k=>{if(k.indexOf(pre)!==0)return;const type=k.split('||')[2];this.customItemsFor(lv,zmk,type).forEach(id=>out.push({key:pre+type+'||'+id,type}));});
+    Object.keys(this._elemAdd||{}).forEach(k=>{if(k.indexOf(pre)!==0)return;const type=k.split('||')[2];this.customItemsFor(lv,zmk,type).forEach(id=>out.push({key:pre+type+'||'+id,type,id}));});
     return out;
   }
   zoneElemStats(lv,z){const items=this.zoneElems(lv,z);let done=0,wip=0;items.forEach(it=>{const s=this.elemStatus(it.key);if(s==='done')done++;else if(s==='wip')wip++;});return{total:items.length,done,wip,todo:items.length-done-wip};}
@@ -1608,11 +1608,19 @@ class Component extends DCLogic {
          element identity.  Merge status/pouring progress from every occurrence. */
       const uk=lv+'||'+aid+'||'+r.type+'||'+String(r.id||'').trim().toUpperCase(),o=elems[uk]||(elems[uk]={done:false,pct:0}),done=this.elemStatus(r.key)==='done',pv=isPour?this.elemPourPct(lv,zmk,aid,r.type,r.id):null;if(done)o.done=true;if(isPour)o.pct=Math.max(o.pct,pv==null?(done?100:0):pv);});
     if(Object.keys(elems).length){
-      const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;return {done,total,pct:Math.min(100,Math.round(done/total*100)),pour:isPour};} }
-    const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal; (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(areaTotal==null){const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));if(t)total+=(+t||0);} this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:total>0?Math.min(100,Math.round(done/total*100)):0}; }
-  _reportStructureAid(aid){return ['piling','slab_pile','pile','col','ls','mbeam','cbeam','slab','slab_top','act_corewall','act_wall','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
+      const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;return {done,total,pct:this._reportPct(done,total),pour:isPour};} }
+    const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal; (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(areaTotal==null){const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));if(t)total+=(+t||0);} this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); return {done,total,pct:this._reportPct(done,total)}; }
+  /* A report is only 100% when its recorded done quantity has actually reached
+     the full scope.  Flooring incomplete percentages prevents 99.5%+ from
+     being presented as complete (for example B1 slab 17,359 / 17,378). */
+  _reportPct(done,total){done=Math.max(0,Number(done)||0);total=Math.max(0,Number(total)||0);if(!total)return 0;if(done>=total)return 100;return Math.min(99,Math.floor(done/total*100));}
+  _reportStructureAid(aid){return ['exc','piling','slab_pile','pile','col','ls','mbeam','cbeam','slab','slab_top','act_corewall','act_wall','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
+  /* Confirmed L1 New Basement structural register totals.  These are scoped
+     totals (not the whole L1 drawing): Podium-owned columns such as C41/C53/
+     C60/C66 are excluded from NB. */
+  _reportScopeTotal(levels,aid,cat,filter){const one=(levels||[]).length===1?(levels||[])[0]:'';if(one==='L1'&&cat==='NB'&&!filter)return ({col:46,mbeam:34,cbeam:5})[aid]??null;return null;}
   /* Catch-Up and Actual share one authoritative full-level denominator. */
-  _reportCommonTotal(levels,aid,cat,filter,A,P){const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
+  _reportCommonTotal(levels,aid,cat,filter,A,P){const fixed=this._reportScopeTotal(levels,aid,cat,filter);if(fixed!=null)return fixed;const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
@@ -1626,7 +1634,7 @@ class Component extends DCLogic {
     EB:{label:'EB Report', title:'Existing Basement Superstructure', scope:'Existing Basement · working levels with live Activity data',levels:['B2','B1','B1M','L1','L2','L3','L4','L5']},
     MA:{label:'MA Report', title:'Marine Superstructure', scope:'Marine · working levels with live Activity data',levels:['B2','B1','B1M','L1','L2','L3','L4','L5']} }; }
   _reportEditKey(cat,r){return [cat,(r.levels&&r.levels[0])||'',r.aid||'',r.filter||''].join('||');}
-  _reportEditedValues(cat,r,A,P,liveTotal){const key=this._reportEditKey(cat,r),cfg=this._appCfg||{},all={...(cfg.reportOverrides||{}),...(cfg['reportOverrides:'+cat]||{})},rawHas=Object.prototype.hasOwnProperty.call(all,key),o=all[key]||{},round=v=>Math.max(0,Math.round(Number(v)||0)),clean=v=>Math.max(0,Number(v)||0),same=(a,b)=>Math.abs(clean(a)-clean(b))<0.0001,baseKnown=['basePlanned','baseDone','baseTotal'].every(k=>Number.isFinite(Number(o[k]))),baseSame=baseKnown&&same(o.basePlanned,P.planned)&&same(o.baseDone,A.done)&&same(o.baseTotal,liveTotal),has=rawHas&&baseSame,num=(v,d)=>Number.isFinite(Number(v))?round(v):round(d),total=has?num(o.total,liveTotal):round(liveTotal),done=Math.min(total,has?num(o.done,A.done):clean(A.done)),planned=Math.min(total,has?num(o.planned,P.planned):clean(P.planned));return {key,has,stale:rawHas&&!has,A:{...A,done,total,pct:total?Math.min(100,Math.round(done/total*100)):0},P:{...P,planned,total}};}
+  _reportEditedValues(cat,r,A,P,liveTotal){const key=this._reportEditKey(cat,r),cfg=this._appCfg||{},all={...(cfg.reportOverrides||{}),...(cfg['reportOverrides:'+cat]||{})},rawHas=Object.prototype.hasOwnProperty.call(all,key),o=all[key]||{},round=v=>Math.max(0,Math.round(Number(v)||0)),clean=v=>Math.max(0,Number(v)||0),same=(a,b)=>Math.abs(clean(a)-clean(b))<0.0001,baseKnown=['basePlanned','baseDone','baseTotal'].every(k=>Number.isFinite(Number(o[k]))),baseSame=baseKnown&&same(o.basePlanned,P.planned)&&same(o.baseDone,A.done)&&same(o.baseTotal,liveTotal),has=rawHas&&baseSame,num=(v,d)=>Number.isFinite(Number(v))?round(v):round(d),total=has?num(o.total,liveTotal):round(liveTotal),done=Math.min(total,has?num(o.done,A.done):clean(A.done)),planned=Math.min(total,has?num(o.planned,P.planned):clean(P.planned));return {key,has,stale:rawHas&&!has,A:{...A,done,total,pct:this._reportPct(done,total)},P:{...P,planned,total}};}
   _reportCats(){ const u=this._rwsUser; if(!u)return []; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; const who=String(u.username||u.display_name||'').trim().toUpperCase(); if(u.role==='admin'||a.indexOf('RWS')>=0||who==='RWS')return ['NB','EB','MA']; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
   rwsCanEditReport(cat){const u=this._rwsUser;if(!u)return false;if(u.role==='admin')return true;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[];return a.indexOf('REPEDIT')>=0&&a.indexOf(cat)>=0;}
   _reportCmtCtx(cat,r){const lv=(r.levels&&r.levels[0])||'',base=(((this.DATA.levels[lv]||{}).zones)||[]).filter(z=>(z.cat||'NB')===cat),z=base.find(x=>this._reportAidApplies(lv,x,r.aid))||base[0],zmk=z?(z.mk||z.lid):'',aid='__report_'+cat+'_'+lv+'_'+r.aid+(r.filter?'_'+r.filter:'');return {cat,lv,zmk,aid,label:r.a,reportAid:r.aid,key:lv+'||'+zmk+'||'+aid};}
@@ -1710,7 +1718,7 @@ class Component extends DCLogic {
     const tabs=cats.length>1?`<div class="seg" id="rptSeg" style="margin:0 0 14px">${cats.map(c=>`<button data-c="${c}" class="${c===cat?'on':''}">${this.esc(c+' Report')}</button>`).join('')}</div>`:'';
     const _leg=[['#f3aeb8','In progress'],['#74c043','Completed'],['#7ea6d4','CIS area'],['#f0b24a','Tie beam']].map(([c,l])=>`<span style="white-space:nowrap"><span style="display:inline-block;width:14px;height:14px;background:${c};border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:5px"></span>${l}</span>`).join('');
     const editBtns=canReportEdit?(editing?'<button class="hbtn primary" id="rptSave">Save</button><button class="hbtn" id="rptCancel">Cancel</button>':'<button class="hbtn" id="rptEdit">✎ Edit</button>'):'';
-    ov.innerHTML=`<div style="max-width:1120px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><div style="display:flex;gap:7px">${editBtns}<button class="hbtn" id="laClose">Close ✕</button></div></div><div class="seg" id="rptViewSeg" style="margin:0 0 10px"><button data-view="area" class="on">Area Report</button><button data-view="combined">Combined Status</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">Scope: ${this.esc(def.scope)} · Structure only · Both percentages use the same full level total. Catch-Up = plan due by today ÷ level total; Actual = completed quantity ÷ level total. NB L2 Slab includes CIS/CIST zones only.${editing?' · Report edit mode: all values must be whole numbers.':''}</div>${tables}</div>`;
+    ov.innerHTML=`<div style="max-width:1120px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><div style="display:flex;gap:7px">${editBtns}<button class="hbtn" id="laClose">Close ✕</button></div></div><div class="seg" id="rptViewSeg" style="margin:0 0 10px"><button data-view="area" class="on">Area Report</button><button data-view="combined">Combined Status</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">Scope: ${this.esc(def.scope)} · Structure + Excavation · Both percentages use the same full level total. Catch-Up = plan due by today ÷ level total; Actual = completed quantity ÷ level total. NB L2 Slab includes CIS/CIST zones only.${editing?' · Report edit mode: all values must be whole numbers.':''}</div>${tables}</div>`;
     ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=close;
     const combinedBtn=ov.querySelector('[data-view="combined"]');if(combinedBtn)combinedBtn.onclick=()=>{this._reportEditing=false;this._reportCombined=true;this.openLookAhead();};
     ov.querySelectorAll('#rptSeg button[data-c]').forEach(b=>b.onclick=()=>{this._reportCat=b.dataset.c;this.openLookAhead();});
@@ -2316,10 +2324,14 @@ class Component extends DCLogic {
     uniq.forEach(z=>{const c=z.counts;t.columns+=c.columns||0;t.pilecap+=c.pilecap||0;t.mainbeam+=c.mainbeam||0;t.steelbeam+=c.steelbeam||0;t.ls+=this.lsAll(c);t.area+=z.area||0;});
     /* 楼层汇总覆盖 (level-summary.csv) */
     const OVk=(window.__LEVELSUM||{})[this.curLevel]||{};
-    if(OVk.columns!=null)t.columns=OVk.columns; if(OVk.pilecap!=null)t.pilecap=OVk.pilecap;
-    if(OVk.mainbeam!=null)t.mainbeam=OVk.mainbeam; if(OVk.steelbeam!=null)t.steelbeam=OVk.steelbeam;
-    if(OVk.liftstair!=null)t.ls=OVk.liftstair; if(OVk.area!=null)t.area=OVk.area;
+    if(this.filterCat==='all'){if(OVk.columns!=null)t.columns=OVk.columns; if(OVk.pilecap!=null)t.pilecap=OVk.pilecap;
+      if(OVk.mainbeam!=null)t.mainbeam=OVk.mainbeam; if(OVk.steelbeam!=null)t.steelbeam=OVk.steelbeam;
+      if(OVk.liftstair!=null)t.ls=OVk.liftstair; if(OVk.area!=null)t.area=OVk.area;}
+    /* L1 NB register confirmed by the structural schedule: 46 columns
+       (including rectangular columns), 34 steel beams and 5 cast steel beams. */
+    const l1nb=this.curLevel==='L1'&&this.filterCat==='NB';if(l1nb){t.columns=46;t.mainbeam=34;t.steelbeam=5;}
     const S=this.levelTypeStats();
+    if(l1nb){S.col.total=46;S.col.done=Math.min(46,S.col.done);S.col.wip=Math.min(Math.max(0,46-S.col.done),S.col.wip);S.beam.total=34;S.beam.done=Math.min(34,S.beam.done);S.beam.wip=Math.min(Math.max(0,34-S.beam.done),S.beam.wip);}
     const lsS={total:S.lift.total+S.stair.total,done:S.lift.done+S.stair.done,wip:S.lift.wip+S.stair.wip};
     const dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
     const mini=(es)=>{ if(!es||!es.total) return ''; const rem=es.total-es.done-es.wip;
@@ -2332,7 +2344,7 @@ class Component extends DCLogic {
     const miniVol=(tot,done)=>{ if(!tot) return ''; const rem=Math.max(0,tot-done); const dp=Math.min(100,done/tot*100);
       return `<div class="kmini" title="${this.fmt(done)} done · ${this.fmt(rem)} remaining"><i style="width:${dp}%;background:${dc}"></i><i style="width:${100-dp}%;background:${tc}"></i></div>
         <div class="kmc"><span style="color:${dc}">${this.fmt(done)} done</span><span style="color:var(--faint)">${this.fmt(rem)} left</span></div>`; };
-    const cards=[['Columns',t.columns,S.col],['Pile Caps',t.pilecap,S.pile],['Steel Main Beams',t.mainbeam,S.beam],['Lift/Stair',t.ls,lsS],['Area m²',this.fmt(t.area),null]];
+    const cards=[['Columns',t.columns,S.col],['Pile Caps',t.pilecap,S.pile],['Steel Main Beams',t.mainbeam,S.beam],['Cast Steel Main Beams',t.steelbeam,null],['Lift/Stair',t.ls,lsS],['Area m²',this.fmt(t.area),null]];
     const volCards=[['Excavation m³',this.fmt(excT),excT,excD],['Demolition m³',this.fmt(demoT),demoT,demoD]];
     this.root.querySelector('#kpis').innerHTML=cards.filter(([l,n])=>n!==0&&n!=='0').map(([l,n,es])=>`<div class="kpi"><div class="n">${n}</div><div class="l">${l}</div>${mini(es)}</div>`).join('')
       +volCards.filter(([l,n,tot])=>tot>0).map(([l,n,tot,done])=>`<div class="kpi"><div class="n">${n}</div><div class="l">${l}</div>${miniVol(tot,done)}</div>`).join('');
