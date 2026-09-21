@@ -3558,7 +3558,7 @@ class Component extends DCLogic {
     {const _res=this.root.querySelector('#openResource');if(_res)_res.addEventListener('click',()=>this.openResourcePlanner());}
     {const _msu=this.root.querySelector('#openMonthlySummary');if(_msu)_msu.addEventListener('click',()=>this.openMonthlySummary());}
     {const _cv=this.root.querySelector('#openCastView');if(_cv)_cv.addEventListener('click',()=>{this.colorMode=(this.colorMode==='castdate')?'area':'castdate';this.buildMetrics();this.render();});}
-    {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>this.openLookAhead());}
+    {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>{this._reportCombined=true;this._reportEditing=false;this.openLookAhead();});}
     {const _d=this.root.querySelector('#toggleDelayTop');if(_d)_d.addEventListener('click',()=>this._toggleFocus('delay'));}
     {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
