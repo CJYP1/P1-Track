@@ -210,6 +210,24 @@ class Component extends DCLogic {
     let ownerPool=owners;
     let pref=this.filterCat!=='all'?this.filterCat:null;
     if(!pref&&!this.rwsIsAdmin()&&this._rwsUser){const aa=(this._rwsUser.allowed_scopes||[]).filter(x=>x==='EB'||x==='NB'||x==='MA');if(aa.length===1)pref=aa[0];}
+    /* These two adjacent NB staircase drawings continue through the same NB
+       structural zone.  P1-ST-20/21 also exists in the Marine ledger, so its
+       id alone is ambiguous; the drawing's NB source-zone/link disambiguates
+       it and keeps every floor click in the matching NB zone. */
+    const sid=String(name||'').replace(/\s+/g,'').toUpperCase(),srcLink=[...(Array.isArray(w.links)?w.links:[]),...(w.link?[w.link]:[])].find(x=>x&&x.zmk),srcZone=String(w.zone||'').replace(/\s+/g,'').toUpperCase();
+    const nbDrawing=srcZone==='SLAB2B'||srcZone==='2.6CIS'||(srcLink&&((L.zones||[]).find(z=>(z.mk||z.lid)===srcLink.zmk)||{}).cat==='NB')||sid==='P1-ST-22/23';
+    if(nbDrawing&&(sid==='P1-ST-22/23'||sid==='P1-ST-20/21')&&pref!=='MA'){
+      const lab=lv==='L1'?'SLAB 2B':(/^L[2345]$/.test(lv)?'2.6CIS':'');
+      const z=lab&&(L.zones||[]).find(x=>(x.cat||'NB')==='NB'&&String(x.label||'').replace(/\s+/g,'').toUpperCase()===lab.replace(/\s+/g,''));
+      if(z)return {lv,zmk:z.mk||z.lid,label:z.label,z};
+    }
+    /* A staircase shape can share its element id with an old ledger entry in
+       another area.  A link saved on the shape is normally the most precise
+       ownership signal, so honour it before centroid/first-owner fallbacks.
+       The known adjacent NB pair above is resolved first because legacy saved
+       links for that pair can themselves point to the duplicate Marine row. */
+    const saved=[...(Array.isArray(w.links)?w.links:[]),...(w.link?[w.link]:[])].find(x=>x&&x.lv===lv&&x.type==='stair'&&this._idSameGroup(x.id,name));
+    if(saved){const z=(L.zones||[]).find(x=>(x.mk||x.lid)===saved.zmk);if(z&&(!pref||(z.cat||'NB')===pref))return {lv,zmk:z.mk||z.lid,label:z.label,z};}
     /* An old owner entry from another area must not override the active/account
        area.  An empty preferred owner set intentionally falls through to the
        preferred-area geometry lookup below. */
@@ -247,11 +265,20 @@ class Component extends DCLogic {
     return z?{lv,zmk,label:z.label,z}:null;
   }
   _stairItemsFor(lv,zmk){return (((this._stairZoneItems||{})[lv]||{})[zmk]||[]);}
-  _coreTarget(lv,w){if(!w)return null;const name=String(w.id||'').trim().toUpperCase(),fixed={LW10:'P12',LW9:'P5-2',CW01:'P11'},label=fixed[name];
+  _coreTarget(lv,w){if(!w)return null;const name=String(w.id||'').trim().toUpperCase();
+    /* LW7 continues through L2 inside NB zone 2.1CIST.  Its shape is drawn on
+       L1 and projected upward, so geometry on the source floor cannot resolve
+       the correct L2 owner.  Keep this structural ownership explicit. */
+    if(lv==='L2'&&name==='LW7'){
+      const L=this.DATA&&this.DATA.levels&&this.DATA.levels.L2;
+      const z=L&&((L.zones||[]).find(x=>(x.mk||x.lid)==='L2|2.1CIST')||(L.zones||[]).find(x=>x.label==='2.1CIST'));
+      if(z)return {lv:'L2',zmk:z.mk||z.lid,label:z.label,z};
+    }
+    const fixed={LW10:'P12',LW9:'P5-2',CW01:'P11'},label=fixed[name];
     if(lv==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){const P=this.SUBZONES.L1.P;let i=label?P.findIndex(e=>e.label===label):-1;if(i<0&&w.pts&&w.pts.length){const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;i=P.findIndex(e=>e.pts&&this.ptIn(e.pts,cx,cy));}if(i>=0)return {lv,zmk:'L1|'+P[i].label,label:P[i].label,sub:{kind:'P',i}};}
     return null;}
   _coreItemsFor(lv,zmk){return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]);}
-  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(lv=>(store[lv]||[]).forEach(w=>{const target=this._coreTarget(lv,w),id=String(w&&w.id||'').trim();if(!target||!id)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});}));}
+  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=lv===srcLv||(rng&&ord!=null&&ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6);if(!show)return;const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -1999,7 +2026,7 @@ class Component extends DCLogic {
         /* Large, almost-invisible top hit layer.  The staircase line sits on top
            of zone/column shapes, and stopping mousedown prevents a small hand
            movement from turning the intended click into map-pan. */
-        _stairHitHtml+=`<polygon class="stairhit" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="#ffffff" fill-opacity="0.002" stroke="#ffffff" stroke-opacity="0.002" stroke-width="2600" stroke-linejoin="round" pointer-events="all" style="cursor:pointer"><title>${this.esc(this._shapeLabel(w))} · Staircase</title></polygon>`;});
+        _stairHitHtml+=`<polygon class="stairhit" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="#ffffff" fill-opacity="0.002" stroke="#ffffff" stroke-opacity="0.002" stroke-width="900" stroke-linejoin="round" pointer-events="all" style="cursor:pointer"><title>${this.esc(this._shapeLabel(w))} · Staircase</title></polygon>`;});
       }
       { const lfArr=[];
       if(this._drawingLift&&this._liftBuf&&this._liftBuf.length){
