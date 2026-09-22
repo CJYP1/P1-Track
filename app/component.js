@@ -50,7 +50,10 @@ class Component extends DCLogic {
     /* Drawing correction: WF-B2C55 is not an L1 column. Remove it from L1 only;
        keep any same-ID records on B2/L2 and other floors untouched. */
     if(this.COLUMNS&&this.COLUMNS.L1)this.COLUMNS.L1=this.COLUMNS.L1.filter(c=>String(c.id||'').trim().toUpperCase()!=='WF-B2C55');
-    if(this.AREA_OUTLINES&&this.AREA_OUTLINES.L2){this.AREA_OUTLINES.L3=this.AREA_OUTLINES.L3||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L4=this.AREA_OUTLINES.L4||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L5=this.AREA_OUTLINES.L5||JSON.parse(JSON.stringify(this.AREA_OUTLINES.L4||this.AREA_OUTLINES.L2));}   /* L3/L4/L5 复用同一平面边界；L5 独立复制 */
+    if(this.AREA_OUTLINES&&this.AREA_OUTLINES.L2){this.AREA_OUTLINES.L3=this.AREA_OUTLINES.L3||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L4=this.AREA_OUTLINES.L4||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L5={};}   /* L5 uses its own V3 drawing edges below; never reuse the L2 outline. */
+    /* L5 authoritative plan edges extracted from ZONINGPLAN-INTERNALSTUDY_V3.
+       These are drawing lines only: zone keys, quantities and recorded progress remain independent. */
+    this.L5_PLAN_EDGES=[[[223005,173795],[225949,136386]],[[224342,156813],[252813,159047]],[[276394,172666],[279928,127757]],[[287590,173208],[291100,128636]],[[310724,187453],[312851,161504]],[[322684,188414],[324470,166261]],[[263815,171676],[299695,174500]],[[309992,145265],[314019,145587],[312851,161504]],[[250357,138269],[254465,138601],[251006,181514]],[[312556,165099],[314489,167949],[317879,180277],[334766,175623]],[[320711,162122],[321963,146212],[314016,145629]],[[310930,133257],[311044,131810],[291152,130244],[291278,128650],[267495,126721]],[[324236,125026],[324276,124997],[323162,123491],[323805,123015],[322526,121286],[321883,121762],[318536,117239],[317583,116000]],[[279040,110544],[279122,109500],[288493,110238],[288411,111281],[316245,113472]],[[316245,113472],[317583,116000]],[[324236,125026],[337098,142136],[332953,141810],[332796,143804],[335039,143981],[334980,144728],[337184,144902],[335979,160204],[332884,159961],[332821,160758],[331430,160649],[331317,162094],[335803,162447],[333633,190013],[329905,189700],[329961,188987],[322667,188400],[322176,194873],[318139,194555],[318640,188077],[310723,187453],[310213,193942],[306185,193624],[306695,187154],[302003,186785],[297310,192861],[295704,193385],[250080,181326]],[[250289,181381],[250283,181380],[249376,181144],[211357,170342]],[[211357,170342],[189600,164150],[175042,159975]],[[262813,184435],[268852,109993]],[[264914,157735],[324429,162414]],[[298352,191513],[303115,131186]],[[335010,167100],[325878,166334],[324127,166243],[324429,162414]],[[213984,141423],[175042,159975]],[[311236,133282],[314964,133575],[316507,113968]],[[268852,109993],[267521,126881],[251353,125609],[250357,138269],[214466,135445]],[[211357,170342],[213658,145735],[214466,135445]],[[268872,109739],[279041,110538]],[[267529,126781],[291278,128650],[291152,130244],[311043,131810],[310908,133529]],[[310930,133257],[309991,145270],[321963,146212],[320711,162122]],[[263815,171676],[259896,171367],[260419,164735],[252644,161187]],[[250731,134947],[254220,135223],[253985,137949],[262473,138679],[263437,126460]],[[259678,230385],[263209,185523],[356421,192859]],[[286480,187355],[293661,96105]],[[218004,95492],[211723,166428],[235475,168294],[230768,228109]]];
     this.showBeams = false; this.showSeq = false; this.showCrit = true; this.showAreaBounds = true; this.showDelay=false; this.showRpVsAc=false;
     try{this._critOv=JSON.parse(localStorage.getItem('rws_crit_ov')||'{}');}catch(e){this._critOv={};}
     try{this._qtyOv=JSON.parse(localStorage.getItem('rws_qty_ov')||'{}');}catch(e){this._qtyOv={};}
@@ -1871,6 +1874,12 @@ class Component extends DCLogic {
           const pts=ring.map(p=>p[0].toFixed(0)+','+(H-p[1]).toFixed(0)).join(' ');
           s+=`<polyline class="areabound" points="${pts}" stroke="${bc}" stroke-width="900" stroke-linecap="round"/>`;});
       });
+      if(this.curLevel==='L5'&&this.L5_PLAN_EDGES){
+        this.L5_PLAN_EDGES.forEach(line=>{
+          const pts=line.map(p=>p[0].toFixed(0)+','+(H-p[1]).toFixed(0)).join(' ');
+          s+=`<polyline class="areabound l5-plan-edge" points="${pts}" fill="none" stroke="#1747b8" stroke-width="900" stroke-linecap="round" stroke-linejoin="round"/>`;
+        });
+      }
     }
     // --- smart zone labels: font scaled to zone size, collision-avoided (never overlap) ---
     const _lbls=[];
