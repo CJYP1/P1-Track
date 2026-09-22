@@ -27,5 +27,8 @@ window.CW_GROUPS = {
 };
 /* 别名: 你习惯都写 "CW", 但数据里 lift-wall 是 "LW" —— CW6/7/9/10 当作 LW6/7/9/10 */
 ["6","7","9","10"].forEach(function(n){ window.CW_GROUPS["CW"+n]=window.CW_GROUPS["LW"+n]; });
-/* LW8 = CW8 那道核心筒的楼梯(P1-ST-03B),但楼梯到 L17 (TRF), 比 lift 核心筒(L4M)高 → 单独一组 */
-window.CW_GROUPS["LW8"]={ lifts:[], stairs:["P1-ST-03B (LW8)","P1-ST-03/3B (LW8)","P1-ST-03 (LW8)"], f:"B2", t:"L17" };
+/* ST3 (formerly LW8) = the staircase of core wall CW8.  The stair runs to L17 (TRF) while the
+   lift core stops at L4M, so it stays its own group.  Both the old "(LW8)" and the new "(ST3)"
+   spellings are listed so records saved under either name keep matching. */
+window.CW_GROUPS["ST3"]={ lifts:[], stairs:["P1-ST-03B (ST3)","P1-ST-03/3B (ST3)","P1-ST-03 (ST3)","P1-ST-03B (LW8)","P1-ST-03/3B (LW8)","P1-ST-03 (LW8)"], f:"B2", t:"L17" };
+window.CW_GROUPS["LW8"]=window.CW_GROUPS["ST3"];   /* legacy name → same group */

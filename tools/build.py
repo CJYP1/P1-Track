@@ -209,6 +209,7 @@ _assets = [
     (r'zp-data\.global\.js',         ['zp-data.global.js']),
     (r'cw-groups\.global\.js',       ['cw-groups.global.js']),
     (r'floor-templates\.global\.js', ['floor-templates.global.js']),
+    (r'l5-zones\.global\.js',       ['l5-zones.global.js']),
     (r'app/cloud-sync\.js',          ['app/cloud-sync.js']),
     (r'app/map-interactions\.js',    ['app/map-interactions.js']),
     (r'presentation/styles\.css',    ['presentation/styles.css']),
