@@ -25,12 +25,6 @@ begin
     end if;
   end if;
   select value into old from rws_kv where store = p_store and k = p_k;
-  -- 防改小:非 admin 不能把已录入的 Done(act_done_m)改小
-  if s.role <> 'admin' and p_store = 'act_done_m' and p_value is not null and old is not null
-     and jsonb_typeof(p_value) = 'number' and jsonb_typeof(old) = 'number'
-     and (p_value#>>'{}')::numeric < (old#>>'{}')::numeric then
-    raise exception 'not permitted: 已录入的 Done 不能改小(% -> %),要改小请找 admin', (old#>>'{}'), (p_value#>>'{}');
-  end if;
   if p_value is null then delete from rws_kv where store = p_store and k = p_k;
   else insert into rws_kv(store,k,value,level,zone_mk,updated_by,updated_at) values (p_store,p_k,p_value,p_level,p_zone_mk,s.user_id,now())
     on conflict (store,k) do update set value=excluded.value, level=excluded.level, zone_mk=excluded.zone_mk, updated_by=excluded.updated_by, updated_at=now(); end if;

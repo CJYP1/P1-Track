@@ -2,7 +2,7 @@
 -- 修复 "bad store / 未同步":后端补上 settings / edited / manpower 三个 store。
 --   settings, edited  → 仅 admin 可写(全局设置 / 锁定标记)
 --   manpower          → 有本区权限即可写(现场可填人数)
---   act_done_m        → 保留"非 admin 不能改小"的防改小规则
+--   act_done_m        → 有本区权限即可更正（可增加、减少或清空）
 -- 同时 rws_get_state 把这三个返回,才能在各端读回来。
 -- 在 Supabase SQL Editor 整段跑一次(可重复跑)。
 -- ============================================================
@@ -27,12 +27,6 @@ begin
     end if;
   end if;
   select value into old from rws_kv where store = p_store and k = p_k;
-  -- 防改小:非 admin 不能把已录入的 Done(act_done_m)改小
-  if s.role <> 'admin' and p_store = 'act_done_m' and p_value is not null and old is not null
-     and jsonb_typeof(p_value) = 'number' and jsonb_typeof(old) = 'number'
-     and (p_value#>>'{}')::numeric < (old#>>'{}')::numeric then
-    raise exception 'not permitted: 已录入的 Done 不能改小(% -> %),要改小请找 admin', (old#>>'{}'), (p_value#>>'{}');
-  end if;
   if p_value is null then delete from rws_kv where store = p_store and k = p_k;
   else insert into rws_kv(store,k,value,level,zone_mk,updated_by,updated_at) values (p_store,p_k,p_value,p_level,p_zone_mk,s.user_id,now())
     on conflict (store,k) do update set value=excluded.value, level=excluded.level, zone_mk=excluded.zone_mk, updated_by=excluded.updated_by, updated_at=now(); end if;

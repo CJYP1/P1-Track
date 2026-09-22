@@ -1,7 +1,7 @@
 -- ============================================================
--- BIM Links 权限补丁
--- Admin 与拥有 PLAN 权限的账号可以修改 settings.bimLinks；其他账号只读。
--- 其他 settings 仍然仅限 Admin。可在 Supabase SQL Editor 重复运行。
+-- 允许获授权的 Site 账号更正已录入的 Actual / Done 数量。
+-- 可增加、减少或清空；区域权限、Admin-only 项目和 activity log 均保留。
+-- 在 Supabase SQL Editor 整段运行一次（可重复运行）。
 -- ============================================================
 
 create or replace function public.rws_set_kv(p_token uuid, p_store text, p_k text, p_value jsonb, p_level text, p_zone_mk text)
@@ -41,8 +41,6 @@ begin
           raise exception 'not permitted: Planning comment';
         elsif comment_to = 'PM' and not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
           raise exception 'not permitted: PM comment outside assigned area';
-        elsif comment_to not in ('PM','Planning') then
-          null;
         end if;
       end if;
     elsif not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
@@ -50,6 +48,8 @@ begin
     end if;
   end if;
 
+  -- No monotonic restriction: authorised Site users may correct a mistaken
+  -- act_done_m value downward or clear it. The old/new values remain audited.
   if p_value is null then
     delete from rws_kv where store = p_store and k = p_k;
   else
@@ -61,4 +61,22 @@ begin
   insert into rws_activity_log(user_id,username,action,target_key,old_value,new_value)
     values (s.user_id,s.username,p_store,p_k,old,p_value);
   return jsonb_build_object('ok',true);
+end;$$;
+
+create or replace function public.rws_update_slab_qty(p_token uuid, p_qty_key text, p_level text, p_zone_mk text, p_qty numeric)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare s record; old_qty numeric;
+begin
+  select * into s from _rws_session(p_token);
+  if s.role <> 'admin' and not _rws_area_ok(s.allowed_scopes, p_level, p_zone_mk) then
+    raise exception 'not permitted: outside your assigned area';
+  end if;
+  select qty into old_qty from rws_slab_qty where qty_key = p_qty_key;
+  -- Authorised Site users may also correct Slab/Pilecap quantities downward.
+  insert into rws_slab_qty(qty_key, level, zone_mk, qty, updated_by, updated_at)
+    values (p_qty_key, p_level, p_zone_mk, p_qty, s.user_id, now())
+  on conflict (qty_key) do update set qty = excluded.qty, updated_by = excluded.updated_by, updated_at = now();
+  insert into rws_activity_log(user_id, username, action, target_key, old_value, new_value)
+    values (s.user_id, s.username, 'slab_qty', p_qty_key, to_jsonb(old_qty), to_jsonb(p_qty));
+  return jsonb_build_object('ok', true, 'qty_key', p_qty_key, 'qty', p_qty);
 end;$$;

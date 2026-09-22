@@ -54,12 +54,6 @@ begin
     end if;
   end if;
 
-  if s.role <> 'admin' and p_store = 'act_done_m' and p_value is not null and old is not null
-     and jsonb_typeof(p_value) = 'number' and jsonb_typeof(old) = 'number'
-     and (p_value#>>'{}')::numeric < (old#>>'{}')::numeric then
-    raise exception 'not permitted: 已录入的 Done 不能改小(% -> %),要改小请找 admin', (old#>>'{}'), (p_value#>>'{}');
-  end if;
-
   if p_value is null then
     delete from rws_kv where store = p_store and k = p_k;
   else
