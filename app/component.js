@@ -2224,7 +2224,7 @@ class Component extends DCLogic {
     }
     s+=_colHtml;   /* 柱子放到最后 → 浮在 Marine 子区图层之上, 柱名可见、可点选 */
     if(this._resourceMode){   /* one headline number per Team, anchored on one of its own Zones */
-      const _bs=Math.max(this.vb.w,1)*0.022;   /* scales with the zoom so it reads the same at any level */
+      const _bs=Math.max(this.vb.w,1)*0.024;   /* scales with the zoom so it reads the same at any level */
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k],ps=e.pts||[];if(!ps.length)return;
         const cx0=ps.reduce((a,q)=>a+q.x,0)/ps.length,cy0=ps.reduce((a,q)=>a+q.y,0)/ps.length;
         /* Anchor on the Team's Zone nearest its centre, so the number always sits on coloured
