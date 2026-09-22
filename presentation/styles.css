@@ -34,7 +34,10 @@ header .header-more-menu .hbtn{width:100%;height:32px;justify-content:flex-start
 .delay-admin-head,.delay-admin-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line)}
 .delay-admin-head b{display:block;font-size:16px}.delay-admin-head span,.delay-admin-foot span{font-size:10px;color:var(--dim)}
 .delay-admin-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 16px;background:var(--panel2);font-size:10px;color:var(--dim)}
-.delay-admin-tools input{width:min(360px,65vw);padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px}
+.delay-admin-tools input#__delayFind{width:min(220px,40vw);padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px}
+.delay-admin-tools select{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px;font-weight:700;cursor:pointer}
+.delay-admin-tools label{font-size:10px;font-weight:700;color:var(--dim);white-space:nowrap}
+.delay-admin-tools input[type=checkbox]{width:auto;margin:0;cursor:pointer}
 .delay-admin-scroll{flex:1;overflow:auto}.delay-admin-scroll table{width:100%;border-collapse:collapse;font-size:11px}.delay-admin-scroll th{position:sticky;top:0;z-index:2;background:#e8ebf1;color:var(--dim);text-align:left;padding:8px 9px;border-bottom:1px solid var(--line)}
 .delay-admin-scroll td{padding:6px 9px;border-bottom:1px solid var(--line);vertical-align:middle}.delay-admin-scroll tbody tr:hover{background:color-mix(in srgb,var(--accent) 5%,var(--panel))}.delay-admin-scroll td small{display:block;color:var(--faint);font-size:8.5px;margin-top:1px}
 .delay-edit{display:flex;align-items:center;gap:4px}.delay-edit input{width:72px;padding:4px 6px;text-align:right;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--txt);font-size:11px}.delay-edit span{font-size:9px;color:var(--faint)}.delay-edit button{border:0;background:transparent;color:var(--accent);font-size:15px;cursor:pointer;padding:1px 3px}.delay-result{font-weight:850;white-space:nowrap}.delay-admin-foot{border-top:1px solid var(--line);border-bottom:0}

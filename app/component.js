@@ -1148,7 +1148,7 @@ class Component extends DCLogic {
       if(own('col_month')){this._colMonth={...(B.colMonth||{}),...(state.col_month||{})};try{localStorage.setItem('rws_col_month',JSON.stringify(this._colMonth));}catch(e){}}
       if(own('act_cmt')){this._actCmt={...(state.act_cmt||{})};this.saveActCmt();}
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
-      if(own('settings')){this._appCfg={...(state.settings||{})};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
+      if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
       try{this._migrateLW8();}catch(_e){}   /* cloud settings can carry the old LW8 name back */
       this._reconcileZoneStairs();
       this._reconcileZoneCores();
@@ -1605,7 +1605,19 @@ class Component extends DCLogic {
   _delayBaseDays(lv,z){return this._delayBaseStats(lv,z).days;}
   _zoneDelayDays(lv,z){if(!z)return null;const m=this._appCfg&&this._appCfg.zoneDelay,zmk=z.mk||z.lid||'',lab=z.label||'';if(m){const ks=[lv+'||'+zmk,lv+'||'+lab,zmk,lab];let raw;
       for(const k of ks){if(k&&Object.prototype.hasOwnProperty.call(m,k)){raw=m[k];break;}}if(raw&&typeof raw==='object')raw=(raw.days!=null?raw.days:raw.delay_days);if(raw!=null&&raw!==''){const n=Number(raw);if(Number.isFinite(n))return Math.max(0,n);}}
-    return this._delayBaseDays(lv,z);}
+    return null;}   /* Delay days are entered by hand in the Delay Table — nothing is derived automatically. */
+  /* Cloud settings replace the local copy wholesale.  A Delay-Table edit that has not reached the
+     server yet (offline, or still in the retry queue) would be wiped by that replace, so keep the
+     local entry until its queued write has actually gone through. */
+  _mergePendingDelay(local,cloud){
+    const out={...(cloud||{})};
+    if(!local)return out;
+    let pending=false;
+    try{pending=(JSON.parse(localStorage.getItem('rws_offline_queue')||'[]')||[]).some(it=>it&&it.fn==='rws_set_kv'&&it.args&&it.args.p_store==='settings'&&it.args.p_k==='zoneDelay');}catch(e){}
+    if(!pending)return out;
+    Object.keys(local).forEach(k=>{if(out[k]==null)out[k]=local[k];});
+    return out;
+  }
   _delayView(n){const d=Math.max(0,Math.round(Number(n)||0));return d>0?{txt:'−'+d+' days',c:'#c8102e'}:{txt:'0 days',c:'#667085'};}
   /* August RP is interpolated two months into the Jun→Sep recovery-plan interval. */
   _rpAugPct(lv,z){if(!z)return null;const n=s=>String(s||'').toUpperCase().replace(/\s+/g,'').replace(/^POD/,''),lab=n(z.label),cat=z.cat||'NB';
@@ -1734,17 +1746,80 @@ class Component extends DCLogic {
   _syncFocusButtons(){const d=this.root&&this.root.querySelector('#toggleDelayTop'),r=this.root&&this.root.querySelector('#toggleRpVsAc');if(d)d.classList.toggle('on',!!this.showDelay);if(r)r.classList.toggle('on',!!this.showRpVsAc);}
   _toggleFocus(which){if(which==='delay'){this.showDelay=!this.showDelay;if(this.showDelay)this.showRpVsAc=false;}else{this.showRpVsAc=!this.showRpVsAc;if(this.showRpVsAc)this.showDelay=false;}this._syncFocusButtons();this.buildMetrics();this.render();}
   openDelayAdmin(){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit Delay days.');return;}const old=document.getElementById('__delayAdmin');if(old)old.remove();
-    const rows=[],seen=new Set(),add=(lv,z,group)=>{if(!z)return;const zmk=z.mk||z.lid||lv+'|'+z.label,key=lv+'||'+zmk;if(seen.has(key))return;seen.add(key);rows.push({lv,zmk,key,label:z.label||zmk,cat:z.cat||'NB',group:group||'',z});};
+    /* Delay days are a purely manual figure: whatever is typed here is what the map shows.
+       Nothing is derived from the programme baseline or from live progress any more. */
+    const rows=[],seen=new Set(),add=(lv,z,group)=>{if(!z)return;const zmk=z.mk||z.lid||lv+'|'+z.label,key=lv+'||'+zmk;if(seen.has(key))return;seen.add(key);rows.push({lv,zmk,key,label:z.label||zmk,cat:z.cat||'NB',group:group||''});};
     (this.DATA.order||[]).forEach(lv=>{const L=this.DATA.levels[lv];(L&&L.zones||[]).forEach(z=>add(lv,z,''));});
     const S=this.SUBZONES&&this.SUBZONES.L1;if(S){['C','P'].forEach(k=>(S[k]||[]).forEach(e=>add('L1',{mk:'L1|'+e.label,label:e.label,cat:'MA'},'Marine '+k)));}
     const map=(this._appCfg&&this._appCfg.zoneDelay)||{},cats={EB:'Existing Basement',NB:'New Basement',MA:'Marine'};
-    const body=rows.map((r,i)=>{let raw=Object.prototype.hasOwnProperty.call(map,r.key)?map[r.key]:'';if(raw&&typeof raw==='object')raw=raw.days!=null?raw.days:raw.delay_days;if(raw==null)raw='';if(raw!==''&&Number.isFinite(Number(raw)))raw=Math.max(0,Math.round(Number(raw)));const bs=this._delayBaseStats(r.lv,r.z),ps=bs.project,base=bs.days,eff=raw!==''?Number(raw):base,dv=eff==null?null:this._delayView(eff),parts=[];if(bs.programme!=null)parts.push('Programme baseline −'+bs.programme+' days');if(ps)parts.push((ps.adjustDays<0?'Recovered ':'Added ')+Math.abs(ps.adjustDays)+' days from whole-project progress');const auto=base==null?'—':`<b style="color:${this._delayView(base).c}">${this.esc(this._delayView(base).txt)}</b><small style="display:block;margin-top:3px">${this.esc(parts.join(' · '))}${ps?' · Project Actual '+this.esc(ps.progressPct)+'% of plan-to-date':''}</small>`;return `<tr data-q="${this.esc((r.lv+' '+r.label+' '+r.cat+' '+r.group).toLowerCase())}"><td>${this.esc(r.lv)}</td><td><b>${this.esc(r.label)}</b>${r.group?`<small>${this.esc(r.group)}</small>`:''}</td><td>${this.esc(cats[r.cat]||r.cat)}</td><td class="delay-base" data-days="${base==null?'':this.esc(String(base))}">${auto}</td><td><div class="delay-edit"><input class="delay-admin-in" type="number" min="0" step="1" data-key="${this.esc(r.key)}" value="${this.esc(String(raw))}" placeholder="Auto"><span>days</span><button type="button" class="delay-clear" title="Clear override and use project-based Auto">↺</button></div></td><td class="delay-result" style="color:${dv?dv.c:'#667085'}">${dv?this.esc(dv.txt):'—'}</td></tr>`;}).join('');
-    const ov=document.createElement('div');ov.id='__delayAdmin';ov.innerHTML=`<div class="delay-admin-box"><div class="delay-admin-head"><div><b>Delay Table</b><span>Programme baseline adjusted by whole-project Plan / Actual · recoverable toward 0 days</span></div><button class="hbtn" id="__delayClose">Close ✕</button></div><div class="delay-admin-tools"><input id="__delayFind" placeholder="Find level or zone…"><span>${rows.length} zones</span></div><div class="delay-admin-scroll"><table><thead><tr><th>Level</th><th>Zone</th><th>Area</th><th>Project-based Auto</th><th>Override</th><th>Map display</th></tr></thead><tbody>${body}</tbody></table></div><div class="delay-admin-foot"><span>Auto starts with the 26-Aug programme-delay baseline. From Sep onward, the whole project's live Actual is compared with plan-to-date by unit. Above-plan production earns recovery days; below-plan production adds delay. The result can recover to 0 days, but never becomes “ahead”.</span><button class="hbtn primary" id="__delaySave">Save Delay Table</button></div></div>`;
-    document.body.appendChild(ov);const close=()=>ov.remove();ov.addEventListener('click',e=>{if(e.target===ov)close();});ov.querySelector('#__delayClose').onclick=close;
-    const refreshRow=inp=>{const tr=inp.closest('tr'),v=inp.value.trim(),baseCell=tr.querySelector('.delay-base'),base=baseCell.dataset.days,out=tr.querySelector('.delay-result');if(v===''){if(base===''){out.textContent='—';out.style.color='#667085';return;}const d=this._delayView(Number(base));out.textContent=d.txt;out.style.color=d.c;return;}const n=Number(v);if(!Number.isFinite(n))return;const whole=Math.max(0,Math.round(n));if(String(whole)!==v)inp.value=String(whole);const d=this._delayView(whole);out.textContent=d.txt;out.style.color=d.c;};
-    ov.querySelectorAll('.delay-admin-in').forEach(inp=>inp.addEventListener('input',()=>refreshRow(inp)));ov.querySelectorAll('.delay-clear').forEach(b=>b.onclick=()=>{const inp=b.parentElement.querySelector('input');inp.value='';refreshRow(inp);});
-    ov.querySelector('#__delayFind').oninput=e=>{const q=e.target.value.trim().toLowerCase();ov.querySelectorAll('tbody tr').forEach(tr=>tr.style.display=!q||tr.dataset.q.indexOf(q)>=0?'':'none');};
-    ov.querySelector('#__delaySave').onclick=()=>{this._appCfg=this._appCfg||{};const dst=this._appCfg.zoneDelay=this._appCfg.zoneDelay||{};ov.querySelectorAll('.delay-admin-in').forEach(inp=>{const key=inp.dataset.key,v=inp.value.trim();if(v==='')delete dst[key];else{const n=Number(v);if(Number.isFinite(n))dst[key]=Math.max(0,Math.round(n));}});try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','zoneDelay',dst,null,null);close();this.buildMetrics();this.render();this._toast&&this._toast('Delay Table saved ✓');};}
+    const rawOf=r=>{let v=Object.prototype.hasOwnProperty.call(map,r.key)?map[r.key]:'';if(v&&typeof v==='object')v=(v.days!=null?v.days:v.delay_days);if(v==null)v='';if(v!==''&&Number.isFinite(Number(v)))v=Math.max(0,Math.round(Number(v)));return v;};
+    const body=rows.map(r=>{const raw=rawOf(r),dv=raw===''?null:this._delayView(Number(raw));
+      return `<tr data-cat="${this.esc(r.cat)}" data-lv="${this.esc(r.lv)}" data-q="${this.esc((r.lv+' '+r.label+' '+r.cat+' '+r.group).toLowerCase())}">`
+        +`<td>${this.esc(r.lv)}</td>`
+        +`<td><b>${this.esc(r.label)}</b>${r.group?`<small>${this.esc(r.group)}</small>`:''}</td>`
+        +`<td>${this.esc(cats[r.cat]||r.cat)}</td>`
+        +`<td><div class="delay-edit"><input class="delay-admin-in" type="number" min="0" step="1" data-key="${this.esc(r.key)}" value="${this.esc(String(raw))}" placeholder="0"><span>days</span><button type="button" class="delay-clear" title="Clear — this Zone shows no delay">↺</button></div></td>`
+        +`<td class="delay-result" style="color:${dv?dv.c:'#667085'}">${dv?this.esc(dv.txt):'—'}</td></tr>`;}).join('');
+    const lvOpts=(this.DATA.order||[]).map(lv=>`<option value="${this.esc(lv)}">${this.esc(lv)}</option>`).join('');
+    const catOpts=Object.keys(cats).map(c=>`<option value="${c}">${this.esc(cats[c])}</option>`).join('');
+    const ov=document.createElement('div');ov.id='__delayAdmin';
+    ov.innerHTML=`<div class="delay-admin-box">`
+      +`<div class="delay-admin-head"><div><b>Delay Table</b><span>Manual only · the number you type here is exactly what the map shows</span></div><button class="hbtn" id="__delayClose">Close ✕</button></div>`
+      +`<div class="delay-admin-tools">`
+        +`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">`
+          +`<label style="display:flex;align-items:center;gap:4px">Area <select id="__delayCat"><option value="">All areas</option>${catOpts}</select></label>`
+          +`<label style="display:flex;align-items:center;gap:4px">Level <select id="__delayLv"><option value="">All levels</option>${lvOpts}</select></label>`
+          +`<input id="__delayFind" placeholder="Find zone…">`
+          +`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="__delaySetOnly">Only Zones with a delay</label>`
+        +`</div>`
+        +`<span id="__delayCount">${rows.length} zones</span>`
+      +`</div>`
+      +`<div class="delay-admin-scroll"><table><thead><tr><th>Level</th><th>Zone</th><th>Area</th><th>Delay days</th><th>Map display</th></tr></thead><tbody>${body}</tbody></table></div>`
+      +`<div class="delay-admin-foot"><span>Blank = no delay · <b id="__delayState">Autosaves as you type</b> · bulk-set applies to the rows currently shown.</span>`
+        +`<div style="display:flex;align-items:center;gap:6px">`
+          +`<input id="__delayBulk" type="number" min="0" step="1" placeholder="days" style="width:74px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--txt);font-size:11px;text-align:right">`
+          +`<button class="hbtn" id="__delayApply">Apply to shown</button>`
+          +`<button class="hbtn" id="__delayClearAll">Clear shown</button>`
+          +`<button class="hbtn primary" id="__delaySave">Save &amp; close</button>`
+        +`</div></div></div>`;
+    document.body.appendChild(ov);
+    const close=()=>{if(this._delaySaveT){clearTimeout(this._delaySaveT);this._delaySaveT=null;try{persist();}catch(e){}}ov.remove();};
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});ov.querySelector('#__delayClose').onclick=close;
+    const refreshRow=inp=>{const tr=inp.closest('tr'),v=inp.value.trim(),out=tr.querySelector('.delay-result');
+      if(v===''){out.textContent='—';out.style.color='#667085';return;}
+      const n=Number(v);if(!Number.isFinite(n))return;const whole=Math.max(0,Math.round(n));if(String(whole)!==v)inp.value=String(whole);
+      const d=this._delayView(whole);out.textContent=d.txt;out.style.color=d.c;};
+    /* Autosave: every edit is written straight through to the shared settings, so nothing is lost
+       if the dialog is closed without pressing Save.  Writes are debounced so typing stays smooth. */
+    const persist=()=>{this._appCfg=this._appCfg||{};const dst=this._appCfg.zoneDelay=this._appCfg.zoneDelay||{};
+      ov.querySelectorAll('.delay-admin-in').forEach(inp=>{const key=inp.dataset.key,v=inp.value.trim();
+        if(v===''){delete dst[key];return;}const num=Number(v);if(Number.isFinite(num))dst[key]=Math.max(0,Math.round(num));});
+      try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+      if(typeof rwsSyncKV==='function')rwsSyncKV('settings','zoneDelay',dst,null,null);
+      this.buildMetrics();this.render();
+      const st=ov.querySelector('#__delayState');if(st){st.textContent='Saved ✓';st.style.color='#159957';clearTimeout(this._delaySavedT);this._delaySavedT=setTimeout(()=>{if(st.isConnected){st.textContent='Autosaves as you type';st.style.color='';}},1800);}
+      return dst;};
+    const queueSave=()=>{const st=ov.querySelector('#__delayState');if(st){st.textContent='Saving...';st.style.color='var(--dim)';}
+      clearTimeout(this._delaySaveT);this._delaySaveT=setTimeout(()=>{this._delaySaveT=null;persist();},600);};
+    ov.querySelectorAll('.delay-admin-in').forEach(inp=>{
+      inp.addEventListener('input',()=>{refreshRow(inp);queueSave();});
+      inp.addEventListener('change',()=>{refreshRow(inp);clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();});});
+    ov.querySelectorAll('.delay-clear').forEach(b=>b.onclick=()=>{const inp=b.parentElement.querySelector('input');inp.value='';refreshRow(inp);clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();});
+    const trs=[...ov.querySelectorAll('tbody tr')],cntEl=ov.querySelector('#__delayCount');
+    const shown=()=>trs.filter(tr=>tr.style.display!=='none');
+    const applyFilter=()=>{const c=ov.querySelector('#__delayCat').value,lv=ov.querySelector('#__delayLv').value,
+        q=ov.querySelector('#__delayFind').value.trim().toLowerCase(),setOnly=ov.querySelector('#__delaySetOnly').checked;
+      trs.forEach(tr=>{const okC=!c||tr.dataset.cat===c,okL=!lv||tr.dataset.lv===lv,okQ=!q||tr.dataset.q.indexOf(q)>=0,
+          okS=!setOnly||(tr.querySelector('.delay-admin-in').value.trim()!=='');
+        tr.style.display=(okC&&okL&&okQ&&okS)?'':'none';});
+      cntEl.textContent=shown().length+' of '+trs.length+' zones';};
+    ['#__delayCat','#__delayLv','#__delaySetOnly'].forEach(sel=>ov.querySelector(sel).onchange=applyFilter);
+    ov.querySelector('#__delayFind').oninput=applyFilter;
+    applyFilter();
+    ov.querySelector('#__delayApply').onclick=()=>{const v=ov.querySelector('#__delayBulk').value.trim();if(v==='')return;
+      const n=Math.max(0,Math.round(Number(v)||0));shown().forEach(tr=>{const inp=tr.querySelector('.delay-admin-in');inp.value=String(n);refreshRow(inp);});clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();};
+    ov.querySelector('#__delayClearAll').onclick=()=>{shown().forEach(tr=>{const inp=tr.querySelector('.delay-admin-in');inp.value='';refreshRow(inp);});clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();};
+    ov.querySelector('#__delaySave').onclick=()=>{clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();close();this._toast&&this._toast('Delay Table saved ✓');};}
   _reportWeekBounds(mon){
     const today=this._reportToday();if(this.dateToActMonth(today)!==mon)return null;
     const p=String(today).split('-').map(Number),d=new Date(p[0],p[1]-1,p[2]),offset=(d.getDay()+6)%7,start=new Date(d);start.setDate(d.getDate()-offset);const end=new Date(start);end.setDate(start.getDate()+6),iso=v=>v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
@@ -3897,7 +3972,7 @@ class Component extends DCLogic {
     return false;}
   async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
-    if(st.settings)this._appCfg={...(st.settings||{})};try{this._migrateLW8();}catch(_e){}
+    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);}try{this._migrateLW8();}catch(_e){}
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
     this._critOv={...(st.crit||{})};this._critPlanSet=null;this.applyCritOv&&this.applyCritOv();
     this._zpOv={...(st.slab_qty||{})};this.zpApplyOv&&this.zpApplyOv();
