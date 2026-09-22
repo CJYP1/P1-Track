@@ -1149,6 +1149,7 @@ class Component extends DCLogic {
       if(own('act_cmt')){this._actCmt={...(state.act_cmt||{})};this.saveActCmt();}
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
       if(own('settings')){this._appCfg={...(state.settings||{})};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
+      try{this._migrateLW8();}catch(_e){}   /* cloud settings can carry the old LW8 name back */
       this._reconcileZoneStairs();
       this._reconcileZoneCores();
       if(own('manpower')){this._manpower={...(state.manpower||{})};try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}}
@@ -2672,7 +2673,10 @@ class Component extends DCLogic {
     ov.querySelector('#__pk_free').addEventListener('click',()=>{close();onFree&&onFree();});
     ov.querySelectorAll('.__pk').forEach(el=>el.addEventListener('click',()=>{const it=items[+el.dataset.i];close();onPick&&onPick(it);}));
   }
-  _shapeLabel(w){return w.id||((w.link&&w.link.id)||'');}
+  _shapeLabel(w){return this._lw8Name(w.id||((w.link&&w.link.id)||''));}
+  /* Belt and braces for the LW8 → ST3 rename: a shape whose stored name came back from the
+     cloud before the migration ran is still drawn and matched as ST3. */
+  _lw8Name(v){return String(v==null?'':v).replace(/\bLW8\b/g,'ST3');}
   _idAliasSet(v){const s=String(v||'').replace(/\([^)]*\)/g,'').replace(/\s+/g,'').toUpperCase(),out=new Set([s]);const m=s.match(/^(.*?)(\d+)(?:\/(\d+))$/);if(m){out.add(m[1]+m[2]);out.add(m[1]+m[3]);}return out;}
   _idSameGroup(a,b){const A=this._idAliasSet(a),B=this._idAliasSet(b);for(const x of A)if(B.has(x))return true;return false;}
   /* 元素 id → 它所属的 Core Wall 编号(反查 CW_GROUPS, 含拼写变体) */
@@ -3643,7 +3647,22 @@ class Component extends DCLogic {
         this.buildMetrics();this.render();});
       seg.appendChild(btn);});
     mc.appendChild(seg);
-    if(!this._resourceMode&&this.colorMode==='plan'){const only=document.createElement('button');only.className='tchip overlay-chip '+(this.showMonthWorkOnly?'on':'off');only.innerHTML='<span style="font-size:10px">◎</span> Working zones only';only.title='Only show Zones with plan or actual work in the selected month';only.addEventListener('click',()=>{this.showMonthWorkOnly=!this.showMonthWorkOnly;this.buildMetrics();this.render();});mc.appendChild(only);}
+    /* Month picker for the planned / this-month views — pick the month right here instead of
+       toggling a chip and hunting for the month elsewhere. */
+    if(!this._resourceMode&&this.colorMode==='plan'){
+      const VM=this.visMonths()||[],cur=this.planMonth();
+      const wrap=document.createElement('div');wrap.className='modeseg';wrap.style.cssText='display:inline-flex;align-items:center;gap:2px';
+      const nav=(dir,txt)=>{const b=document.createElement('button');b.innerHTML=txt;b.title=dir<0?'Previous month':'Next month';
+        b.addEventListener('click',()=>{const i=VM.indexOf(this.planMonth())+dir;if(i<0||i>=VM.length)return;this._planMonth=VM[i];this._actMonth=VM[i];this.buildMetrics();this.render();});
+        b.disabled=(dir<0?VM.indexOf(cur)<=0:VM.indexOf(cur)>=VM.length-1);return b;};
+      const sel=document.createElement('select');
+      sel.style.cssText='border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);font:800 11px Poppins,-apple-system,sans-serif;padding:4px 6px;cursor:pointer';
+      sel.title='Month shown on the plan';
+      VM.forEach(m=>{const o2=document.createElement('option');o2.value=m;o2.textContent=m;if(m===cur)o2.selected=true;sel.appendChild(o2);});
+      sel.addEventListener('change',()=>{this._planMonth=sel.value;this._actMonth=sel.value;this.buildMetrics();this.render();});
+      wrap.appendChild(nav(-1,'\u2039'));wrap.appendChild(sel);wrap.appendChild(nav(1,'\u203a'));
+      mc.appendChild(wrap);
+    }
     if(this.colorMode==='castdate'){
       const dvc=document.createElement('span');dvc.className='divv';mc.appendChild(dvc);
       mc.appendChild(mkLbl('Dashboard:'));
@@ -3878,7 +3897,7 @@ class Component extends DCLogic {
     return false;}
   async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
-    if(st.settings)this._appCfg={...(st.settings||{})};
+    if(st.settings)this._appCfg={...(st.settings||{})};try{this._migrateLW8();}catch(_e){}
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
     this._critOv={...(st.crit||{})};this._critPlanSet=null;this.applyCritOv&&this.applyCritOv();
     this._zpOv={...(st.slab_qty||{})};this.zpApplyOv&&this.zpApplyOv();
