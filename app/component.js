@@ -58,7 +58,7 @@ class Component extends DCLogic {
     /* Drawing correction: WF-B2C55 is not an L1 column. Remove it from L1 only;
        keep any same-ID records on B2/L2 and other floors untouched. */
     if(this.COLUMNS&&this.COLUMNS.L1)this.COLUMNS.L1=this.COLUMNS.L1.filter(c=>String(c.id||'').trim().toUpperCase()!=='WF-B2C55');
-    if(this.AREA_OUTLINES&&this.AREA_OUTLINES.L2){this.AREA_OUTLINES.L3=this.AREA_OUTLINES.L3||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L4=this.AREA_OUTLINES.L4||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L5={};}   /* L5 uses the V3 zone geometry itself; never draw another floor's outline over it. */
+    if(this.AREA_OUTLINES&&this.AREA_OUTLINES.L2){this.AREA_OUTLINES.L3=this.AREA_OUTLINES.L3||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L4=this.AREA_OUTLINES.L4||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L5=((window.__RWS&&window.__RWS.L5&&window.__RWS.L5.outlines)||{});}   /* L5 gets its own EB/NB/MA boundary lines, built from its own zoning — never another floor's outline. */
     this.showBeams = false; this.showSeq = false; this.showCrit = true; this.showAreaBounds = true; this.showDelay=false; this.showRpVsAc=false;
     try{this._critOv=JSON.parse(localStorage.getItem('rws_crit_ov')||'{}');}catch(e){this._critOv={};}
     try{this._qtyOv=JSON.parse(localStorage.getItem('rws_qty_ov')||'{}');}catch(e){this._qtyOv={};}
@@ -758,7 +758,7 @@ class Component extends DCLogic {
     ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:340px;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:13px">
       <div style="font-weight:800;font-size:14.5px;margin-bottom:12px">Add activity</div>
       <label style="display:block;font-size:11px;font-weight:700;color:var(--dim);margin-bottom:3px">Activity name</label>
-      <input id="__aa_nm" type="text" placeholder="e.g. Wall Demolition" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);margin-bottom:11px">
+      <input id="__aa_nm" type="text" placeholder="e.g. Demolished Wall" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);margin-bottom:11px">
       <div style="display:flex;gap:10px;margin-bottom:15px">
         <div style="flex:1"><label style="display:block;font-size:11px;font-weight:700;color:var(--dim);margin-bottom:3px">Total quantity</label>
         <input id="__aa_qty" type="number" min="0" step="1" placeholder="e.g. 308" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt)"></div>
@@ -1453,7 +1453,7 @@ class Component extends DCLogic {
 
   /* ---- Monthly-plan overview: which zones have planned work in a given month ---- */
   _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',pcbeam:'m²',act_cyclical:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',temp_stair:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
-  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Wall Demolition'},{id:'demo',label:'Slab Demolition'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
+  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolished Wall'},{id:'demo',label:'Demolished Slab'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
   planMonth(){if(!this._planMonth||this.visMonths().indexOf(this._planMonth)<0)this._planMonth=this.actDefaultMonthVis();return this._planMonth;}
   zonePlanItems(lv,z,m){const zmk=z.mk||z.lid,mi=this.ACT_MONTHS.indexOf(m),out=[];this._actMeta().forEach(a=>{if(this.actHidden(lv,zmk,a.id))return;const p=this.actPlan(lv,zmk,a.id,m);if(p!=null&&p>0){const d=this.actDoneMonth(lv,zmk,a.id,m)||0,cg=mi>=0?this.actCarry(lv,zmk,a.id,mi):null;out.push({label:a.label,qty:p,unit:a.unit,done:d,owed:cg?Math.max(0,cg.balance):Math.max(0,p-d),achieved:cg?cg.balance<=0:d>=p});}});return out;}
   zoneHasPlan(lv,z,m){return this.zonePlanItems(lv,z,m).length>0;}
@@ -2948,8 +2948,8 @@ class Component extends DCLogic {
       {id:'earth',label:'Earthwork',unit:'m³',total:this.actTotal(lv,zmk,'earth',this.actAutoTotal(lv,zmk,'earth'))},
       {id:'exc',label:'Excavation',unit:'m³',total:this.excTotal(lv,z)},
       {id:'piling',label:'Piling',unit:'nos',total:this.actTotal(lv,zmk,'piling',this.actAutoTotal(lv,zmk,'piling'))},
-      {id:'demo_wall',label:'Wall Demolition',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
-      {id:'demo',label:'Slab Demolition',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
+      {id:'demo_wall',label:'Demolished Wall',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
+      {id:'demo',label:'Demolished Slab',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
       {id:'slab_pile',label:'Slab + Pilecap',unit:'m²',total:this.actTotal(lv,zmk,'slab_pile',this.actAutoTotal(lv,zmk,'slab_pile'))},
       /* 数量一律来自 CSV 各月计划量求和(可手改覆盖);没放计划量就留空 — 不再借用图纸台账数/区域面积 */
       {id:'pile',label:'Pilecap',unit:'nos',total:this.actTotal(lv,zmk,'pile',this.actAutoTotal(lv,zmk,'pile'))},
