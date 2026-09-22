@@ -210,6 +210,7 @@ _assets = [
     (r'cw-groups\.global\.js',       ['cw-groups.global.js']),
     (r'floor-templates\.global\.js', ['floor-templates.global.js']),
     (r'app/cloud-sync\.js',          ['app/cloud-sync.js']),
+    (r'app/map-interactions\.js',    ['app/map-interactions.js']),
     (r'presentation/styles\.css',    ['presentation/styles.css']),
 ]
 _idxp = ROOT/'index.html'
