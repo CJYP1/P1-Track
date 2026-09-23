@@ -315,7 +315,7 @@ class Component extends DCLogic {
     if(lv==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){const P=this.SUBZONES.L1.P;let i=label?P.findIndex(e=>e.label===label):-1;if(i<0&&w.pts&&w.pts.length){const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;i=P.findIndex(e=>e.pts&&this.ptIn(e.pts,cx,cy));}if(i>=0)return {lv,zmk:'L1|'+P[i].label,label:P[i].label,sub:{kind:'P',i}};}
     return null;}
   _coreItemsFor(lv,zmk){return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]);}
-  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=lv===srcLv||(rng&&ord!=null&&ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6);if(!show)return;const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
+  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -336,7 +336,7 @@ class Component extends DCLogic {
     const store=(((this._appCfg||{}).lifts)||{}),assign=[];
     Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{
       const rng=this._linksFloorRange(w,srcLv),srcOrd=this._floorOrd(srcLv);
-      (this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=lv===srcLv||(rng&&ord!=null&&ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6);if(show){const target=this._stairTarget(lv,w);if(target)assign.push({w,srcLv,target});}});
+      (this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(show){const target=this._stairTarget(lv,w);if(target)assign.push({w,srcLv,target});}});
     }));
     assign.forEach(({w,srcLv,target})=>{
       const lv=target.lv,zones=(this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[],name=String(w.id||'').trim();if(!name)return;
@@ -2912,18 +2912,33 @@ class Component extends DCLogic {
     if(!links.length){const probe={...w};delete probe.link;delete probe.links;links=this._autoLinks(probe,lv).filter(x=>x.lv===lv);}
     return links;}
   _shapeLinkColor(w,baseFill,baseStroke,lv,kind){const ls=kind==='stair'?this._stairLinksForLevel(w,lv):(kind==='core'?this._coreLinksForLevel(w,lv):this._shapeLinks(w,lv));if(!ls.length)return[baseFill,baseStroke];const sts=ls.map(l=>this.elemStatus(l.lv+'||'+l.zmk+'||'+l.type+'||'+l.id));if(sts.every(s=>s==='done'))return['#35c08e','#218a5c'];if(sts.some(s=>s==='done'||s==='wip'))return['#e2b45c','#b8801f'];return[baseFill,baseStroke];}
+  /* Floor range of a drawn core wall / lift / staircase outline.
+     Members are matched first (their f -> t union), but the RWS main table's own f -> t for that
+     group is a hard cap: a group that tops out at L4 must not be stretched to L17 just because one
+     staircase inside it happens to run higher.  Without a group entry the member union stands. */
+  _cwGroupRange(w){
+    const name=(w&&w.id||'').trim();
+    const g=(name&&typeof window!=='undefined'&&window.CW_GROUPS)?window.CW_GROUPS[name]:null;
+    if(!g||!g.f||!g.t)return null;
+    const a=this._floorOrd(g.f),b=this._floorOrd(g.t);
+    return (a==null||b==null)?null:[Math.min(a,b),Math.max(a,b)];
+  }
   _linksFloorRange(w,lv){
-    /* 楼层范围跟着组里 lift/staircase 走 = 已匹配成员 f→t 的并集 */
-    const ls=this._shapeLinks(w,lv);let lo=null,hi=null;ls.forEach(l=>{const r=this._linkFloorRange(l);if(r){lo=(lo==null?r[0]:Math.min(lo,r[0]));hi=(hi==null?r[1]:Math.max(hi,r[1]));}});if(lo!=null)return [lo,hi];
-    /* Staircase 清单按当前楼层/Zone 重新归区后，旧的手工 link 可能已经找不到
-       原对象。此时必须按图形编号从实时清单及原始 stair 台账反查 f→t，
-       否则画在 L1 的楼梯会错误地只在 L1 显示。 */
-    const name=this._shapeLabel(w),take=e=>{if(!e||typeof e==='string'||!this._idSameGroup(e.id,name))return;const a=this._floorOrd(e.f),b=this._floorOrd(e.t);if(a==null||b==null)return;lo=lo==null?Math.min(a,b):Math.min(lo,a,b);hi=hi==null?Math.max(a,b):Math.max(hi,a,b);};
-    if(name){(this.DATA.order||[]).forEach(fl=>{const L=this.DATA.levels[fl];(L&&L.zones||[]).forEach(z=>{[...(z.lifts||[]),...(z.stairs||[]),...(z.cores||[])].forEach(take);});const base=(this._baseZoneStairs||{})[fl]||{};Object.values(base).forEach(arr=>(arr||[]).forEach(take));});}
-    if(lo!=null)return [lo,hi];
-    /* 没匹配到成员时才退回主表写死的 f/t */
-    const cwName=(w&&w.id||'').trim();const g=(cwName&&typeof window!=='undefined'&&window.CW_GROUPS)?window.CW_GROUPS[cwName]:null;if(g&&g.f&&g.t){const a=this._floorOrd(g.f),b=this._floorOrd(g.t);if(a!=null&&b!=null)return [Math.min(a,b),Math.max(a,b)];}
-    return null;}
+    let lo=null,hi=null;
+    const ls=this._shapeLinks(w,lv);
+    ls.forEach(l=>{const r=this._linkFloorRange(l);if(r){lo=(lo==null?r[0]:Math.min(lo,r[0]));hi=(hi==null?r[1]:Math.max(hi,r[1]));}});
+    if(lo==null){
+      /* The staircase lists are re-homed per level, so an old hand-made link may no longer resolve.
+         Fall back to matching by the outline's own mark across every level's live lists. */
+      const name=this._shapeLabel(w),take=e=>{if(!e||typeof e==='string'||!this._idSameGroup(e.id,name))return;const a=this._floorOrd(e.f),b=this._floorOrd(e.t);if(a==null||b==null)return;lo=lo==null?Math.min(a,b):Math.min(lo,a,b);hi=hi==null?Math.max(a,b):Math.max(hi,a,b);};
+      if(name){(this.DATA.order||[]).forEach(fl=>{const L=this.DATA.levels[fl];(L&&L.zones||[]).forEach(z=>{[...(z.lifts||[]),...(z.stairs||[]),...(z.cores||[])].forEach(take);});const base=(this._baseZoneStairs||{})[fl]||{};Object.values(base).forEach(arr=>(arr||[]).forEach(take));});}
+    }
+    const g=this._cwGroupRange(w);
+    if(lo==null)return g;                       /* nothing matched -> the main table alone */
+    if(!g)return [lo,hi];                       /* no table entry -> the members alone */
+    const a=Math.max(lo,g[0]),b=Math.min(hi,g[1]);
+    return (a<=b)?[a,b]:g;                      /* members clamped to the table; disjoint -> trust the table */
+  }
   _openShape(w,lv,kind){
     /* Staircase 可能从 L1 图形跨层显示，但点击必须留在当前楼层。当前层重新按
        图形位置找 Zone；Marine L1 则进入 Podium 的 P 区 Staircase list。 */
@@ -2949,7 +2964,8 @@ class Component extends DCLogic {
   _linkElem(link){if(!link)return null;const L=this.DATA.levels[link.lv];if(!L)return null;const z=(L.zones||[]).find(x=>(x.mk||x.lid)===link.zmk);if(!z)return null;let arr=link.type==='lift'?z.lifts:link.type==='stair'?z.stairs:link.type==='core'?z.cores:null;if(!arr&&this._catAct({code:link.type})==='ls')arr=this.customItemsFor(link.lv,link.zmk,link.type);if(!arr)return null;return arr.find(x=>this._idSameGroup((typeof x==='string')?x:x.id,link.id))||null;}
   _linkFloorRange(link){const e=this._linkElem(link);if(!e||typeof e==='string')return null;const a=this._floorOrd(e.f),b=this._floorOrd(e.t);if(a==null||b==null)return null;return [Math.min(a,b),Math.max(a,b)];}
   /* 收集当前层要显示的形状: 本层画的 + 有链接且 f→t 范围覆盖本层的(在别层画的). 返回 {w,lv,idx} */
-  _shapesForLevel(kind){const m=kind==='core'?'coreWalls':'lifts';const store=(this._appCfg&&this._appCfg[m])||{};const cur=this.curLevel,curOrd=this._floorOrd(cur);const out=[],seen=new Set();Object.keys(store).forEach(lv=>{(store[lv]||[]).forEach((w,idx)=>{if(!w||!w.pts||w.pts.length<3)return;let show=(lv===cur);if(!show&&curOrd!=null){const rng=this._linksFloorRange(w,lv);if(rng&&curOrd>=rng[0]-1e-6&&curOrd<=rng[1]+1e-6)show=true;}if(show){const k=lv+'|'+idx;if(!seen.has(k)){seen.add(k);out.push({w,lv,idx});}}});});return out;}
+  _shapesForLevel(kind){const m=kind==='core'?'coreWalls':'lifts';const store=(this._appCfg&&this._appCfg[m])||{};const cur=this.curLevel,curOrd=this._floorOrd(cur);const out=[],seen=new Set();Object.keys(store).forEach(lv=>{(store[lv]||[]).forEach((w,idx)=>{if(!w||!w.pts||w.pts.length<3)return;const rng=this._linksFloorRange(w,lv);/* The floor range wins over the level the shape happens to be drawn on: a core wall / lift /
+   staircase that tops out at L4 must not appear on L5 just because its outline lives there. */let show;if(rng&&curOrd!=null)show=(curOrd>=rng[0]-1e-6&&curOrd<=rng[1]+1e-6);else show=(lv===cur);if(show){const k=lv+'|'+idx;if(!seen.has(k)){seen.add(k);out.push({w,lv,idx});}}});});return out;}
   _shapeArr(kind,lv){lv=lv||this.curLevel;const m=kind==='core'?'coreWalls':'lifts';return (this._appCfg&&this._appCfg[m]&&this._appCfg[m][lv])||[];}
   _shapeAreaCat(kind,w){
     const lv=this.curLevel,L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];if(!L||!w)return null;
