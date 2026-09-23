@@ -566,14 +566,17 @@ class Component extends DCLogic {
   _resourceKeys(){return ['workers','formwork','rebar','total'];}
   /* "concrete" was the old name of this field — it is rebar, not concrete.  Old saved plans are
      read through so nothing typed in before the rename is lost. */
-  _resourceTeamValues(t){const saved=(t&&t.resources)||{},sum={};this._resourceKeys().forEach(k=>sum[k]=0);
-    (t&&t.zones||[]).forEach(x=>this._resourceKeys().forEach(k=>sum[k]+=Number(k==='rebar'&&x[k]==null?x.concrete:x[k])||0));
+  _resourceTeamValues(t,lv){const saved=(t&&t.resources)||{},sum={};this._resourceKeys().forEach(k=>sum[k]=0);
+    (t&&t.zones||[]).filter(x=>!lv||x.lv===lv).forEach(x=>this._resourceKeys().forEach(k=>sum[k]+=Number(k==='rebar'&&x[k]==null?x.concrete:x[k])||0));
+    /* A team-wide override is one figure for the whole team, so it can only stand in for the
+       all-levels total.  Asked for one level, always report that level's own zones. */
+    if(lv)return sum;
     const out={};this._resourceKeys().forEach(k=>{const sv=(k==='rebar'&&saved[k]==null)?saved.concrete:saved[k];out[k]=sv==null?sum[k]:sv;});return out;}
   /* ---- Core walls in the resource plan.  They are tracked per drawn core-wall shape and keep
      their own figures; they are never folded into the zone Team Total. ---- */
   _resourceCoreKey(id){return String(id==null?'':id).trim().toUpperCase();}
   _resourceCoreEntry(lv,id){const k=this._resourceCoreKey(id);for(const t of this._resourceData().teams){const i=(t.cores||[]).find(x=>x.lv===lv&&this._resourceCoreKey(x.id)===k);if(i)return {team:t,item:i};}return null;}
-  _resourceCoreValues(t){const sum={};this._resourceKeys().forEach(k=>sum[k]=0);(t&&t.cores||[]).forEach(x=>this._resourceKeys().forEach(k=>sum[k]+=Number(k==='rebar'&&x[k]==null?x.concrete:x[k])||0));return sum;}
+  _resourceCoreValues(t,lv){const sum={};this._resourceKeys().forEach(k=>sum[k]=0);(t&&t.cores||[]).filter(x=>!lv||x.lv===lv).forEach(x=>this._resourceKeys().forEach(k=>sum[k]+=Number(k==='rebar'&&x[k]==null?x.concrete:x[k])||0));return sum;}
   /* Core walls are numbered per level, like zones, so each floor reads 1,2,3. */
   _resourceCoreRenumber(t){const by={};
     (t.cores||[]).sort((a,b)=>(this._resourceLvOrder(a.lv)-this._resourceLvOrder(b.lv))||((Number(a.order)||999)-(Number(b.order)||999)))
@@ -2676,7 +2679,7 @@ class Component extends DCLogic {
            ground rather than drifting into empty space, then drop it clear of the order badge. */
         let a=ps[0],ad=Infinity;ps.forEach(q=>{const d=Math.hypot(q.x-cx0,q.y-cy0);if(d<ad){ad=d;a=q;}});
         const x=a.x,y=a.y+(a.r||0)+_bs*1.05;
-        const v=this._resourceTeamValues(e.t),cv=this._resourceCoreValues(e.t),
+        const v=this._resourceTeamValues(e.t,this.curLevel),cv=this._resourceCoreValues(e.t,this.curLevel),
               w=(Number(v.workers)||0)+(Number(cv.workers)||0),c=this._darken(e.t.color||'#3157d5',0.42);
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
