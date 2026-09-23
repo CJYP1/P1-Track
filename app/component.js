@@ -1913,6 +1913,26 @@ class Component extends DCLogic {
       return {...b,n:g.length,avg,lines};
     }).filter(b=>b.n);
   }
+  _delayBandHtml(rows){
+    if(!rows.length)return '<div class="delay-sum-empty">No Zone in this filter has a delay.</div>';
+    const strip=(r)=>String(r.label).replace(new RegExp('^'+r.lv+'[-_ ]','i'),'');
+    const lvls=[...new Set(rows.map(r=>r.lv))];
+    return lvls.map(lv=>{
+      const g=rows.filter(r=>r.lv===lv),bands=this._delayBands(g);
+      const avg=Math.round(g.reduce((a,r)=>a+r.days,0)/g.length);
+      const worst=g.reduce((m,r)=>r.days>m.days?r:m,g[0]);
+      const body=bands.map(b=>{
+        const byDay={};g.filter(r=>r.days>=b.min&&r.days<=b.max).forEach(r=>(byDay[r.days]=byDay[r.days]||[]).push(r));
+        const lines=Object.keys(byDay).map(Number).sort((a,c)=>c-a).map(d=>{
+          const L=byDay[d];
+          return '<div>'+this.esc(L.map(strip).join(', '))+' <b>('+d+')</b>'+(L.some(r=>r.crit)?' <i>\u2013 critical path</i>':'')+'</div>';}).join('');
+        return `<tr class="${b.k==='hi'?'hot':''}"><td>${this.esc(b.label)}</td><td class="n">${b.n}</td><td class="n">${b.avg} days</td><td>${lines}</td></tr>`;}).join('');
+      return `<div class="delay-sum-lv"><h4>${this.esc(lv)} zone delay by band \u00b7 ${g.length} zone${g.length===1?'':'s'} delayed</h4>
+        <table><thead><tr><th>Delay band</th><th class="n">Zones</th><th class="n">Avg delay</th><th>Zones (delay in days)</th></tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr><td>Total</td><td class="n">${g.length}</td><td class="n">${avg} days</td><td class="worst">Worst: ${this.esc(strip(worst))} at ${worst.days} days</td></tr></tfoot></table></div>`;
+    }).join('');
+  }
   _exportDelayBandPng(rows,pick){
     const W=800,ACC='#c8102e',HEAD='#1f3557',PAD=20,LH=19;
     const lvls=[...new Set(rows.map(r=>r.lv))];
@@ -1983,14 +2003,14 @@ class Component extends DCLogic {
     const old=document.getElementById('__delayPick');if(old)old.remove();
     const ov=document.createElement('div');ov.id='__delayPick';
     ov.style.cssText='position:fixed;inset:0;z-index:2147483600;background:rgba(15,23,42,.45);display:grid;place-items:center';
-    const chip=(v,lab,n)=>`<button type="button" class="hbtn dpk on" data-g="${n}" data-v="${v}" style="padding:6px 11px">${this.esc(lab)}</button>`;
+    const chip=(v,lab,n)=>`<button type="button" class="hbtn dpk" data-g="${n}" data-v="${v}" style="padding:6px 11px;opacity:.45">${this.esc(lab)}</button>`;
     ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(460px,92vw);box-shadow:0 18px 50px rgba(0,0,0,.35)">
       <div style="font-weight:800;font-size:14px;margin-bottom:2px">Export delay image</div>
-      <div style="font-size:10px;color:var(--dim);margin-bottom:12px">Pick the areas and levels to include · ${all.length} zones have a delay</div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:12px">Pick at least one area and one level · ${all.length} zones have a delay</div>
       <div style="font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--dim);margin-bottom:5px">AREA</div>
-      <div id="__dpkA" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${areas.map(a=>chip(a,aNames[a]||a,'a')).join('')}</div>
+      <div id="__dpkA" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${areas.map(a=>chip(a,aNames[a]||a,'a')).join('')}<button type="button" class="hbtn dpkall" data-g="a" style="padding:6px 11px;font-weight:800">All</button></div>
       <div style="font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--dim);margin-bottom:5px">LEVEL</div>
-      <div id="__dpkL" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${levels.map(l=>chip(l,l,'l')).join('')}</div>
+      <div id="__dpkL" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${levels.map(l=>chip(l,l,'l')).join('')}<button type="button" class="hbtn dpkall" data-g="l" style="padding:6px 11px;font-weight:800">All</button></div>
       <div style="font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--dim);margin:12px 0 5px">LAYOUT</div>
       <div id="__dpkM" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
         <button type="button" class="hbtn dpkm on" data-m="list" style="padding:6px 11px">Zone list</button>
@@ -2006,11 +2026,16 @@ class Component extends DCLogic {
     ov.addEventListener('click',e=>{if(e.target===ov)close();});
     const sel=g=>[...ov.querySelectorAll('.dpk[data-g="'+g+'"].on')].map(b=>b.dataset.v);
     const refresh=()=>{const A=new Set(sel('a')),L=new Set(sel('l'));
-      const n=all.filter(r=>(!A.size||A.has(k2a[r.cat]||r.cat))&&(!L.size||L.has(r.lv))).length;
-      ov.querySelector('#__dpkCount').textContent=n+' zone'+(n===1?'':'s')+' will be in the image';
+      const ready=A.size&&L.size;
+      const n=ready?all.filter(r=>A.has(k2a[r.cat]||r.cat)&&L.has(r.lv)).length:0;
+      ov.querySelector('#__dpkCount').textContent=ready?(n+' zone'+(n===1?'':'s')+' will be in the image')
+        :(!A.size&&!L.size?'Nothing picked yet':(!A.size?'Pick an area':'Pick a level'));
       ov.querySelector('#__dpkGo').disabled=!n;};
     ov.querySelectorAll('.dpk').forEach(b=>b.onclick=()=>{b.classList.toggle('on');
       b.style.opacity=b.classList.contains('on')?'':'0.45';refresh();});
+    ov.querySelectorAll('.dpkall').forEach(bt=>bt.onclick=()=>{const g=bt.dataset.g,
+      cs=[...ov.querySelectorAll('.dpk[data-g="'+g+'"]')],on=cs.some(c=>!c.classList.contains('on'));
+      cs.forEach(c=>{c.classList.toggle('on',on);c.style.opacity=on?'':'0.45';});refresh();});
     ov.querySelectorAll('.dpkm').forEach(b=>b.onclick=()=>{ov.querySelectorAll('.dpkm').forEach(o2=>{
       const on=o2===b;o2.classList.toggle('on',on);o2.style.opacity=on?'':'0.45';});});
     ov.querySelector('#__dpkCancel').onclick=close;
@@ -2095,8 +2120,9 @@ class Component extends DCLogic {
           +`<input id="__delayFind" placeholder="Find zone…">`
           +`<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="__delaySetOnly">Only Zones with a delay</label>`
         +`</div>`
-        +`<span id="__delayCount">${rows.length} zones</span>`
+        +`<span style="display:flex;align-items:center;gap:8px"><button class="hbtn" id="__delaySum" title="Show the band summary for the rows currently filtered">\u25a4 Summary</button><span id="__delayCount">${rows.length} zones</span></span>`
       +`</div>`
+      +`<div id="__delaySumBox" class="delay-sum" style="display:none"></div>`
       +`<div class="delay-admin-scroll"><table><thead><tr><th>Level</th><th>Zone</th><th>Area</th><th>Delay days</th><th>Map display</th></tr></thead><tbody>${body}</tbody></table></div>`
       +`<div class="delay-admin-foot"><span>Blank = no delay · <b id="__delayState">Autosaves as you type</b> · bulk-set applies to the rows currently shown.</span>`
         +`<div style="display:flex;align-items:center;gap:6px">`
@@ -2120,6 +2146,7 @@ class Component extends DCLogic {
       try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
       if(typeof rwsSyncKV==='function')rwsSyncKV('settings','zoneDelay',dst,null,null);
       this.buildMetrics();this.render();
+      try{renderSum();}catch(_e){}
       const st=ov.querySelector('#__delayState');if(st){st.textContent='Saved ✓';st.style.color='#159957';clearTimeout(this._delaySavedT);this._delaySavedT=setTimeout(()=>{if(st.isConnected){st.textContent='Autosaves as you type';st.style.color='';}},1800);}
       return dst;};
     const queueSave=()=>{const st=ov.querySelector('#__delayState');if(st){st.textContent='Saving...';st.style.color='var(--dim)';}
@@ -2135,7 +2162,17 @@ class Component extends DCLogic {
       trs.forEach(tr=>{const okC=!c||tr.dataset.cat===c,okL=!lv||tr.dataset.lv===lv,okQ=!q||tr.dataset.q.indexOf(q)>=0,
           okS=!setOnly||(tr.querySelector('.delay-admin-in').value.trim()!=='');
         tr.style.display=(okC&&okL&&okQ&&okS)?'':'none';});
-      cntEl.textContent=shown().length+' of '+trs.length+' zones';};
+      cntEl.textContent=shown().length+' of '+trs.length+' zones';renderSum();};
+    /* Band summary, in the page itself — same buckets as the "Summary by band" PNG, and it
+       follows the Area / Level selects above so it always describes what is on screen. */
+    const sumBox=ov.querySelector('#__delaySumBox');
+    const renderSum=()=>{if(!sumBox||sumBox.style.display==='none')return;
+      const c=ov.querySelector('#__delayCat').value,lv=ov.querySelector('#__delayLv').value,
+            k2a={'Existing Basement':'EB','New Basement':'NB','Marine':'MA'};
+      const rs=this._delayRows().filter(r=>(!c||(k2a[r.cat]||r.cat)===c)&&(!lv||r.lv===lv));
+      sumBox.innerHTML=this._delayBandHtml(rs);};
+    ov.querySelector('#__delaySum').onclick=()=>{const on=sumBox.style.display==='none';
+      sumBox.style.display=on?'':'none';ov.querySelector('#__delaySum').classList.toggle('on',on);renderSum();};
     ['#__delayCat','#__delayLv','#__delaySetOnly'].forEach(sel=>ov.querySelector(sel).onchange=applyFilter);
     ov.querySelector('#__delayFind').oninput=applyFilter;
     applyFilter();
