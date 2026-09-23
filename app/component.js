@@ -1861,6 +1861,64 @@ class Component extends DCLogic {
   _reportCmtBtn(ctx){if(!ctx.zmk)return '';const all=this.visibleActCmts(ctx.lv,ctx.zmk,ctx.aid),n=all.filter(c=>!c.done).length,d=all.filter(c=>c.done).length,b=n?`<b class="rpt-cmt-count open">${n}</b>`:(d?`<b class="rpt-cmt-count done">✓${d}</b>`:'');return `<button type="button" class="rpt-cmt-open" data-lv="${this.esc(ctx.lv)}" data-zmk="${this.esc(ctx.zmk)}" data-a="${this.esc(ctx.aid)}" title="Report comments · ${n} open · ${d} completed" style="position:relative;margin-top:7px;border:1px solid rgba(255,255,255,.65);border-radius:7px;background:rgba(255,255,255,.12);padding:3px 7px;cursor:pointer">${this._cmtBubbleSVG()}${b}</button>`;}
   _syncFocusButtons(){const d=this.root&&this.root.querySelector('#toggleDelayTop'),r=this.root&&this.root.querySelector('#toggleRpVsAc');if(d)d.classList.toggle('on',!!this.showDelay);if(r)r.classList.toggle('on',!!this.showRpVsAc);}
   _toggleFocus(which){if(which==='delay'){this.showDelay=!this.showDelay;if(this.showDelay)this.showRpVsAc=false;}else{this.showRpVsAc=!this.showRpVsAc;if(this.showRpVsAc)this.showDelay=false;}this._syncFocusButtons();this.buildMetrics();this.render();}
+  /* Delay days as a shareable PNG: one row per Zone that actually carries a delay, grouped by
+     level and sorted worst-first, so it can be dropped straight into a report or a chat. */
+  _delayRows(){
+    const rows=[],seen=new Set(),cats={EB:'Existing Basement',NB:'New Basement',MA:'Marine'};
+    const add=(lv,z,group)=>{if(!z)return;const zmk=z.mk||z.lid||lv+'|'+z.label,key=lv+'||'+zmk;
+      if(seen.has(key))return;seen.add(key);
+      let raw=((this._appCfg&&this._appCfg.zoneDelay)||{})[key];
+      if(raw&&typeof raw==='object')raw=(raw.days!=null?raw.days:raw.delay_days);
+      const d=Number(raw);if(!Number.isFinite(d)||d<=0)return;
+      rows.push({lv,label:z.label||zmk,cat:cats[z.cat||'NB']||(z.cat||'NB'),group:group||'',days:Math.round(d)});};
+    (this.DATA.order||[]).forEach(lv=>{const L=this.DATA.levels[lv];(L&&L.zones||[]).forEach(z=>add(lv,z,''));});
+    const S=this.SUBZONES&&this.SUBZONES.L1;
+    if(S)['C','P'].forEach(k=>(S[k]||[]).forEach(e=>add('L1',{mk:'L1|'+e.label,label:e.label,cat:'MA'},'Marine '+k)));
+    const ord=lv=>{const i=(this.DATA.order||[]).indexOf(lv);return i<0?999:i;};
+    rows.sort((a,b)=>(ord(a.lv)-ord(b.lv))||(b.days-a.days)||String(a.label).localeCompare(String(b.label)));
+    return rows;
+  }
+  exportDelayPng(){
+    const rows=this._delayRows();
+    if(!rows.length){this._toast&&this._toast('No Zone has a delay to export.');return;}
+    const W=1180,rowH=40,headH=34,ACC='#c8102e';
+    const lvls=[...new Set(rows.map(r=>r.lv))];
+    const H=150+lvls.length*(headH+6)+rows.length*rowH+70;
+    const cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
+    x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
+    x.fillStyle=ACC;x.fillRect(0,0,W,84);
+    x.fillStyle='#ffffff';x.font='700 27px Arial';x.fillText('P1 Waterfront · Delay by Zone',34,37);
+    x.font='600 15px Arial';
+    const worst=rows.reduce((m,r)=>Math.max(m,r.days),0);
+    x.fillText(rows.length+' zone'+(rows.length===1?'':'s')+' delayed · worst '+worst+' days · '+new Date().toISOString().slice(0,10),34,66);
+    const cols=[34,300,660,930];
+    let y=116;
+    x.font='700 13px Arial';x.fillStyle='#475467';
+    ['Level','Zone','Area','Delay'].forEach((h,i)=>x.fillText(h,cols[i],y));
+    y+=18;x.strokeStyle='#cfd7e2';x.beginPath();x.moveTo(28,y);x.lineTo(W-28,y);x.stroke();
+    lvls.forEach(lv=>{
+      const g=rows.filter(r=>r.lv===lv);
+      x.fillStyle='#eef1f6';x.fillRect(28,y,W-56,headH);
+      x.fillStyle='#202938';x.font='700 15px Arial';
+      x.fillText(lv+' · '+((this.DATA.levels[lv]&&this.DATA.levels[lv].title)||lv)+'   ('+g.length+')',40,y+23);
+      y+=headH;
+      g.forEach((r,i)=>{
+        x.fillStyle=(i%2)?'#fafbfc':'#ffffff';x.fillRect(28,y,W-56,rowH);
+        x.fillStyle='#667085';x.font='13px Arial';x.fillText(r.lv,cols[0],y+25);
+        x.fillStyle='#202938';x.font='700 14px Arial';x.fillText(String(r.label)+(r.group?'  ('+r.group+')':''),cols[1],y+25);
+        x.fillStyle='#667085';x.font='13px Arial';x.fillText(r.cat,cols[2],y+25);
+        x.fillStyle=ACC;x.font='700 17px Arial';x.fillText('−'+r.days+' days',cols[3],y+26);
+        x.strokeStyle='#e8ebf0';x.beginPath();x.moveTo(28,y+rowH);x.lineTo(W-28,y+rowH);x.stroke();
+        y+=rowH;});
+      y+=6;});
+    y+=14;x.fillStyle='#8a92a2';x.font='12px Arial';
+    x.fillText('Delay days are entered by hand in the Delay Table. Zones with no entry are not shown.',34,y);
+    const name=('P1_delay-by-zone_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
+    const dl=u=>{const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();};
+    if(cv.toBlob)cv.toBlob(b=>{if(!b)return;const u=URL.createObjectURL(b);dl(u);setTimeout(()=>URL.revokeObjectURL(u),1000);},'image/png');
+    else dl(cv.toDataURL('image/png'));
+    this._toast&&this._toast('Delay image exported ✓');
+  }
   openDelayAdmin(){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit Delay days.');return;}const old=document.getElementById('__delayAdmin');if(old)old.remove();
     /* Delay days are a purely manual figure: whatever is typed here is what the map shows.
        Nothing is derived from the programme baseline or from live progress any more. */
@@ -1895,7 +1953,7 @@ class Component extends DCLogic {
         +`<div style="display:flex;align-items:center;gap:6px">`
           +`<input id="__delayBulk" type="number" min="0" step="1" placeholder="days" style="width:74px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--txt);font-size:11px;text-align:right">`
           +`<button class="hbtn" id="__delayApply">Apply to shown</button>`
-          +`<button class="hbtn" id="__delayClearAll">Clear shown</button>`
+          +`<button class="hbtn" id="__delayClearAll">Clear shown</button><button class="hbtn" id="__delayPng" title="Download a PNG listing every Zone and its delay days">\u2b07 PNG</button>`
           +`<button class="hbtn primary" id="__delaySave">Save &amp; close</button>`
         +`</div></div></div>`;
     document.body.appendChild(ov);
@@ -1935,6 +1993,7 @@ class Component extends DCLogic {
     ov.querySelector('#__delayApply').onclick=()=>{const v=ov.querySelector('#__delayBulk').value.trim();if(v==='')return;
       const n=Math.max(0,Math.round(Number(v)||0));shown().forEach(tr=>{const inp=tr.querySelector('.delay-admin-in');inp.value=String(n);refreshRow(inp);});clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();};
     ov.querySelector('#__delayClearAll').onclick=()=>{shown().forEach(tr=>{const inp=tr.querySelector('.delay-admin-in');inp.value='';refreshRow(inp);});clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();};
+    ov.querySelector('#__delayPng').onclick=()=>{clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();this.exportDelayPng();};
     ov.querySelector('#__delaySave').onclick=()=>{clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();close();this._toast&&this._toast('Delay Table saved ✓');};}
   _reportWeekBounds(mon){
     const today=this._reportToday();if(this.dateToActMonth(today)!==mon)return null;
@@ -2172,7 +2231,7 @@ class Component extends DCLogic {
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#b23a2e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*1.18).toFixed(0)}">■ ${this.esc(_e)}</text>`;
         } }   /* Slab 起(▶)/止(■)日期 — 没有 slab 日期的区域不写 TBA, 避免整张图过密 */
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _cm=this._dateToActMonth(_cd.start||_cd.end); if(_cm){_topDates+=`<text class="zname" style="font-size:${(fs*0.38).toFixed(0)}px;font-weight:750;fill:#315b96;stroke:var(--stage);stroke-width:${(fs*0.10).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*1.67).toFixed(0)}">COL ${this.esc(_cm)}</text>`;} }
-      if(this._resourceMode){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="${_rc}" stroke="#fff" stroke-width="${Math.max(220,_rr*0.18).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.12).toFixed(0)}px" fill="#fff" style="font-weight:900">${_rn}</text></g>`;}}
+      if(this._resourceMode){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
       if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
@@ -2283,7 +2342,7 @@ class Component extends DCLogic {
       const _aggZone=this._marineSubCalcZone(cls.replace('sub',''),i),_aggKey=_aggZone&&String(_aggZone.mk||_aggZone.lid),_aggPicked=this.rwsIsAdmin()&&this._adminAggLevel===this.curLevel&&this._adminAggSet&&this._adminAggSet.has(_aggKey);
       s+=base+`<polygon class="subz ${cls}${_aggPicked?' aggpick':''}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
-      if(_resSub){const _rn=_resSub.item.order||((_resSub.team.zones||[]).indexOf(_resSub.item)+1),_rr=Math.max(1050,Math.min(1600,_bh*0.125));_resMark(_resSub.team,lq[0],lq[1],_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_resSub.team.name)} · Work order ${_rn}</title><circle cx="${lq[0].toFixed(0)}" cy="${lq[1].toFixed(0)}" r="${_rr.toFixed(0)}" fill="${_resSub.team.color}" stroke="#fff" stroke-width="220"/><text x="${lq[0].toFixed(0)}" y="${(lq[1]+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.08).toFixed(0)}" fill="#fff" font-weight="900">${_rn}</text></g>`;}
+      if(_resSub){const _rn=_resSub.item.order||((_resSub.team.zones||[]).indexOf(_resSub.item)+1),_rr=Math.max(1050,Math.min(1600,_bh*0.125));_resMark(_resSub.team,lq[0],lq[1],_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_resSub.team.name)} · Work order ${_rn}</title><circle cx="${lq[0].toFixed(0)}" cy="${lq[1].toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_resSub.team.color}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${lq[0].toFixed(0)}" y="${(lq[1]+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.02).toFixed(0)}" fill="${this._darken(_resSub.team.color||'#3157d5',0.45)}" font-weight="950">${_rn}</text></g>`;}
       if(!_focusOnly&&this.colorMode==='castdate'&&cls!=='subP'&&this._castSlabsOn()&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=cls==='subZC'?this._marineCastInfo(this.curLevel,_z2):this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
       if(!_focusOnly&&this.colorMode==='castdate'&&cls==='subP'&&this._castColumnsOn()&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.end||_cd.start); if(_mo){const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_mo.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_mo,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">COL ${this.esc(_mo)}</text>`;} }
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'&&!(cls==='subZC'&&this.showSubC)){const _z3={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')},_mi=cls==='subZC'?this._marineCastInfo(this.curLevel,_z3):this._zoneCastInfo(this.curLevel,_z3);if(_mi.start||_mi.end){const _ds=[_mi.start&&('▶ '+this._fmtDShort(_mi.start)),_mi.end&&('■ '+this._fmtDShort(_mi.end))].filter(Boolean).join(' → '),_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_ds.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_ds,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#315b96" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_ds)}</text>`;}}
