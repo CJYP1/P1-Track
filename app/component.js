@@ -1878,9 +1878,52 @@ class Component extends DCLogic {
     rows.sort((a,b)=>(ord(a.lv)-ord(b.lv))||(b.days-a.days)||String(a.label).localeCompare(String(b.label)));
     return rows;
   }
-  exportDelayPng(){
-    const rows=this._delayRows();
-    if(!rows.length){this._toast&&this._toast('No Zone has a delay to export.');return;}
+  /* Ask which areas and levels go into the delay image.  Only the ones that actually carry a
+     delay are offered, so the choice is never a dead end. */
+  openDelayPngPicker(){
+    const all=this._delayRows();
+    if(!all.length){this._toast&&this._toast('No Zone has a delay to export.');return;}
+    const k2a={'Existing Basement':'EB','New Basement':'NB','Marine':'MA'};
+    const aNames={EB:'Existing Basement',NB:'New Basement',MA:'Marine'};
+    const areas=[...new Set(all.map(r=>k2a[r.cat]||r.cat))];
+    const levels=(this.DATA.order||[]).filter(lv=>all.some(r=>r.lv===lv));
+    const old=document.getElementById('__delayPick');if(old)old.remove();
+    const ov=document.createElement('div');ov.id='__delayPick';
+    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.45);display:grid;place-items:center';
+    const chip=(v,lab,n)=>`<button type="button" class="hbtn dpk on" data-g="${n}" data-v="${v}" style="padding:6px 11px">${this.esc(lab)}</button>`;
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(460px,92vw);box-shadow:0 18px 50px rgba(0,0,0,.35)">
+      <div style="font-weight:800;font-size:14px;margin-bottom:2px">Export delay image</div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:12px">Pick the areas and levels to include · ${all.length} zones have a delay</div>
+      <div style="font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--dim);margin-bottom:5px">AREA</div>
+      <div id="__dpkA" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${areas.map(a=>chip(a,aNames[a]||a,'a')).join('')}</div>
+      <div style="font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--dim);margin-bottom:5px">LEVEL</div>
+      <div id="__dpkL" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${levels.map(l=>chip(l,l,'l')).join('')}</div>
+      <div id="__dpkCount" style="font-size:10px;color:var(--dim);margin-bottom:12px"></div>
+      <div style="display:flex;justify-content:flex-end;gap:7px">
+        <button class="hbtn" id="__dpkCancel">Cancel</button>
+        <button class="hbtn primary" id="__dpkGo">⬇ Export PNG</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const close=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    const sel=g=>[...ov.querySelectorAll('.dpk[data-g="'+g+'"].on')].map(b=>b.dataset.v);
+    const refresh=()=>{const A=new Set(sel('a')),L=new Set(sel('l'));
+      const n=all.filter(r=>(!A.size||A.has(k2a[r.cat]||r.cat))&&(!L.size||L.has(r.lv))).length;
+      ov.querySelector('#__dpkCount').textContent=n+' zone'+(n===1?'':'s')+' will be in the image';
+      ov.querySelector('#__dpkGo').disabled=!n;};
+    ov.querySelectorAll('.dpk').forEach(b=>b.onclick=()=>{b.classList.toggle('on');
+      b.style.opacity=b.classList.contains('on')?'':'0.45';refresh();});
+    ov.querySelector('#__dpkCancel').onclick=close;
+    ov.querySelector('#__dpkGo').onclick=()=>{const A=sel('a'),L=sel('l');close();
+      this.exportDelayPng({areas:A.length===areas.length?[]:A,levels:L.length===levels.length?[]:L});};
+    refresh();
+  }
+  exportDelayPng(pick){
+    let rows=this._delayRows();
+    if(pick){const L=new Set(pick.levels||[]),A=new Set(pick.areas||[]);
+      const key={'Existing Basement':'EB','New Basement':'NB','Marine':'MA'};
+      rows=rows.filter(r=>(!L.size||L.has(r.lv))&&(!A.size||A.has(key[r.cat]||r.cat)));}
+    if(!rows.length){this._toast&&this._toast('No Zone has a delay in that selection.');return;}
     const W=1180,rowH=40,headH=34,ACC='#c8102e';
     const lvls=[...new Set(rows.map(r=>r.lv))];
     const H=150+lvls.length*(headH+6)+rows.length*rowH+70;
@@ -1890,7 +1933,9 @@ class Component extends DCLogic {
     x.fillStyle='#ffffff';x.font='700 27px Arial';x.fillText('P1 Waterfront · Delay by Zone',34,37);
     x.font='600 15px Arial';
     const worst=rows.reduce((m,r)=>Math.max(m,r.days),0);
-    x.fillText(rows.length+' zone'+(rows.length===1?'':'s')+' delayed · worst '+worst+' days · '+new Date().toISOString().slice(0,10),34,66);
+    const _scope=(pick&&((pick.areas||[]).length||(pick.levels||[]).length))
+      ?(((pick.areas||[]).join(' + ')||'All areas')+' · '+((pick.levels||[]).join(' ')||'All levels')+' · '):'';
+    x.fillText(_scope+rows.length+' zone'+(rows.length===1?'':'s')+' delayed · worst '+worst+' days · '+new Date().toISOString().slice(0,10),34,66);
     const cols=[34,300,660,930];
     let y=116;
     x.font='700 13px Arial';x.fillStyle='#475467';
@@ -1913,7 +1958,8 @@ class Component extends DCLogic {
       y+=6;});
     y+=14;x.fillStyle='#8a92a2';x.font='12px Arial';
     x.fillText('Delay days are entered by hand in the Delay Table. Zones with no entry are not shown.',34,y);
-    const name=('P1_delay-by-zone_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
+    const _tag=(pick?((pick.areas||[]).join('-')+'_'+(pick.levels||[]).join('-')):'').replace(/^_+|_+$/g,'');
+    const name=('P1_delay-by-zone'+(_tag?'_'+_tag:'')+'_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
     const dl=u=>{const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();};
     if(cv.toBlob)cv.toBlob(b=>{if(!b)return;const u=URL.createObjectURL(b);dl(u);setTimeout(()=>URL.revokeObjectURL(u),1000);},'image/png');
     else dl(cv.toDataURL('image/png'));
@@ -1993,7 +2039,7 @@ class Component extends DCLogic {
     ov.querySelector('#__delayApply').onclick=()=>{const v=ov.querySelector('#__delayBulk').value.trim();if(v==='')return;
       const n=Math.max(0,Math.round(Number(v)||0));shown().forEach(tr=>{const inp=tr.querySelector('.delay-admin-in');inp.value=String(n);refreshRow(inp);});clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();};
     ov.querySelector('#__delayClearAll').onclick=()=>{shown().forEach(tr=>{const inp=tr.querySelector('.delay-admin-in');inp.value='';refreshRow(inp);});clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();};
-    ov.querySelector('#__delayPng').onclick=()=>{clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();this.exportDelayPng();};
+    ov.querySelector('#__delayPng').onclick=()=>{clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();this.openDelayPngPicker();};
     ov.querySelector('#__delaySave').onclick=()=>{clearTimeout(this._delaySaveT);this._delaySaveT=null;persist();close();this._toast&&this._toast('Delay Table saved ✓');};}
   _reportWeekBounds(mon){
     const today=this._reportToday();if(this.dateToActMonth(today)!==mon)return null;
