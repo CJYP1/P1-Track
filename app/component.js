@@ -2620,18 +2620,20 @@ class Component extends DCLogic {
        必须按当前正在看的楼层重新取归属，不能沿用来源楼层。 */
     const _shapeInArea=(kind,w)=>this.filterCat==='all'||this._shapeAreaCat(kind,w)===this.filterCat;
     /* Core Wall 多边形(admin 画的) + 正在画的临时轮廓 */
-    if(!_focusOnly&&this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi,top:_top})=>{ if(!w.pts||w.pts.length<3)return;
+    /* Core walls stay on the map in the Delay / RP-vs-AC focus views, drawn plain grey so
+       they give position without competing with the numbers those views are about. */
+    if(this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi,top:_top})=>{ if(!w.pts||w.pts.length<3)return;
         if(!_shapeInArea('core',w))return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length, cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length; const lq=this.proj([cx,cy],H);
         let _cc=this._shapeLinkColor(w,'#22c55e','#15803d',this.curLevel,'core'); const _foreign=(swlv!==this.curLevel);
         /* Tops out on this level: the work belongs to the level below, so draw a plain grey
            outline that only marks where it stops — no status colour, no clicking. */
-        if(_top)_cc=['#c3c8d1','#8b93a1'];
+        if(_top||_focusOnly)_cc=['#c3c8d1','#8b93a1'];
         if(this._resourceMode){const _rc=this._resourceCoreEntry(swlv,this._shapeLabel(w));
           if(!_rc&&!this._resourceEditing)return;                       /* view mode shows only planned core walls */
           _cc=_rc?[_rc.team.color||'#3157d5',_rc.team.color||'#3157d5']:['#d9dee7','#9aa3b0'];}   /* 未开始=亮绿底色; 做完=深绿, 在做=黄(按成员状态) */
-        s+=`<polygon class="corewall${_top?' shape-top':''}" data-cwi="${wi}" data-cwlv="${swlv}" points="${pp}" fill="${_cc[0]}" fill-opacity="${this._resourceMode?(this._resourceCoreEntry(swlv,this._shapeLabel(w))?0.72:0.18):(_foreign?0.14:0.22)}" stroke="${_cc[1]}" stroke-width="520"${_foreign?' stroke-dasharray="1400,700"':''} style="${_top?'pointer-events:none':'cursor:pointer'}"/>`;
+        s+=`<polygon class="corewall${_top?' shape-top':''}" data-cwi="${wi}" data-cwlv="${swlv}" points="${pp}" fill="${_cc[0]}" fill-opacity="${_focusOnly?0.16:(this._resourceMode?(this._resourceCoreEntry(swlv,this._shapeLabel(w))?0.72:0.18):(_foreign?0.14:0.22))}" stroke="${_cc[1]}" stroke-width="520"${_foreign?' stroke-dasharray="1400,700"':''} style="${_top?'pointer-events:none':'cursor:pointer'}"/>`;
         s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none;opacity:${_top?0.75:1}">${this.esc(this._shapeLabel(w))}${_top?' \u23f9':''}</text>`;});
       }
       if(this._drawingCore&&this._coreBuf&&this._coreBuf.length){
