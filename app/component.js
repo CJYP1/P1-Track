@@ -758,7 +758,7 @@ class Component extends DCLogic {
     ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:340px;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:13px">
       <div style="font-weight:800;font-size:14.5px;margin-bottom:12px">Add activity</div>
       <label style="display:block;font-size:11px;font-weight:700;color:var(--dim);margin-bottom:3px">Activity name</label>
-      <input id="__aa_nm" type="text" placeholder="e.g. Wall Demolish" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);margin-bottom:11px">
+      <input id="__aa_nm" type="text" placeholder="e.g. Demolished Wall" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);margin-bottom:11px">
       <div style="display:flex;gap:10px;margin-bottom:15px">
         <div style="flex:1"><label style="display:block;font-size:11px;font-weight:700;color:var(--dim);margin-bottom:3px">Total quantity</label>
         <input id="__aa_qty" type="number" min="0" step="1" placeholder="e.g. 308" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt)"></div>
@@ -1454,7 +1454,7 @@ class Component extends DCLogic {
 
   /* ---- Monthly-plan overview: which zones have planned work in a given month ---- */
   _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',pcbeam:'m²',act_cyclical:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',temp_stair:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
-  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Wall Demolish'},{id:'demo',label:'Slab Demolish'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
+  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolished Wall'},{id:'demo',label:'Demolished Slab'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
   planMonth(){if(!this._planMonth||this.visMonths().indexOf(this._planMonth)<0)this._planMonth=this.actDefaultMonthVis();return this._planMonth;}
   zonePlanItems(lv,z,m){const zmk=z.mk||z.lid,mi=this.ACT_MONTHS.indexOf(m),out=[];this._actMeta().forEach(a=>{if(this.actHidden(lv,zmk,a.id))return;const p=this.actPlan(lv,zmk,a.id,m);if(p!=null&&p>0){const d=this.actDoneMonth(lv,zmk,a.id,m)||0,cg=mi>=0?this.actCarry(lv,zmk,a.id,mi):null;out.push({label:a.label,qty:p,unit:a.unit,done:d,owed:cg?Math.max(0,cg.balance):Math.max(0,p-d),achieved:cg?cg.balance<=0:d>=p});}});return out;}
   zoneHasPlan(lv,z,m){return this.zonePlanItems(lv,z,m).length>0;}
@@ -1636,9 +1636,9 @@ class Component extends DCLogic {
     if(!this.rwsIsAdmin())return null;
     this._appCfg=this._appCfg||{};
     let done=[];try{done=JSON.parse(localStorage.getItem('rws_slab_demo_merged')||'[]')||[];}catch(e){}
-    if((this._appCfg.slabDemoMerged||done.length)&&!force)return null;
+    if(!force&&this._slabDemoSrcIds().every(id=>done.indexOf(id)>=0))return null;   /* every duplicate already merged */
     const srcIds=this._slabDemoSrcIds().filter(id=>done.indexOf(id)<0);
-    if(!srcIds.length){this._appCfg.slabDemoMerged=true;try{localStorage.setItem('rws_slab_demo_merged',JSON.stringify(done));}catch(e){}return null;}
+    if(!srcIds.length)return null;   /* nothing to merge yet — stay armed, the def may still be loading */
     const DST='demo',num=v=>{const n=Number(v);return Number.isFinite(n)?n:null;};
     const backup={actTotal:{},actPlan:{},actDoneM:{},actDate:{},actHidden:{},actDefs:JSON.parse(JSON.stringify(this._actDefs||[]))};
     const moved={total:0,plan:0,done:0,date:0,cmt:0};
@@ -1699,7 +1699,7 @@ class Component extends DCLogic {
     this.saveAct&&this.saveAct();this.saveDates&&this.saveDates();this.saveActCmt&&this.saveActCmt();
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','slabDemoMerged',true,null,null);
-    this._toast&&this._toast('Merged '+srcIds.join(', ')+' into Slab Demolish ✓ ('+moved.plan+' plan, '+moved.done+' done cells)');
+    this._toast&&this._toast('Merged '+srcIds.join(', ')+' into Demolished Slab ✓ ('+moved.plan+' plan, '+moved.done+' done cells)');
     return {srcIds,moved};
   }
   /* Text drawn on top of a Zone painted in the Team's colour needs to be a darker shade of that
@@ -3131,8 +3131,8 @@ class Component extends DCLogic {
       {id:'earth',label:'Earthwork',unit:'m³',total:this.actTotal(lv,zmk,'earth',this.actAutoTotal(lv,zmk,'earth'))},
       {id:'exc',label:'Excavation',unit:'m³',total:this.excTotal(lv,z)},
       {id:'piling',label:'Piling',unit:'nos',total:this.actTotal(lv,zmk,'piling',this.actAutoTotal(lv,zmk,'piling'))},
-      {id:'demo_wall',label:'Wall Demolish',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
-      {id:'demo',label:'Slab Demolish',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
+      {id:'demo_wall',label:'Demolished Wall',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
+      {id:'demo',label:'Demolished Slab',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
       {id:'slab_pile',label:'Slab + Pilecap',unit:'m²',total:this.actTotal(lv,zmk,'slab_pile',this.actAutoTotal(lv,zmk,'slab_pile'))},
       /* 数量一律来自 CSV 各月计划量求和(可手改覆盖);没放计划量就留空 — 不再借用图纸台账数/区域面积 */
       {id:'pile',label:'Pilecap',unit:'nos',total:this.actTotal(lv,zmk,'pile',this.actAutoTotal(lv,zmk,'pile'))},
@@ -3830,22 +3830,6 @@ class Component extends DCLogic {
         this.buildMetrics();this.render();});
       seg.appendChild(btn);});
     mc.appendChild(seg);
-    /* Month picker for the planned / this-month views — pick the month right here instead of
-       toggling a chip and hunting for the month elsewhere. */
-    if(!this._resourceMode&&this.colorMode==='plan'){
-      const VM=this.visMonths()||[],cur=this.planMonth();
-      const wrap=document.createElement('div');wrap.className='modeseg';wrap.style.cssText='display:inline-flex;align-items:center;gap:2px';
-      const nav=(dir,txt)=>{const b=document.createElement('button');b.innerHTML=txt;b.title=dir<0?'Previous month':'Next month';
-        b.addEventListener('click',()=>{const i=VM.indexOf(this.planMonth())+dir;if(i<0||i>=VM.length)return;this._planMonth=VM[i];this._actMonth=VM[i];this.buildMetrics();this.render();});
-        b.disabled=(dir<0?VM.indexOf(cur)<=0:VM.indexOf(cur)>=VM.length-1);return b;};
-      const sel=document.createElement('select');
-      sel.style.cssText='border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--txt);font:800 11px Poppins,-apple-system,sans-serif;padding:4px 6px;cursor:pointer';
-      sel.title='Month shown on the plan';
-      VM.forEach(m=>{const o2=document.createElement('option');o2.value=m;o2.textContent=m;if(m===cur)o2.selected=true;sel.appendChild(o2);});
-      sel.addEventListener('change',()=>{this._planMonth=sel.value;this._actMonth=sel.value;this.buildMetrics();this.render();});
-      wrap.appendChild(nav(-1,'\u2039'));wrap.appendChild(sel);wrap.appendChild(nav(1,'\u203a'));
-      mc.appendChild(wrap);
-    }
     if(this.colorMode==='castdate'){
       const dvc=document.createElement('span');dvc.className='divv';mc.appendChild(dvc);
       mc.appendChild(mkLbl('Dashboard:'));
