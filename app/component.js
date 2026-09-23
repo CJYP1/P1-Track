@@ -758,7 +758,7 @@ class Component extends DCLogic {
     ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:20px 22px;width:340px;box-shadow:0 18px 50px rgba(0,0,0,.35);font-size:13px">
       <div style="font-weight:800;font-size:14.5px;margin-bottom:12px">Add activity</div>
       <label style="display:block;font-size:11px;font-weight:700;color:var(--dim);margin-bottom:3px">Activity name</label>
-      <input id="__aa_nm" type="text" placeholder="e.g. Demolished Wall" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);margin-bottom:11px">
+      <input id="__aa_nm" type="text" placeholder="e.g. Wall Demolish" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);margin-bottom:11px">
       <div style="display:flex;gap:10px;margin-bottom:15px">
         <div style="flex:1"><label style="display:block;font-size:11px;font-weight:700;color:var(--dim);margin-bottom:3px">Total quantity</label>
         <input id="__aa_qty" type="number" min="0" step="1" placeholder="e.g. 308" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt)"></div>
@@ -1150,6 +1150,7 @@ class Component extends DCLogic {
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
       if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
       try{this._migrateLW8();}catch(_e){}   /* cloud settings can carry the old LW8 name back */
+      try{const _m=this.mergeSlabDemolish();if(_m)this.buildMetrics();}catch(_e){console.error('slab-demolish merge',_e);}
       this._reconcileZoneStairs();
       this._reconcileZoneCores();
       if(own('manpower')){this._manpower={...(state.manpower||{})};try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}}
@@ -1453,7 +1454,7 @@ class Component extends DCLogic {
 
   /* ---- Monthly-plan overview: which zones have planned work in a given month ---- */
   _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',pcbeam:'m²',act_cyclical:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',temp_stair:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
-  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolished Wall'},{id:'demo',label:'Demolished Slab'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
+  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Wall Demolish'},{id:'demo',label:'Slab Demolish'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
   planMonth(){if(!this._planMonth||this.visMonths().indexOf(this._planMonth)<0)this._planMonth=this.actDefaultMonthVis();return this._planMonth;}
   zonePlanItems(lv,z,m){const zmk=z.mk||z.lid,mi=this.ACT_MONTHS.indexOf(m),out=[];this._actMeta().forEach(a=>{if(this.actHidden(lv,zmk,a.id))return;const p=this.actPlan(lv,zmk,a.id,m);if(p!=null&&p>0){const d=this.actDoneMonth(lv,zmk,a.id,m)||0,cg=mi>=0?this.actCarry(lv,zmk,a.id,mi):null;out.push({label:a.label,qty:p,unit:a.unit,done:d,owed:cg?Math.max(0,cg.balance):Math.max(0,p-d),achieved:cg?cg.balance<=0:d>=p});}});return out;}
   zoneHasPlan(lv,z,m){return this.zonePlanItems(lv,z,m).length>0;}
@@ -1618,6 +1619,94 @@ class Component extends DCLogic {
     Object.keys(local).forEach(k=>{if(out[k]==null)out[k]=local[k];});
     return out;
   }
+  /* One-time merge of the hand-added "Slab Demolish" activity into the built-in 'demo'.
+     The duplicate was created before the built-in one was noticed, so its figures belong on 'demo'.
+     Monthly plan / done quantities are ADDED (they are per-month increments, so a blank on one side
+     simply yields the other); the zone total, the dates and the visibility flag are only taken when
+     'demo' has nothing of its own, so an existing figure is never inflated.  The pre-merge state is
+     kept in _appCfg.slabDemoMergeBackup so the whole thing can be undone. */
+  _slabDemoSrcIds(){
+    const norm=v=>String(v==null?'':v).toLowerCase().replace(/[^a-z]/g,'');
+    return (this._actDefs||[]).map(d=>d&&d.id).filter(id=>{
+      if(!id||id==='demo'||id==='demo_wall')return false;
+      const d=(this._actDefs||[]).find(x=>x.id===id)||{},n=norm(d.label)+' '+norm(id);
+      return /slab/.test(n)&&/demol/.test(n)&&!/wall/.test(n);});
+  }
+  mergeSlabDemolish(force){
+    if(!this.rwsIsAdmin())return null;
+    this._appCfg=this._appCfg||{};
+    let done=[];try{done=JSON.parse(localStorage.getItem('rws_slab_demo_merged')||'[]')||[];}catch(e){}
+    if((this._appCfg.slabDemoMerged||done.length)&&!force)return null;
+    const srcIds=this._slabDemoSrcIds().filter(id=>done.indexOf(id)<0);
+    if(!srcIds.length){this._appCfg.slabDemoMerged=true;try{localStorage.setItem('rws_slab_demo_merged',JSON.stringify(done));}catch(e){}return null;}
+    const DST='demo',num=v=>{const n=Number(v);return Number.isFinite(n)?n:null;};
+    const backup={actTotal:{},actPlan:{},actDoneM:{},actDate:{},actHidden:{},actDefs:JSON.parse(JSON.stringify(this._actDefs||[]))};
+    const moved={total:0,plan:0,done:0,date:0,cmt:0};
+    const push=(store,k,v,lv,zmk)=>{if(typeof rwsSyncKV==='function')rwsSyncKV(store,k,(v==null?null:v),lv||null,zmk||null);};
+    const parts=k=>{const a=String(k).split('||');return {lv:a[0],zmk:a[1],aid:a[2],mon:a[3]};};
+
+    srcIds.forEach(SRC=>{
+      /* --- per-month quantities: add --- */
+      [['_actPlan','act_plan','plan'],['_actDoneM','act_done_m','done']].forEach(([prop,store,tag])=>{
+        const o=this[prop]||{};
+        Object.keys(o).filter(k=>parts(k).aid===SRC).forEach(k=>{
+          const q=parts(k),dk=q.lv+'||'+q.zmk+'||'+DST+'||'+q.mon,sv=num(o[k]);
+          if(sv==null){delete o[k];push(store,k,null,q.lv,q.zmk);return;}
+          backup[prop==='_actPlan'?'actPlan':'actDoneM'][k]=o[k];
+          if(o[dk]!=null)backup[prop==='_actPlan'?'actPlan':'actDoneM'][dk]=o[dk];
+          const merged=Math.round(((num(o[dk])||0)+sv)*100)/100;
+          o[dk]=merged;delete o[k];moved[tag]++;
+          push(store,dk,merged,q.lv,q.zmk);push(store,k,null,q.lv,q.zmk);
+        });
+      });
+      /* --- zone total: only fill a gap --- */
+      {const o=this._actTotal||{};
+       Object.keys(o).filter(k=>parts(k).aid===SRC).forEach(k=>{
+         const q=parts(k),dk=q.lv+'||'+q.zmk+'||'+DST,sv=num(o[k]);
+         backup.actTotal[k]=o[k];if(o[dk]!=null)backup.actTotal[dk]=o[dk];
+         if(sv!=null&&o[dk]==null){o[dk]=sv;moved.total++;push('act_total',dk,sv,q.lv,q.zmk);}
+         delete o[k];push('act_total',k,null,q.lv,q.zmk);});}
+      /* --- start / end dates: only fill a gap --- */
+      {const o=this._actDate||{};
+       Object.keys(o).filter(k=>parts(k).aid===SRC).forEach(k=>{
+         const q=parts(k),dk=q.lv+'||'+q.zmk+'||'+DST;
+         backup.actDate[k]=o[k];if(o[dk]!=null)backup.actDate[dk]=JSON.parse(JSON.stringify(o[dk]));
+         const src=o[k]||{},dst={...(o[dk]||{})};let hit=false;
+         ['start','end'].forEach(w=>{if(src[w]&&!dst[w]){dst[w]=src[w];hit=true;}});
+         if(hit){o[dk]=dst;moved.date++;push('act_date',dk,dst,q.lv,q.zmk);}
+         delete o[k];push('act_date',k,null,q.lv,q.zmk);});}
+      /* --- visibility flag --- */
+      {const o=this._actHidden||{};
+       Object.keys(o).filter(k=>parts(k).aid===SRC).forEach(k=>{
+         const q=parts(k);backup.actHidden[k]=o[k];delete o[k];push('act_hidden',k,null,q.lv,q.zmk);});}
+      /* --- comments and update stamps: re-key onto 'demo' --- */
+      [['_actCmt','act_cmt'],['_actUpd',null]].forEach(([prop,store])=>{
+        const o=this[prop]||{};
+        Object.keys(o).filter(k=>parts(k).aid===SRC).forEach(k=>{
+          const q=parts(k),rest=String(k).split('||').slice(3).join('||'),
+                dk=q.lv+'||'+q.zmk+'||'+DST+(rest?'||'+rest:'');
+          if(o[dk]==null){o[dk]=o[k];moved.cmt++;if(store)push(store,dk,o[dk],q.lv,q.zmk);}
+          delete o[k];if(store)push(store,k,null,q.lv,q.zmk);});
+      });
+      /* --- drop the duplicate definition --- */
+      this._actDefs=(this._actDefs||[]).filter(d=>d&&d.id!==SRC);
+      push('act_def',SRC,null,null,null);
+    });
+
+    try{localStorage.setItem('rws_slab_demo_merged',JSON.stringify(done.concat(srcIds)));}catch(e){}
+    this._appCfg.slabDemoMerged=true;
+    this._appCfg.slabDemoMergeBackup={at:new Date().toISOString(),srcIds,backup,moved};
+    this.saveAct&&this.saveAct();this.saveDates&&this.saveDates();this.saveActCmt&&this.saveActCmt();
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','slabDemoMerged',true,null,null);
+    this._toast&&this._toast('Merged '+srcIds.join(', ')+' into Slab Demolish ✓ ('+moved.plan+' plan, '+moved.done+' done cells)');
+    return {srcIds,moved};
+  }
+  /* Text drawn on top of a Zone painted in the Team's colour needs to be a darker shade of that
+     same colour, otherwise it disappears into the fill. */
+  _darken(hex,f){const m=String(hex||'').trim().match(/^#?([0-9a-f]{6})$/i);if(!m)return hex||'#202938';
+    const k=(f==null?0.45:f),n=parseInt(m[1],16),c=[(n>>16)&255,(n>>8)&255,n&255].map(v=>Math.max(0,Math.round(v*(1-k))));
+    return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');}
   _delayView(n){const d=Math.max(0,Math.round(Number(n)||0));return d>0?{txt:'−'+d+' days',c:'#c8102e'}:{txt:'0 days',c:'#667085'};}
   /* August RP is interpolated two months into the Jun→Sep recovery-plan interval. */
   _rpAugPct(lv,z){if(!z)return null;const n=s=>String(s||'').toUpperCase().replace(/\s+/g,'').replace(/^POD/,''),lab=n(z.label),cat=z.cat||'NB';
@@ -2232,10 +2321,10 @@ class Component extends DCLogic {
         let a=ps[0],ad=Infinity;ps.forEach(q=>{const d=Math.hypot(q.x-cx0,q.y-cy0);if(d<ad){ad=d;a=q;}});
         const x=a.x,y=a.y+(a.r||0)+_bs*1.05;
         const v=this._resourceTeamValues(e.t),cv=this._resourceCoreValues(e.t),
-              w=(Number(v.workers)||0)+(Number(cv.workers)||0),c=e.t.color||'#3157d5';
+              w=(Number(v.workers)||0)+(Number(cv.workers)||0),c=this._darken(e.t.color||'#3157d5',0.42);
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
-          +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.42).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.26).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.06em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.12).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())} · WORKERS</text>`
+          +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.42).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.30).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.05em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.12).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
           +`</g>`;});
     }
     s+=_topDates;   /* 日期文字最后画 → 最上层, 不被柱子/overlay 遮住 */
@@ -3042,8 +3131,8 @@ class Component extends DCLogic {
       {id:'earth',label:'Earthwork',unit:'m³',total:this.actTotal(lv,zmk,'earth',this.actAutoTotal(lv,zmk,'earth'))},
       {id:'exc',label:'Excavation',unit:'m³',total:this.excTotal(lv,z)},
       {id:'piling',label:'Piling',unit:'nos',total:this.actTotal(lv,zmk,'piling',this.actAutoTotal(lv,zmk,'piling'))},
-      {id:'demo_wall',label:'Demolished Wall',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
-      {id:'demo',label:'Demolished Slab',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
+      {id:'demo_wall',label:'Wall Demolish',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
+      {id:'demo',label:'Slab Demolish',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
       {id:'slab_pile',label:'Slab + Pilecap',unit:'m²',total:this.actTotal(lv,zmk,'slab_pile',this.actAutoTotal(lv,zmk,'slab_pile'))},
       /* 数量一律来自 CSV 各月计划量求和(可手改覆盖);没放计划量就留空 — 不再借用图纸台账数/区域面积 */
       {id:'pile',label:'Pilecap',unit:'nos',total:this.actTotal(lv,zmk,'pile',this.actAutoTotal(lv,zmk,'pile'))},
