@@ -58,6 +58,17 @@ class Component extends DCLogic {
     /* Drawing correction: WF-B2C55 is not an L1 column. Remove it from L1 only;
        keep any same-ID records on B2/L2 and other floors untouched. */
     if(this.COLUMNS&&this.COLUMNS.L1)this.COLUMNS.L1=this.COLUMNS.L1.filter(c=>String(c.id||'').trim().toUpperCase()!=='WF-B2C55');
+    /* Drawing correction: WF-B2C53 is an L1 Marine podium column (it sits inside podium zone P13),
+       not a B2 column.  Move its map marker up to L1 and take it off B2; the marine-col-map entry
+       keeps it attached to P13 rather than the NB zone whose outline overlaps that point. */
+    if(this.COLUMNS){const _K=c=>String(c&&c.id||'').trim().toUpperCase();
+      const _c53=(this.COLUMNS.B2||[]).find(c=>_K(c)==='WF-B2C53');
+      if(_c53){
+        this.COLUMNS.B2=this.COLUMNS.B2.filter(c=>_K(c)!=='WF-B2C53');
+        this.COLUMNS.L1=this.COLUMNS.L1||[];
+        if(!this.COLUMNS.L1.some(c=>_K(c)==='WF-B2C53'))
+          this.COLUMNS.L1.push({id:'WF-B2C53',x:_c53.x,y:_c53.y,sz:_c53.sz||'2200\u00d8',crit:!!_c53.crit,zone:'P13'});
+      }}
     if(this.AREA_OUTLINES&&this.AREA_OUTLINES.L2){this.AREA_OUTLINES.L3=this.AREA_OUTLINES.L3||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L4=this.AREA_OUTLINES.L4||this.AREA_OUTLINES.L2;this.AREA_OUTLINES.L5=((window.__RWS&&window.__RWS.L5&&window.__RWS.L5.outlines)||{});}   /* L5 gets its own EB/NB/MA boundary lines, built from its own zoning — never another floor's outline. */
     this.showBeams = false; this.showSeq = false; this.showCrit = true; this.showAreaBounds = true; this.showDelay=false; this.showRpVsAc=false;
     try{this._critOv=JSON.parse(localStorage.getItem('rws_crit_ov')||'{}');}catch(e){this._critOv={};}
