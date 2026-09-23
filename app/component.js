@@ -324,7 +324,8 @@ class Component extends DCLogic {
      }}
     return null;}
   _coreItemsFor(lv,zmk){return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]);}
-  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
+  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
+        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -345,7 +346,7 @@ class Component extends DCLogic {
     const store=(((this._appCfg||{}).lifts)||{}),assign=[];
     Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{
       const rng=this._linksFloorRange(w,srcLv),srcOrd=this._floorOrd(srcLv);
-      (this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(show){const target=this._stairTarget(lv,w);if(target)assign.push({w,srcLv,target});}});
+      (this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(show&&!(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)){const target=this._stairTarget(lv,w);if(target)assign.push({w,srcLv,target});}});
     }));
     assign.forEach(({w,srcLv,target})=>{
       const lv=target.lv,zones=(this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[],name=String(w.id||'').trim();if(!name)return;
@@ -2295,33 +2296,37 @@ class Component extends DCLogic {
        必须按当前正在看的楼层重新取归属，不能沿用来源楼层。 */
     const _shapeInArea=(kind,w)=>this.filterCat==='all'||this._shapeAreaCat(kind,w)===this.filterCat;
     /* Core Wall 多边形(admin 画的) + 正在画的临时轮廓 */
-    if(!_focusOnly&&this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
+    if(!_focusOnly&&this.showCoreWalls!==false){ this._shapesForLevel('core').forEach(({w,lv:swlv,idx:wi,top:_top})=>{ if(!w.pts||w.pts.length<3)return;
         if(!_shapeInArea('core',w))return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length, cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length; const lq=this.proj([cx,cy],H);
         let _cc=this._shapeLinkColor(w,'#22c55e','#15803d',this.curLevel,'core'); const _foreign=(swlv!==this.curLevel);
+        /* Tops out on this level: the work belongs to the level below, so draw a plain grey
+           outline that only marks where it stops — no status colour, no clicking. */
+        if(_top)_cc=['#c3c8d1','#8b93a1'];
         if(this._resourceMode){const _rc=this._resourceCoreEntry(swlv,this._shapeLabel(w));
           if(!_rc&&!this._resourceEditing)return;                       /* view mode shows only planned core walls */
           _cc=_rc?[_rc.team.color||'#3157d5',_rc.team.color||'#3157d5']:['#d9dee7','#9aa3b0'];}   /* 未开始=亮绿底色; 做完=深绿, 在做=黄(按成员状态) */
-        s+=`<polygon class="corewall" data-cwi="${wi}" data-cwlv="${swlv}" points="${pp}" fill="${_cc[0]}" fill-opacity="${this._resourceMode?(this._resourceCoreEntry(swlv,this._shapeLabel(w))?0.72:0.18):(_foreign?0.14:0.22)}" stroke="${_cc[1]}" stroke-width="520"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
-        s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none">${this.esc(this._shapeLabel(w))}</text>`;});
+        s+=`<polygon class="corewall${_top?' shape-top':''}" data-cwi="${wi}" data-cwlv="${swlv}" points="${pp}" fill="${_cc[0]}" fill-opacity="${this._resourceMode?(this._resourceCoreEntry(swlv,this._shapeLabel(w))?0.72:0.18):(_foreign?0.14:0.22)}" stroke="${_cc[1]}" stroke-width="520"${_foreign?' stroke-dasharray="1400,700"':''} style="${_top?'pointer-events:none':'cursor:pointer'}"/>`;
+        s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none;opacity:${_top?0.75:1}">${this.esc(this._shapeLabel(w))}${_top?' \u23f9':''}</text>`;});
       }
       if(this._drawingCore&&this._coreBuf&&this._coreBuf.length){
         const bp=this._coreBuf.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         s+=`<polyline points="${bp}" fill="#c8102e" fill-opacity="0.1" stroke="#c8102e" stroke-width="420" stroke-dasharray="900,500" style="pointer-events:none"/>`;
         this._coreBuf.forEach(q=>{const r=this.proj(q,H);s+=`<circle cx="${r[0].toFixed(0)}" cy="${r[1].toFixed(0)}" r="640" fill="#c8102e" style="pointer-events:none"/>`;});}
       // Lift 矩形(admin 画的) — 蓝色
-      if(!_focusOnly&&this.showLifts!==false){ this._shapesForLevel('lift').forEach(({w,lv:swlv,idx:wi})=>{ if(!w.pts||w.pts.length<3)return;
+      if(!_focusOnly&&this.showLifts!==false){ this._shapesForLevel('lift').forEach(({w,lv:swlv,idx:wi,top:_top})=>{ if(!w.pts||w.pts.length<3)return;
         if(!_shapeInArea('stair',w))return;
         const pp=w.pts.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
         const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length, cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length; const lq=this.proj([cx,cy],H);
-        const _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',this.curLevel,'stair'); const _foreign=(swlv!==this.curLevel);
-        s+=`<polygon class="liftwall" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="${_lc[0]}" fill-opacity="${_foreign?0.13:0.2}" stroke="${_lc[1]}" stroke-width="500"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
-        s+=`<text class="liftlbl" data-lwi="${wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`;
+        let _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',this.curLevel,'stair'); const _foreign=(swlv!==this.curLevel);
+        if(_top)_lc=['#c3c8d1','#8b93a1'];   /* tops out here: grey marker only */
+        s+=`<polygon class="liftwall${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" points="${pp}" fill="${_lc[0]}" fill-opacity="${_foreign?0.13:0.2}" stroke="${_lc[1]}" stroke-width="500"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
+        s+=`<text class="liftlbl${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`;
         /* Large, almost-invisible top hit layer.  The staircase line sits on top
            of zone/column shapes, and stopping mousedown prevents a small hand
            movement from turning the intended click into map-pan. */
-        _stairHitHtml+=`<polygon class="stairhit" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="#ffffff" fill-opacity="0.002" stroke="#ffffff" stroke-opacity="0.002" stroke-width="900" stroke-linejoin="round" pointer-events="all" style="cursor:pointer"><title>${this.esc(this._shapeLabel(w))} · Staircase</title></polygon>`;});
+        if(!_top)_stairHitHtml+=`<polygon class="stairhit" data-lwi="${wi}" data-lwlv="${swlv}" points="${pp}" fill="#ffffff" fill-opacity="0.002" stroke="#ffffff" stroke-opacity="0.002" stroke-width="900" stroke-linejoin="round" pointer-events="all" style="cursor:pointer"><title>${this.esc(this._shapeLabel(w))} · Staircase</title></polygon>`;});
       }
       { const lfArr=[];
       if(this._drawingLift&&this._liftBuf&&this._liftBuf.length){
@@ -2933,20 +2938,24 @@ class Component extends DCLogic {
     return (a==null||b==null)?null:[Math.min(a,b),Math.max(a,b)];
   }
   _linksFloorRange(w,lv){
+    /* Name first: scanning every level's lists for this mark is position-independent, so the range
+       cannot change just because the outline was drawn a little off its zone.  Only when the mark
+       matches nothing do we fall back to whatever the outline currently links to. */
     let lo=null,hi=null;
-    const ls=this._shapeLinks(w,lv);
-    ls.forEach(l=>{const r=this._linkFloorRange(l);if(r){lo=(lo==null?r[0]:Math.min(lo,r[0]));hi=(hi==null?r[1]:Math.max(hi,r[1]));}});
-    if(lo==null){
-      /* The staircase lists are re-homed per level, so an old hand-made link may no longer resolve.
-         Fall back to matching by the outline's own mark across every level's live lists. */
-      const name=this._shapeLabel(w),take=e=>{if(!e||typeof e==='string'||!this._idSameGroup(e.id,name))return;const a=this._floorOrd(e.f),b=this._floorOrd(e.t);if(a==null||b==null)return;lo=lo==null?Math.min(a,b):Math.min(lo,a,b);hi=hi==null?Math.max(a,b):Math.max(hi,a,b);};
-      if(name){(this.DATA.order||[]).forEach(fl=>{const L=this.DATA.levels[fl];(L&&L.zones||[]).forEach(z=>{[...(z.lifts||[]),...(z.stairs||[]),...(z.cores||[])].forEach(take);});const base=(this._baseZoneStairs||{})[fl]||{};Object.values(base).forEach(arr=>(arr||[]).forEach(take));});}
-    }
+    const name=this._shapeLabel(w),take=e=>{if(!e||typeof e==='string'||!this._idSameGroup(e.id,name))return;const a=this._floorOrd(e.f),b=this._floorOrd(e.t);if(a==null||b==null)return;lo=lo==null?Math.min(a,b):Math.min(lo,a,b);hi=hi==null?Math.max(a,b):Math.max(hi,a,b);};
+    if(name){(this.DATA.order||[]).forEach(fl=>{const L=this.DATA.levels[fl];(L&&L.zones||[]).forEach(z=>{[...(z.lifts||[]),...(z.stairs||[]),...(z.cores||[])].forEach(take);});const base=(this._baseZoneStairs||{})[fl]||{};Object.values(base).forEach(arr=>(arr||[]).forEach(take));});}
+    if(lo==null){const ls=this._shapeLinks(w,lv);ls.forEach(l=>{const r=this._linkFloorRange(l);if(r){lo=(lo==null?r[0]:Math.min(lo,r[0]));hi=(hi==null?r[1]:Math.max(hi,r[1]));}});}
     const g=this._cwGroupRange(w);
     if(lo==null)return g;                       /* nothing matched -> the main table alone */
     if(!g)return [lo,hi];                       /* no table entry -> the members alone */
     const a=Math.max(lo,g[0]),b=Math.min(hi,g[1]);
     return (a<=b)?[a,b]:g;                      /* members clamped to the table; disjoint -> trust the table */
+  }
+  /* True when this level is where the element tops out: the work that builds it belongs to the
+     level below, so here it is only marked, not listed or clickable. */
+  _shapeTopsOutHere(w,srcLv,lv){
+    const rng=this._linksFloorRange(w,srcLv),ord=this._floorOrd(lv);
+    return !!(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6);
   }
   _openShape(w,lv,kind){
     /* Staircase 可能从 L1 图形跨层显示，但点击必须留在当前楼层。当前层重新按
@@ -2974,7 +2983,7 @@ class Component extends DCLogic {
   _linkFloorRange(link){const e=this._linkElem(link);if(!e||typeof e==='string')return null;const a=this._floorOrd(e.f),b=this._floorOrd(e.t);if(a==null||b==null)return null;return [Math.min(a,b),Math.max(a,b)];}
   /* 收集当前层要显示的形状: 本层画的 + 有链接且 f→t 范围覆盖本层的(在别层画的). 返回 {w,lv,idx} */
   _shapesForLevel(kind){const m=kind==='core'?'coreWalls':'lifts';const store=(this._appCfg&&this._appCfg[m])||{};const cur=this.curLevel,curOrd=this._floorOrd(cur);const out=[],seen=new Set();Object.keys(store).forEach(lv=>{(store[lv]||[]).forEach((w,idx)=>{if(!w||!w.pts||w.pts.length<3)return;const rng=this._linksFloorRange(w,lv);/* The floor range wins over the level the shape happens to be drawn on: a core wall / lift /
-   staircase that tops out at L4 must not appear on L5 just because its outline lives there. */let show;if(rng&&curOrd!=null)show=(curOrd>=rng[0]-1e-6&&curOrd<=rng[1]+1e-6);else show=(lv===cur);if(show){const k=lv+'|'+idx;if(!seen.has(k)){seen.add(k);out.push({w,lv,idx});}}});});return out;}
+   staircase that tops out at L4 must not appear on L5 just because its outline lives there. */let show;if(rng&&curOrd!=null)show=(curOrd>=rng[0]-1e-6&&curOrd<=rng[1]+1e-6);else show=(lv===cur);if(show){const k=lv+'|'+idx;if(!seen.has(k)){seen.add(k);out.push({w,lv,idx,top:(rng&&curOrd!=null&&rng[1]>rng[0]&&Math.abs(curOrd-rng[1])<1e-6)});}}});});return out;}
   _shapeArr(kind,lv){lv=lv||this.curLevel;const m=kind==='core'?'coreWalls':'lifts';return (this._appCfg&&this._appCfg[m]&&this._appCfg[m][lv])||[];}
   _shapeAreaCat(kind,w){
     const lv=this.curLevel,L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];if(!L||!w)return null;

@@ -23,7 +23,7 @@ window.CW_GROUPS = {
   "LW6":  { lifts:["P1-ML1","P1-ML2","P1-ML3","P1-ML4"], stairs:[], f:"L1", t:"L4" },
   "LW7":  { lifts:["P1-CL4","P1-CL3"], stairs:[], f:"L1", t:"L3" },
   "LW9":  { lifts:["P1-CL1","P1-CL2"], stairs:[], f:"L2", t:"L3" },
-  "LW10": { lifts:["P1-FL7"], stairs:["P1-ST-07/50"], f:"L1", t:"L17" }
+  "LW10": { lifts:["P1-FL7"], stairs:["P1-ST-07/50"], f:"L1", t:"L4" }   /* lift P1-FL7 and stair P1-ST-07/50 both stop at L4 */
 };
 /* 别名: 你习惯都写 "CW", 但数据里 lift-wall 是 "LW" —— CW6/7/9/10 当作 LW6/7/9/10 */
 ["6","7","9","10"].forEach(function(n){ window.CW_GROUPS["CW"+n]=window.CW_GROUPS["LW"+n]; });
