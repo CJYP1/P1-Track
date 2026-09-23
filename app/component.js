@@ -1870,7 +1870,7 @@ class Component extends DCLogic {
       let raw=((this._appCfg&&this._appCfg.zoneDelay)||{})[key];
       if(raw&&typeof raw==='object')raw=(raw.days!=null?raw.days:raw.delay_days);
       const d=Number(raw);if(!Number.isFinite(d)||d<=0)return;
-      rows.push({lv,label:z.label||zmk,cat:cats[z.cat||'NB']||(z.cat||'NB'),group:group||'',days:Math.round(d)});};
+      rows.push({lv,label:z.label||zmk,cat:cats[z.cat||'NB']||(z.cat||'NB'),group:group||'',days:Math.round(d),crit:!!z.crit});};
     (this.DATA.order||[]).forEach(lv=>{const L=this.DATA.levels[lv];(L&&L.zones||[]).forEach(z=>add(lv,z,''));});
     const S=this.SUBZONES&&this.SUBZONES.L1;
     if(S)['C','P'].forEach(k=>(S[k]||[]).forEach(e=>add('L1',{mk:'L1|'+e.label,label:e.label,cat:'MA'},'Marine '+k)));
@@ -1880,7 +1880,100 @@ class Component extends DCLogic {
   }
   /* Ask which areas and levels go into the delay image.  Only the ones that actually carry a
      delay are offered, so the choice is never a dead end. */
-  openDelayPngPicker(){
+  _showPngPreview(url,name,n){
+    const old=document.getElementById('__pngPrev');if(old)old.remove();
+    const ov=document.createElement('div');ov.id='__pngPrev';
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483640;background:rgba(15,23,42,.62);display:flex;flex-direction:column';
+    ov.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--panel);color:var(--txt);border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;font-size:13px">Delay image · ${n} zone${n===1?'':'s'}</div>
+      <a class="hbtn primary" id="__pngDl" download="${name}" href="${url}" style="text-decoration:none;padding:7px 16px">⬇ Download</a>
+      <button class="hbtn" id="__pngClose">Close</button></div>
+    <div style="flex:1;overflow:auto;padding:16px;text-align:center">
+      <img src="${url}" style="max-width:100%;background:#fff;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.4)">
+      <div style="color:#e6edf6;font-size:11px;margin-top:10px">If Download does nothing, right-click the image (or press and hold on a phone) and save it.</div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#__pngClose').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    try{ov.querySelector('#__pngDl').click();}catch(_e){}
+  }
+  /* Band summary: one table per Level that buckets its Zones by how far behind they are,
+     so a reader sees the shape of the delay before any individual zone name. */
+  _delayBands(rows){
+    const B=[{k:'hi',label:'\u2265 30 days',min:30,max:Infinity},
+             {k:'md',label:'20\u201329 days',min:20,max:29},
+             {k:'lo',label:'< 20 days',min:0,max:19}];
+    return B.map(b=>{
+      const g=rows.filter(r=>r.days>=b.min&&r.days<=b.max);
+      const byDay={};g.forEach(r=>(byDay[r.days]=byDay[r.days]||[]).push(r));
+      const lines=Object.keys(byDay).map(Number).sort((a,c)=>c-a).map(d=>{
+        const list=byDay[d],crit=list.some(r=>r.crit);
+        return list.map(r=>String(r.label).replace(new RegExp('^'+r.lv+'[-_ ]','i'),'')).join(', ')+' ('+d+')'+(crit?' \u2013 critical path':'');});
+      const avg=g.length?Math.round(g.reduce((a,r)=>a+r.days,0)/g.length):0;
+      return {...b,n:g.length,avg,lines};
+    }).filter(b=>b.n);
+  }
+  _exportDelayBandPng(rows,pick){
+    const W=800,ACC='#c8102e',HEAD='#1f3557',PAD=20,LH=19;
+    const lvls=[...new Set(rows.map(r=>r.lv))];
+    const cv=document.createElement('canvas'),x=cv.getContext('2d');
+    const cols=[PAD+10,170,235,335];            /* band / zones / avg / list */
+    const listW=W-PAD-12-cols[3]-10;
+    const wrap=(txt)=>{x.font='12.5px Arial';const words=String(txt).split(' '),out=[];let cur='';
+      words.forEach(w=>{const t=cur?cur+' '+w:w;if(x.measureText(t).width>listW&&cur){out.push(cur);cur=w;}else cur=t;});
+      if(cur)out.push(cur);return out;};
+    /* measure first so the canvas is exactly as tall as the content */
+    const blocks=lvls.map(lv=>{
+      const g=rows.filter(r=>r.lv===lv),bands=this._delayBands(g).map(b=>{
+        const ls=[];b.lines.forEach(l=>wrap(l).forEach(w=>ls.push(w)));
+        return {...b,wrapped:ls,h:Math.max(34,ls.length*LH+14)};});
+      const worst=g.reduce((m,r)=>r.days>m.days?r:m,g[0]);
+      const avg=Math.round(g.reduce((a,r)=>a+r.days,0)/g.length);
+      return {lv,g,bands,worst,avg,h:26+32+bands.reduce((a,b)=>a+b.h,0)+32+18};});
+    const H=66+blocks.reduce((a,b)=>a+b.h,0)+38;
+    cv.width=W;cv.height=H;
+    x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
+    x.fillStyle=ACC;x.fillRect(0,0,W,52);
+    x.fillStyle='#ffffff';x.font='700 18px Arial';x.fillText('P1 Waterfront \u00b7 Delay by band',PAD,24);
+    const _scope=(pick&&((pick.areas||[]).length||(pick.levels||[]).length))
+      ?(((pick.areas||[]).join(' + ')||'All areas')+' \u00b7 '+((pick.levels||[]).join(' ')||'All levels')+' \u00b7 '):'';
+    x.font='600 11.5px Arial';
+    x.fillText(_scope+rows.length+' zone'+(rows.length===1?'':'s')+' delayed \u00b7 '+new Date().toISOString().slice(0,10),PAD,42);
+    let y=66;
+    blocks.forEach(B=>{
+      x.fillStyle='#202938';x.font='700 13.5px Arial';
+      x.fillText(B.lv+' zone delay by band, '+B.g.length+' zone'+(B.g.length===1?'':'s')+' delayed',PAD,y+14);
+      y+=26;
+      x.fillStyle=HEAD;x.fillRect(PAD,y,W-PAD*2,32);
+      x.fillStyle='#ffffff';x.font='700 11.5px Arial';
+      x.fillText('Delay band',cols[0],y+21);
+      x.textAlign='right';x.fillText('Zones',cols[1]+48,y+21);x.fillText('Avg delay',cols[2]+80,y+21);x.textAlign='left';
+      x.fillText('Zones (delay in days)',cols[3],y+21);
+      y+=32;
+      B.bands.forEach((b,bi)=>{
+        const hot=b.k==='hi';
+        x.fillStyle=hot?'#f7dfe2':(bi%2?'#fafbfc':'#ffffff');x.fillRect(PAD,y,W-PAD*2,b.h);
+        x.fillStyle=hot?ACC:'#202938';x.font='700 12.5px Arial';x.fillText(b.label,cols[0],y+20);
+        x.textAlign='right';x.fillText(String(b.n),cols[1]+48,y+20);
+        x.fillStyle=hot?ACC:'#202938';x.fillText(b.avg+' days',cols[2]+80,y+20);x.textAlign='left';
+        x.fillStyle='#202938';x.font='12.5px Arial';
+        b.wrapped.forEach((l,li)=>x.fillText(l,cols[3],y+18+li*LH));
+        x.strokeStyle='#e2e6ec';x.beginPath();x.moveTo(PAD,y+b.h);x.lineTo(W-PAD,y+b.h);x.stroke();
+        y+=b.h;});
+      x.fillStyle='#ffffff';x.fillRect(PAD,y,W-PAD*2,32);
+      x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Total',cols[0],y+21);
+      x.textAlign='right';x.fillText(String(B.g.length),cols[1]+48,y+21);x.fillText(B.avg+' days',cols[2]+80,y+21);x.textAlign='left';
+      x.fillStyle=ACC;x.fillText('Worst: '+String(B.worst.label).replace(new RegExp('^'+B.lv+'[-_ ]','i'),'')+' at '+B.worst.days+' days',cols[3],y+21);
+      x.strokeStyle='#cfd7e2';x.lineWidth=1.4;x.beginPath();x.moveTo(PAD,y+32);x.lineTo(W-PAD,y+32);x.stroke();x.lineWidth=1;
+      y+=32+18;});
+    x.fillStyle='#8a92a2';x.font='10px Arial';
+    x.fillText('Avg delay = simple mean of the zones in that band. Source: Delay Table (manual entry).',PAD,y+12);
+    const _tag=(pick?((pick.areas||[]).join('-')+'_'+(pick.levels||[]).join('-')):'').replace(/^_+|_+$/g,'');
+    const name=('P1_delay-by-band'+(_tag?'_'+_tag:'')+'_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
+    this._showPngPreview(cv.toDataURL('image/png'),name,rows.length);
+  }
+  openDelayPngPicker(){try{this._openDelayPngPicker();}catch(e){alert('Delay picker failed: '+(e&&e.message||e));}}
+  _openDelayPngPicker(){
     const all=this._delayRows();
     if(!all.length){this._toast&&this._toast('No Zone has a delay to export.');return;}
     const k2a={'Existing Basement':'EB','New Basement':'NB','Marine':'MA'};
@@ -1889,7 +1982,7 @@ class Component extends DCLogic {
     const levels=(this.DATA.order||[]).filter(lv=>all.some(r=>r.lv===lv));
     const old=document.getElementById('__delayPick');if(old)old.remove();
     const ov=document.createElement('div');ov.id='__delayPick';
-    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.45);display:grid;place-items:center';
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483600;background:rgba(15,23,42,.45);display:grid;place-items:center';
     const chip=(v,lab,n)=>`<button type="button" class="hbtn dpk on" data-g="${n}" data-v="${v}" style="padding:6px 11px">${this.esc(lab)}</button>`;
     ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(460px,92vw);box-shadow:0 18px 50px rgba(0,0,0,.35)">
       <div style="font-weight:800;font-size:14px;margin-bottom:2px">Export delay image</div>
@@ -1898,6 +1991,11 @@ class Component extends DCLogic {
       <div id="__dpkA" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${areas.map(a=>chip(a,aNames[a]||a,'a')).join('')}</div>
       <div style="font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--dim);margin-bottom:5px">LEVEL</div>
       <div id="__dpkL" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${levels.map(l=>chip(l,l,'l')).join('')}</div>
+      <div style="font-size:9.5px;font-weight:900;letter-spacing:.06em;color:var(--dim);margin:12px 0 5px">LAYOUT</div>
+      <div id="__dpkM" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button type="button" class="hbtn dpkm on" data-m="list" style="padding:6px 11px">Zone list</button>
+        <button type="button" class="hbtn dpkm" data-m="band" style="padding:6px 11px;opacity:.45">Summary by band</button>
+      </div>
       <div id="__dpkCount" style="font-size:10px;color:var(--dim);margin-bottom:12px"></div>
       <div style="display:flex;justify-content:flex-end;gap:7px">
         <button class="hbtn" id="__dpkCancel">Cancel</button>
@@ -1913,17 +2011,22 @@ class Component extends DCLogic {
       ov.querySelector('#__dpkGo').disabled=!n;};
     ov.querySelectorAll('.dpk').forEach(b=>b.onclick=()=>{b.classList.toggle('on');
       b.style.opacity=b.classList.contains('on')?'':'0.45';refresh();});
+    ov.querySelectorAll('.dpkm').forEach(b=>b.onclick=()=>{ov.querySelectorAll('.dpkm').forEach(o2=>{
+      const on=o2===b;o2.classList.toggle('on',on);o2.style.opacity=on?'':'0.45';});});
     ov.querySelector('#__dpkCancel').onclick=close;
     ov.querySelector('#__dpkGo').onclick=()=>{const A=sel('a'),L=sel('l');close();
-      this.exportDelayPng({areas:A.length===areas.length?[]:A,levels:L.length===levels.length?[]:L});};
+      const M=(ov.querySelector('.dpkm.on')||{dataset:{}}).dataset.m||'list';
+      this.exportDelayPng({areas:A.length===areas.length?[]:A,levels:L.length===levels.length?[]:L,mode:M});};
     refresh();
   }
-  exportDelayPng(pick){
+  exportDelayPng(pick){try{this._exportDelayPng(pick);}catch(e){alert('Delay export failed: '+(e&&e.message||e));}}
+  _exportDelayPng(pick){
     let rows=this._delayRows();
     if(pick){const L=new Set(pick.levels||[]),A=new Set(pick.areas||[]);
       const key={'Existing Basement':'EB','New Basement':'NB','Marine':'MA'};
       rows=rows.filter(r=>(!L.size||L.has(r.lv))&&(!A.size||A.has(key[r.cat]||r.cat)));}
     if(!rows.length){this._toast&&this._toast('No Zone has a delay in that selection.');return;}
+    if(pick&&pick.mode==='band'){this._exportDelayBandPng(rows,pick);return;}
     const W=1180,rowH=40,headH=34,ACC='#c8102e';
     const lvls=[...new Set(rows.map(r=>r.lv))];
     const H=150+lvls.length*(headH+6)+rows.length*rowH+70;
@@ -1960,10 +2063,10 @@ class Component extends DCLogic {
     x.fillText('Delay days are entered by hand in the Delay Table. Zones with no entry are not shown.',34,y);
     const _tag=(pick?((pick.areas||[]).join('-')+'_'+(pick.levels||[]).join('-')):'').replace(/^_+|_+$/g,'');
     const name=('P1_delay-by-zone'+(_tag?'_'+_tag:'')+'_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
-    const dl=u=>{const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();};
-    if(cv.toBlob)cv.toBlob(b=>{if(!b)return;const u=URL.createObjectURL(b);dl(u);setTimeout(()=>URL.revokeObjectURL(u),1000);},'image/png');
-    else dl(cv.toDataURL('image/png'));
-    this._toast&&this._toast('Delay image exported ✓');
+    /* Some browsers silently drop a programmatic download (sandboxed frames, download
+       blockers, mobile).  So the image is always shown as well: the picture on screen can
+       be saved by hand even when the automatic download never fires. */
+    this._showPngPreview(cv.toDataURL('image/png'),name,rows.length);
   }
   openDelayAdmin(){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit Delay days.');return;}const old=document.getElementById('__delayAdmin');if(old)old.remove();
     /* Delay days are a purely manual figure: whatever is typed here is what the map shows.
@@ -2193,7 +2296,9 @@ class Component extends DCLogic {
       const crit=vis&&this.showCrit&&z.crit?' critln':'';
       const _strictHidden=!vis&&((this._resourceMode&&!this._resourceEditing)||(this.colorMode==='plan'&&this.showMonthWorkOnly));
       let op=vis?(_focusOnly?0.58:(this.colorMode==='area'?0.5:0.72)):(_strictHidden?0:0.05);
-      if(this._resourceMode)op=_monthEntry?0.68:(this._resourceEditing?0.16:0);
+      /* Resource mode used to set its own opacity unconditionally, which ignored the EB/NB/Marine
+         card filter — picking Marine still left the other areas painted. */
+      if(this._resourceMode)op=this.zoneVisible(z)?(_monthEntry?0.68:(this._resourceEditing?0.16:0)):0;
       let planst='';
       /* Resource mode sets its own flat opacity above; the plan / cast-date shading must not
          override it, or two zones of the same Team come out in different shades. */
@@ -2277,7 +2382,7 @@ class Component extends DCLogic {
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#b23a2e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*1.18).toFixed(0)}">■ ${this.esc(_e)}</text>`;
         } }   /* Slab 起(▶)/止(■)日期 — 没有 slab 日期的区域不写 TBA, 避免整张图过密 */
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _cm=this._dateToActMonth(_cd.start||_cd.end); if(_cm){_topDates+=`<text class="zname" style="font-size:${(fs*0.38).toFixed(0)}px;font-weight:750;fill:#315b96;stroke:var(--stage);stroke-width:${(fs*0.10).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*1.67).toFixed(0)}">COL ${this.esc(_cm)}</text>`;} }
-      if(this._resourceMode){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
+      if(this._resourceMode&&this.zoneVisible(z)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
       if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
@@ -2462,7 +2567,7 @@ class Component extends DCLogic {
               w=(Number(v.workers)||0)+(Number(cv.workers)||0),c=this._darken(e.t.color||'#3157d5',0.42);
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
-          +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.42).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.30).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.05em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.12).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
+          +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.04em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.16).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
           +`</g>`;});
     }
     s+=_topDates;   /* 日期文字最后画 → 最上层, 不被柱子/overlay 遮住 */
