@@ -566,12 +566,19 @@ class Component extends DCLogic {
   _resourceKeys(){return ['workers','formwork','rebar','total'];}
   /* "concrete" was the old name of this field — it is rebar, not concrete.  Old saved plans are
      read through so nothing typed in before the rename is lost. */
-  _resourceTeamValues(t,lv){const saved=(t&&t.resources)||{},sum={};this._resourceKeys().forEach(k=>sum[k]=0);
-    (t&&t.zones||[]).filter(x=>!lv||x.lv===lv).forEach(x=>this._resourceKeys().forEach(k=>sum[k]+=Number(k==='rebar'&&x[k]==null?x.concrete:x[k])||0));
-    /* A team-wide override is one figure for the whole team, so it can only stand in for the
-       all-levels total.  Asked for one level, always report that level's own zones. */
-    if(lv)return sum;
-    const out={};this._resourceKeys().forEach(k=>{const sv=(k==='rebar'&&saved[k]==null)?saved.concrete:saved[k];out[k]=sv==null?sum[k]:sv;});return out;}
+  _resourceTeamValues(t,lv){const saved=(t&&t.resources)||{},K=this._resourceKeys(),lvSum={},all={};
+    K.forEach(k=>{lvSum[k]=0;all[k]=0;});
+    (t&&t.zones||[]).forEach(x=>K.forEach(k=>{const v=Number(k==='rebar'&&x[k]==null?x.concrete:x[k])||0;
+      all[k]+=v;if(!lv||x.lv===lv)lvSum[k]+=v;}));
+    const out={};K.forEach(k=>{const sv=(k==='rebar'&&saved[k]==null)?saved.concrete:saved[k];out[k]=sv==null?all[k]:sv;});
+    /* One level's figures, in order of precedence: the zones' own numbers on that level, then a
+       team figure entered for that level, then the old team-wide figure (which has no level
+       breakdown, so it stands for every level until per-level numbers replace it). */
+    if(lv){if(K.some(k=>lvSum[k]>0))return lvSum;
+      const per=(t&&t.levelRes&&t.levelRes[lv])||null;
+      if(per){const o2={};K.forEach(k=>o2[k]=Math.max(0,Math.round(Number(k==='rebar'&&per[k]==null?per.concrete:per[k])||0)));return o2;}
+      return out;}
+    return out;}
   /* ---- Core walls in the resource plan.  They are tracked per drawn core-wall shape and keep
      their own figures; they are never folded into the zone Team Total. ---- */
   _resourceCoreKey(id){return String(id==null?'':id).trim().toUpperCase();}
@@ -603,7 +610,7 @@ class Component extends DCLogic {
   _resourceCopyLevel(from,tos,pct){
     const src=this._resourceZoneLabelMap(from),f=1+(Number(pct)||0)/100,K=this._resourceKeys();
     const scale=(x)=>{const o={};K.forEach(k=>{const v=Number(k==='rebar'&&x[k]==null?x.concrete:x[k]);
-      if(Number.isFinite(v)&&v)o[k]=Math.max(0,Math.round(v*f));});return o;};
+      if(Number.isFinite(v)&&v)o[k]=Math.max(0,Math.round(v*f));});return o;};   /* whole people only */
     let zN=0,cN=0,miss=[];
     tos.forEach(to=>{const dst=this._resourceZoneLabelMap(to);
       this._resourceData().teams.forEach(t=>{
@@ -614,9 +621,180 @@ class Component extends DCLogic {
           if(!zmk){if(lab&&miss.indexOf(lab)<0)miss.push(lab);return;}
           t.zones.push({...x,...scale(x),lv:to,zmk});zN++;});
         (t.cores||[]).filter(x=>x.lv===from).slice().forEach(x=>{t.cores.push({...x,...scale(x),lv:to});cN++;});
+        /* Plans whose numbers were typed as a team total, not per zone, are carried the same
+           way: the level's team figure is scaled onto the target level. */
+        const srcRes=(t.levelRes&&t.levelRes[from])||((t.zones||[]).some(x=>x.lv===from&&K.some(k=>Number(x[k])))?null:t.resources);
+        if(srcRes){t.levelRes=t.levelRes||{};t.levelRes[to]=scale(srcRes);if(!t.levelRes[from])t.levelRes[from]={...srcRes};}
         this._resourceRenumber(t);this._resourceCoreRenumber(t);});});
     this._resourceSave();this.buildMetrics();this.render();this._renderResourcePanel();
     return {zN,cN,miss};
+  }
+  /* Wipe one level's resource plan in a single step, for every team at once. */
+  /* The whole resource plan as one editable grid — assigning a Team, its work order and its
+     figures without hunting for each Zone on the map. */
+  /* One picture of who does what, in what order, on the level being looked at. */
+  _resourceSeqRows(lv){
+    const zmap={};((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{zmap[z.mk||z.lid]=z.label||z.mk;});
+    const strip=t=>String(t||'').replace(new RegExp('^'+lv+'[-_| ]','i'),'');
+    return this._resourceData().teams.map(t=>{
+      const zs=(t.zones||[]).filter(x=>x.lv===lv).slice()
+        .sort((a,b)=>(Number(a.order)||999)-(Number(b.order)||999))
+        .map(x=>strip(zmap[x.zmk]||x.zmk));
+      const cs=(t.cores||[]).filter(x=>x.lv===lv).slice()
+        .sort((a,b)=>(Number(a.order)||999)-(Number(b.order)||999)).map(x=>String(x.id||''));
+      const v=this._resourceTeamValues(t,lv),cv=this._resourceCoreValues(t,lv);
+      return {name:t.name||'Team',color:t.color||'#3157d5',zs,cs,
+              workers:(Number(v.workers)||0)+(Number(cv.workers)||0)};
+    }).filter(r=>r.zs.length||r.cs.length);
+  }
+  exportResourceSeqPng(lv){
+    lv=lv||this.curLevel;
+    const teams=this._resourceSeqRows(lv);
+    if(!teams.length){this._toast&&this._toast('No team is planned on '+lv+'.');return;}
+    const W=760,PAD=26,HEAD=64,NAME=30,ROW=27,GAP=13,R=11,ACC='#1f3557';
+    const cv=document.createElement('canvas'),x=cv.getContext('2d');
+    /* lay the chips out once to learn the height, then draw for real */
+    const chipW=(lab,last)=>{x.font='600 12.5px Arial';return R*2+6+x.measureText(lab).width+(last?0:20);};
+    const plan=(items)=>{const lines=[];let cur=[],w=0;
+      items.forEach((it,i)=>{const cw=chipW(it.lab,i===items.length-1);
+        if(w+cw>W-PAD*2-10&&cur.length){lines.push(cur);cur=[];w=0;}
+        cur.push({...it,w:cw,last:i===items.length-1});w+=cw;});
+      if(cur.length)lines.push(cur);return lines;};
+    const blocks=teams.map(t=>{
+      const items=t.zs.map((l,i)=>({lab:l,n:i+1,core:false}))
+        .concat(t.cs.map((l,i)=>({lab:l,n:i+1,core:true})));
+      const lines=plan(items);return {t,lines,h:NAME+lines.length*ROW+GAP};});
+    const H=HEAD+blocks.reduce((a,b)=>a+b.h,0)+26;
+    cv.width=W;cv.height=H;
+    x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
+    x.fillStyle=ACC;x.font='700 17px Arial';
+    x.fillText('Work sequence by team \u00b7 '+lv,PAD,34);
+    x.fillStyle='#8a92a2';x.font='11px Arial';
+    x.fillText(teams.length+' team'+(teams.length===1?'':'s')+' \u00b7 '+new Date().toISOString().slice(0,10),PAD,52);
+    let y=HEAD;
+    blocks.forEach(B=>{
+      const t=B.t;
+      x.fillStyle=t.color;x.fillRect(PAD,y+3,13,13);
+      x.fillStyle='#202938';x.font='700 15px Arial';x.fillText(t.name,PAD+21,y+15);
+      const nw=x.measureText(t.name).width;
+      x.fillStyle='#8a92a2';x.font='12px Arial';
+      x.fillText((t.zs.length+t.cs.length)+' zone'+((t.zs.length+t.cs.length)===1?'':'s')+' \u00b7 '+t.workers+' workers',PAD+31+nw,y+15);
+      y+=NAME;
+      B.lines.forEach(line=>{
+        let cx=PAD+8;
+        line.forEach(it=>{
+          x.beginPath();x.arc(cx+R,y+R-2,R,0,Math.PI*2);
+          x.fillStyle=t.color;x.globalAlpha=it.core?0.45:1;x.fill();x.globalAlpha=1;
+          x.fillStyle='#ffffff';x.font='700 11px Arial';x.textAlign='center';
+          x.fillText(String(it.n),cx+R,y+R+2);x.textAlign='left';
+          x.fillStyle='#202938';x.font='600 12.5px Arial';
+          x.fillText(it.lab,cx+R*2+6,y+R+2);
+          const lw=x.measureText(it.lab).width;
+          if(!it.last){x.fillStyle='#98a2b3';x.font='13px Arial';x.fillText('\u2192',cx+R*2+6+lw+6,y+R+2);}
+          cx+=it.w;});
+        y+=ROW;});
+      y+=GAP;
+      x.strokeStyle='#eceff3';x.beginPath();x.moveTo(PAD,y-GAP/2);x.lineTo(W-PAD,y-GAP/2);x.stroke();});
+    const name=('P1_work-sequence_'+lv+'_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
+    this._showPngPreview(cv.toDataURL('image/png'),name,teams.length);
+  }
+  openResourceTable(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit the resource plan.');return;}
+    const old=document.getElementById('__resTable');if(old)old.remove();
+    const K=this._resourceKeys(),cats={EB:'Existing Basement',NB:'New Basement',MA:'Marine'};
+    const rows=[];(this.DATA.order||[]).forEach(lv=>{((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{
+      rows.push({lv,zmk:z.mk||z.lid,label:z.label||z.mk,cat:z.cat||'NB'});});});
+    const ov=document.createElement('div');ov.id='__resTable';
+    const lvOpts=[...new Set(rows.map(r=>r.lv))].map(v=>`<option value="${v}">${v}</option>`).join('');
+    const catOpts=Object.keys(cats).map(k=>`<option value="${k}">${cats[k]}</option>`).join('');
+    ov.innerHTML=`<div class="delay-admin-box">
+      <div class="delay-admin-head"><div><b>Resource Table</b><span>Assign a Team, work order and figures for every Zone \u00b7 autosaves</span></div>
+        <button class="hbtn" id="__rtClose">Close \u00d7</button></div>
+      <div class="delay-admin-tools"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px">Area <select id="__rtCat"><option value="">All areas</option>${catOpts}</select></label>
+        <label style="display:flex;align-items:center;gap:4px">Level <select id="__rtLv"><option value="">All levels</option>${lvOpts}</select></label>
+        <input id="__rtFind" placeholder="Find zone\u2026">
+        <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="__rtOnly">Only assigned Zones</label>
+      </div><span id="__rtCount"></span></div>
+      <div class="delay-admin-scroll"><table><thead><tr><th>Level</th><th>Zone</th><th>Area</th><th>Team</th><th>Order</th>
+        ${K.map(k=>`<th style="text-align:right">${k.charAt(0).toUpperCase()+k.slice(1)}</th>`).join('')}</tr></thead><tbody id="__rtBody"></tbody></table></div>
+      <div class="delay-admin-foot"><span>Blank Team = not planned \u00b7 <b id="__rtState">Autosaves as you type</b> \u00b7 bulk actions apply to the rows shown.</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <select id="__rtBulkTeam" style="padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--txt);font-size:11px"></select>
+          <button class="hbtn" id="__rtAssign">Assign shown</button>
+          <button class="hbtn" id="__rtClear" style="color:var(--crit)">Clear shown</button>
+          <button class="hbtn primary" id="__rtDone">Done</button></div></div></div>`;
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483500;background:rgba(15,20,30,.5);display:flex;align-items:center;justify-content:center;padding:24px';
+    document.body.appendChild(ov);
+    const teams=()=>this._resourceData().teams;
+    const tOpts=sel=>`<option value="">\u2014</option>`+teams().map(t=>`<option value="${this.esc(t.id)}"${t.id===sel?' selected':''}>${this.esc(t.name)}</option>`).join('');
+    ov.querySelector('#__rtBulkTeam').innerHTML=tOpts('');
+    const body=ov.querySelector('#__rtBody'),cnt=ov.querySelector('#__rtCount'),state=ov.querySelector('#__rtState');
+    const draw=()=>{body.innerHTML=rows.map((r,i)=>{
+      const e=this._resourceEntry(r.lv,r.zmk),it=e&&e._zoneItem||(e&&e.item&&e.item._zoneItem),
+            tid=e?e.team.id:'',col=e?(e.team.color||'#3157d5'):'';
+      const src=it||(e?e.item:null);
+      return `<tr data-i="${i}" data-lv="${r.lv}" data-cat="${r.cat}" data-q="${this.esc((r.lv+' '+r.label+' '+cats[r.cat]).toLowerCase())}" data-on="${e?1:0}">
+        <td>${r.lv}</td><td><b>${this.esc(r.label)}</b></td><td>${cats[r.cat]||r.cat}</td>
+        <td><select class="rt-team" ${col?`style="border-left:4px solid ${col}"`:''}>${tOpts(tid)}</select></td>
+        <td><input class="rt-num" data-k="order" type="number" min="1" step="1" value="${src?(src.order||''):''}" ${e?'':'disabled'}></td>
+        ${K.map(k=>`<td style="text-align:right"><input class="rt-num" data-k="${k}" type="number" min="0" step="1" value="${src?(src[k]==null&&k==='rebar'?(src.concrete==null?'':src.concrete):(src[k]==null?'':src[k])):''}" ${e?'':'disabled'}></td>`).join('')}
+      </tr>`;}).join('');
+      wire();filter();};
+    const save=()=>{this._resourceSave();this.buildMetrics();this.render();
+      state.textContent='Saved \u2713';state.style.color='#159957';clearTimeout(this._rtSavedT);
+      this._rtSavedT=setTimeout(()=>{if(state.isConnected){state.textContent='Autosaves as you type';state.style.color='';}},1600);};
+    const queue=()=>{state.textContent='Saving\u2026';state.style.color='var(--dim)';
+      clearTimeout(this._rtSaveT);this._rtSaveT=setTimeout(()=>{this._rtSaveT=null;save();},500);};
+    const setTeam=(r,tid)=>{const cur=this._resourceEntry(r.lv,r.zmk);let keep=null;
+      teams().forEach(t=>{const at=(t.zones||[]).findIndex(x=>x.lv===r.lv&&x.zmk===r.zmk);
+        if(at>=0){keep=t.zones[at];t.zones.splice(at,1);this._resourceRenumber(t);}});
+      if(tid){const t=teams().find(x=>x.id===tid);if(t){t.zones=t.zones||[];
+        t.zones.push({...(keep||{}),lv:r.lv,zmk:r.zmk,order:(t.zones.filter(x=>x.lv===r.lv).length+1)});this._resourceRenumber(t);}}
+      void cur;};
+    const wire=()=>{
+      body.querySelectorAll('.rt-team').forEach(sel=>sel.onchange=()=>{
+        const r=rows[+sel.closest('tr').dataset.i];setTeam(r,sel.value);save();draw();});
+      body.querySelectorAll('.rt-num').forEach(inp=>inp.oninput=()=>{
+        const tr=inp.closest('tr'),r=rows[+tr.dataset.i],e=this._resourceEntry(r.lv,r.zmk);if(!e)return;
+        let it=null;teams().forEach(t=>(t.zones||[]).forEach(x=>{if(x.lv===r.lv&&x.zmk===r.zmk)it=x;}));if(!it)return;
+        const v=inp.value.trim(),n=v===''?null:Math.max(0,Math.round(Number(v)||0));
+        if(inp.dataset.k==='order'){it.order=n==null?999:n;const t=teams().find(x=>(x.zones||[]).indexOf(it)>=0);if(t)this._resourceRenumber(t);}
+        else {if(n==null)delete it[inp.dataset.k];else it[inp.dataset.k]=n;}
+        queue();});};
+    const filter=()=>{const c=ov.querySelector('#__rtCat').value,lv=ov.querySelector('#__rtLv').value,
+        q=ov.querySelector('#__rtFind').value.trim().toLowerCase(),only=ov.querySelector('#__rtOnly').checked;
+      let n=0;body.querySelectorAll('tr').forEach(tr=>{
+        const ok=(!c||tr.dataset.cat===c)&&(!lv||tr.dataset.lv===lv)&&(!q||tr.dataset.q.indexOf(q)>=0)&&(!only||tr.dataset.on==='1');
+        tr.style.display=ok?'':'none';if(ok)n++;});
+      cnt.textContent=n+' of '+rows.length+' zones';};
+    ['#__rtCat','#__rtLv','#__rtOnly'].forEach(x=>ov.querySelector(x).onchange=filter);
+    ov.querySelector('#__rtFind').oninput=filter;
+    const shown=()=>[...body.querySelectorAll('tr')].filter(tr=>tr.style.display!=='none').map(tr=>rows[+tr.dataset.i]);
+    ov.querySelector('#__rtAssign').onclick=()=>{const tid=ov.querySelector('#__rtBulkTeam').value;
+      if(!tid)return;shown().forEach(r=>setTeam(r,tid));save();draw();};
+    ov.querySelector('#__rtClear').onclick=()=>{const rs=shown();
+      if(!rs.length||!window.confirm('Remove '+rs.length+' zone'+(rs.length===1?'':'s')+' from the plan?'))return;
+      rs.forEach(r=>setTeam(r,''));save();draw();};
+    const close=()=>{clearTimeout(this._rtSaveT);this._rtSaveT=null;this._resourceSave();
+      this.buildMetrics();this.render();this._renderResourcePanel();ov.remove();};
+    ov.querySelector('#__rtClose').onclick=close;ov.querySelector('#__rtDone').onclick=close;
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    draw();
+  }
+  resourceClearLevel(lv){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit the resource plan.');return;}
+    lv=lv||this.curLevel;
+    const teams=this._resourceData().teams;
+    let zN=0,cN=0;teams.forEach(t=>{zN+=(t.zones||[]).filter(x=>x.lv===lv).length;cN+=(t.cores||[]).filter(x=>x.lv===lv).length;});
+    if(!zN&&!cN){this._toast&&this._toast('Nothing is planned on '+lv+'.');return;}
+    if(!window.confirm('Remove '+zN+' zone'+(zN===1?'':'s')+(cN?' and '+cN+' core wall'+(cN===1?'':'s'):'')+' from '+lv+'?\nEvery team is cleared on this level. Other levels are untouched.'))return;
+    teams.forEach(t=>{t.zones=(t.zones||[]).filter(x=>x.lv!==lv);t.cores=(t.cores||[]).filter(x=>x.lv!==lv);
+      if(t.levelRes)delete t.levelRes[lv];
+      this._resourceRenumber(t);this._resourceCoreRenumber(t);});
+    this._resourceInspect=null;
+    this._resourceSave();this.buildMetrics();this.render();this._renderResourcePanel();
+    this._toast&&this._toast('Cleared '+lv+' \u2713');
   }
   openResourceCopyLevel(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit the resource plan.');return;}
@@ -669,7 +847,7 @@ class Component extends DCLogic {
   }
   openResourcePlanner(){if(!this.rwsCanResource()){this.rwsDeny('Resource permission is required.');return;}this._resourceMode=true;this._resourceEditing=false;this._resourceTeam();this.buildMetrics();this.render();this._renderResourcePanel();}
   _closeResourcePlanner(){this._resourceMode=false;this._resourceEditing=false;this._resourceInspect=null;const p=this.root.querySelector('#resourcePlannerPanel');if(p)p.remove();['#kpis','#progroll','#foot'].forEach(s=>{const e=this.root.querySelector(s);if(e)e.style.display='';});this.buildMetrics();this.render();}
-  _renderResourcePanel(){if(!this._resourceMode)return;const side=this.root.querySelector('#side'),title=this.root.querySelector('#sideTitle'),kpis=this.root.querySelector('#kpis'),prog=this.root.querySelector('#progroll'),foot=this.root.querySelector('#foot'),p=this.root.querySelector('#sidebody');if(!side||!p)return;const old=this.root.querySelector('#resourcePlannerPanel');if(old)old.remove();p.id='sidebody';p.dataset.resource='1';if(title)title.textContent='🧰 Resource Planning';if(kpis)kpis.style.display='none';if(prog)prog.style.display='none';if(foot)foot.style.display='none';const d=this._resourceData(),admin=this.rwsIsAdmin(),editing=admin&&!!this._resourceEditing,t=this._resourceTeam(),colors=this._resourceColours(),zs=t?(t.zones||[]).sort((a,b)=>(this._resourceLvOrder(a.lv)-this._resourceLvOrder(b.lv))||((Number(a.order)||999)-(Number(b.order)||999))):[],tot=t?this._resourceTeamValues(t):{workers:0,formwork:0,concrete:0,total:0},selected=this._resourceInspect&&(this._resourceInspect.core?this._resourceCoreEntry(this._resourceInspect.lv,this._resourceInspect.id):this._resourceEntry(this._resourceInspect.lv,this._resourceInspect.zmk));
+  _renderResourcePanel(){if(!this._resourceMode)return;const side=this.root.querySelector('#side'),title=this.root.querySelector('#sideTitle'),kpis=this.root.querySelector('#kpis'),prog=this.root.querySelector('#progroll'),foot=this.root.querySelector('#foot'),p=this.root.querySelector('#sidebody');if(!side||!p)return;const old=this.root.querySelector('#resourcePlannerPanel');if(old)old.remove();p.id='sidebody';p.dataset.resource='1';if(title)title.textContent='🧰 Resource Planning';if(kpis)kpis.style.display='none';if(prog)prog.style.display='none';if(foot)foot.style.display='none';const d=this._resourceData(),admin=this.rwsIsAdmin(),editing=admin&&!!this._resourceEditing,t=this._resourceTeam(),colors=this._resourceColours(),zs=t?(t.zones||[]).sort((a,b)=>(this._resourceLvOrder(a.lv)-this._resourceLvOrder(b.lv))||((Number(a.order)||999)-(Number(b.order)||999))):[],tot=t?this._resourceTeamValues(t,this.curLevel):{workers:0,formwork:0,concrete:0,total:0},selected=this._resourceInspect&&(this._resourceInspect.core?this._resourceCoreEntry(this._resourceInspect.lv,this._resourceInspect.id):this._resourceEntry(this._resourceInspect.lv,this._resourceInspect.zmk));
     tot.w=tot.workers;tot.f=tot.formwork;tot.c=tot.rebar;tot.t=tot.total;
     const tabs=d.teams.map((q,i)=>`<button class="hbtn resource-team-tab" data-team="${this.esc(q.id)}" style="padding:5px 8px;border-color:${q.id===(t&&t.id)?q.color:'var(--line)'};box-shadow:${q.id===(t&&t.id)?'inset 0 -3px '+q.color:'none'}"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${q.color}"></span> ${this.esc(q.name||('Team '+(i+1)))}</button>`).join('');
     const input=(x,k,label)=>editing?`<label style="display:block;color:var(--dim);font-size:8px;font-weight:800">${label}<input class="resource-team-qty" data-key="${k}" type="number" min="0" step="any" value="${x[k]==null?'':this.esc(x[k])}" placeholder="0" style="display:block;width:100%;box-sizing:border-box;margin-top:3px;padding:7px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt);font-size:14px;font-weight:900"></label>`:((k==='total'||k==='workers')?`<div><small style="display:block;color:var(--dim);font-size:9px;font-weight:900;letter-spacing:.06em">${label}</small><b style="font-size:26px;line-height:1.15">${x[k]==null?'—':this.esc(x[k])}</b></div>`:'');
@@ -687,12 +865,14 @@ class Component extends DCLogic {
       return `<section class="resource-core-card" data-i="${i}" style="margin-bottom:8px;padding:9px;border:${on?'2px':'1px'} solid ${on?t.color:'var(--line)'};border-radius:9px;background:${on?'color-mix(in srgb,'+t.color+' 8%,var(--panel))':'var(--panel)'}"><div style="display:flex;align-items:center;gap:7px"><b style="display:grid;place-items:center;width:25px;height:25px;border-radius:7px;background:#15803d;color:#fff;font-size:10px">CW</b><div style="min-width:0;flex:1"><b>${this.esc(x.id)}</b><small style="display:block;color:var(--dim);font-weight:800">${this.esc(x.lv)} \u00b7 Core wall ${i+1}</small></div>${editing?`<button class="resource-core-remove" title="Remove" style="color:var(--crit)">\u2715</button>`:''}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px">${cInput(x,'workers','Workers')}${cInput(x,'formwork','Formwork')}${cInput(x,'rebar','Rebar')}${cInput(x,'total','Total')}</div></section>`;}).join('');
     const coreSection=t?`<div style="margin:12px 0 4px;font-size:10px;font-weight:900;letter-spacing:.05em;color:#15803d">CORE WALLS \u00b7 separate resource</div>${coreCards||`<div style="padding:16px 12px;text-align:center;color:var(--faint);border:1px dashed var(--line);border-radius:9px;font-size:10px">${editing?'Click a core wall on the map to add it to this Team.':'No core walls assigned.'}</div>`}<div style="margin:8px 0 12px;padding:11px;border-top:3px solid #15803d;background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">CORE WALL TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:#15803d">${this.fmt(ctot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:#15803d">${this.fmt(ctot.total)}</b></div></div></div>`:'';
     p.onchange=e=>{const el=e.target;if(!el||!el.classList||!t)return;
-      if(el.classList.contains('resource-team-qty')){const vals=this._resourceTeamValues(t);t.resources={...vals,[el.dataset.key]:this._resourceNum(el.value)};this._resourceSave();this.render();this._renderResourcePanel();return;}
+      if(el.classList.contains('resource-team-qty')){const lv=this.curLevel,vals=this._resourceTeamValues(t,lv);
+        t.levelRes=t.levelRes||{};t.levelRes[lv]={...vals,[el.dataset.key]:Math.max(0,Math.round(this._resourceNum(el.value)||0))};
+        this._resourceSave();this.render();this._renderResourcePanel();return;}
       if(el.classList.contains('resource-core-qty')){const card=el.closest('.resource-core-card'),i=card?Number(card.dataset.i):-1;if(i<0||!cs[i])return;cs[i][el.dataset.key]=this._resourceNum(el.value);this._resourceSave();this.render();this._renderResourcePanel();}};
     if(p._resourceCapture)p.removeEventListener('click',p._resourceCapture,true);p._resourceCapture=e=>{const editBtn=e.target.closest&&e.target.closest('#resourceEdit');if(editBtn){e.preventDefault();e.stopImmediatePropagation();this._resourceEditing=!this._resourceEditing;this.render();this._renderResourcePanel();return;}const cb=e.target.closest&&e.target.closest('.resource-core-remove');if(cb&&t){e.preventDefault();e.stopImmediatePropagation();const cc=cb.closest('.resource-core-card'),k=cc?Number(cc.dataset.i):-1;if(k>=0&&cs[k]){const at=t.cores.indexOf(cs[k]);if(at>=0)t.cores.splice(at,1);this._resourceInspect=null;this._resourceCoreRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();}return;}
     const b=e.target.closest&&e.target.closest('.resource-up,.resource-down,.resource-remove');if(!b||!t)return;e.preventDefault();e.stopImmediatePropagation();const card=b.closest('.resource-zone-card'),i=card?Number(card.dataset.i):-1;if(i<0||!zs[i])return;if(b.classList.contains('resource-remove')){const at=t.zones.indexOf(zs[i]);if(at>=0)t.zones.splice(at,1);this._resourceInspect=null;}else{const j=b.classList.contains('resource-up')?i-1:i+1;if(j<0||j>=zs.length)return;const a=zs[i].order,c=zs[j].order;zs[i].order=c;zs[j].order=a;}this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};p.addEventListener('click',p._resourceCapture,true);
-    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}<button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
-    p.querySelector('#resourceClose').onclick=()=>this._closeResourcePlanner();{const _cl=p.querySelector('#resourceCopyLv');if(_cl)_cl.onclick=()=>this.openResourceCopyLevel();}const edit=p.querySelector('#resourceEdit');if(edit)edit.onclick=()=>{this._resourceEditing=!this._resourceEditing;this._renderResourcePanel();};p.querySelectorAll('.resource-team-tab').forEach(b=>b.onclick=()=>{this._resourceTeamId=b.dataset.team;this._resourceInspect=null;this.render();this._renderResourcePanel();});const add=p.querySelector('#resourceAddTeam');if(add)add.onclick=()=>{const name=window.prompt('Team name','Team '+String.fromCharCode(65+d.teams.length));if(!name||!name.trim())return;const id='team_'+Date.now().toString(36);const _used=new Set(d.teams.map(q=>String(q.color||'').toLowerCase()));const _free=colors.find(c=>!_used.has(String(c).toLowerCase()))||colors[d.teams.length%colors.length];d.teams.push({id,name:name.trim(),color:_free,zones:[]});this._resourceTeamId=id;this._resourceSave();this.render();this._renderResourcePanel();};if(!t)return;const tn=p.querySelector('#resourceTeamName'),tc=p.querySelector('#resourceTeamColor');if(tn)tn.onchange=()=>{t.name=tn.value.trim()||t.name;this._resourceSave();this.render();this._renderResourcePanel();};if(tc)tc.onchange=()=>{t.color=tc.value;this._resourceSave();this.render();this._renderResourcePanel();};const del=p.querySelector('#resourceDeleteTeam');if(del)del.onclick=()=>this._confirmModal('Delete this team and its Zone assignment?',()=>{d.teams=d.teams.filter(q=>q.id!==t.id);this._resourceTeamId=(d.teams[0]||{}).id;this._resourceSave();this.render();this._renderResourcePanel();});p.querySelectorAll('.resource-core-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;if(!cs[i])return;this._resourceInspect={core:true,lv:cs[i].lv,id:cs[i].id};this.render();this._renderResourcePanel();};});
+    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}<button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button><button class="hbtn" id="resourceSeqPng" style="padding:5px 8px" title="Export the work sequence of every team on this level as a PNG">\u2b07 PNG</button><button class="hbtn" id="resourceTable" style="padding:5px 8px" title="Edit the whole plan as a table">\u25a4 Table</button><button class="hbtn" id="resourceClearLv" style="padding:5px 8px;color:var(--crit)" title="Remove every Team\u2019s zones and core walls on the level you are looking at">\ud83d\uddd1 Clear level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
+    p.querySelector('#resourceClose').onclick=()=>this._closeResourcePlanner();{const _cl=p.querySelector('#resourceCopyLv');if(_cl)_cl.onclick=()=>this.openResourceCopyLevel();}{const _xl=p.querySelector('#resourceClearLv');if(_xl)_xl.onclick=()=>this.resourceClearLevel();}{const _rt=p.querySelector('#resourceTable');if(_rt)_rt.onclick=()=>this.openResourceTable();}{const _sp=p.querySelector('#resourceSeqPng');if(_sp)_sp.onclick=()=>this.exportResourceSeqPng();}const edit=p.querySelector('#resourceEdit');if(edit)edit.onclick=()=>{this._resourceEditing=!this._resourceEditing;this._renderResourcePanel();};p.querySelectorAll('.resource-team-tab').forEach(b=>b.onclick=()=>{this._resourceTeamId=b.dataset.team;this._resourceInspect=null;this.render();this._renderResourcePanel();});const add=p.querySelector('#resourceAddTeam');if(add)add.onclick=()=>{const name=window.prompt('Team name','Team '+String.fromCharCode(65+d.teams.length));if(!name||!name.trim())return;const id='team_'+Date.now().toString(36);const _used=new Set(d.teams.map(q=>String(q.color||'').toLowerCase()));const _free=colors.find(c=>!_used.has(String(c).toLowerCase()))||colors[d.teams.length%colors.length];d.teams.push({id,name:name.trim(),color:_free,zones:[]});this._resourceTeamId=id;this._resourceSave();this.render();this._renderResourcePanel();};if(!t)return;const tn=p.querySelector('#resourceTeamName'),tc=p.querySelector('#resourceTeamColor');if(tn)tn.onchange=()=>{t.name=tn.value.trim()||t.name;this._resourceSave();this.render();this._renderResourcePanel();};if(tc)tc.onchange=()=>{t.color=tc.value;this._resourceSave();this.render();this._renderResourcePanel();};const del=p.querySelector('#resourceDeleteTeam');if(del)del.onclick=()=>this._confirmModal('Delete this team and its Zone assignment?',()=>{d.teams=d.teams.filter(q=>q.id!==t.id);this._resourceTeamId=(d.teams[0]||{}).id;this._resourceSave();this.render();this._renderResourcePanel();});p.querySelectorAll('.resource-core-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;if(!cs[i])return;this._resourceInspect={core:true,lv:cs[i].lv,id:cs[i].id};this.render();this._renderResourcePanel();};});
     p.querySelectorAll('.resource-zone-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();};card.querySelectorAll('.resource-qty').forEach(inp=>inp.onchange=()=>{zs[i][inp.dataset.key]=this._resourceNum(inp.value);this._resourceSave();this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();});const up=card.querySelector('.resource-up'),dn=card.querySelector('.resource-down'),rm=card.querySelector('.resource-remove');if(up)up.onclick=()=>{if(i<1)return;[zs[i-1],zs[i]]=[zs[i],zs[i-1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(dn)dn.onclick=()=>{if(i>=zs.length-1)return;[zs[i+1],zs[i]]=[zs[i],zs[i+1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(rm)rm.onclick=()=>{const gone=zs[i];zs.splice(i,1);if(this._resourceInspect&&this._resourceInspect.lv===gone.lv&&this._resourceInspect.zmk===gone.zmk)this._resourceInspect=null;this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};});}
   _monthlySummaryRows(cat,mon){
     const M=this.ACT_MONTHS||[],mi=M.indexOf(mon),prev=mi>0?M[mi-1]:null,earlier=mi>1?M[mi-2]:null,by={critical:{},noncritical:{}};if(mi<0)return {critical:[],noncritical:[],prev,earlier};
