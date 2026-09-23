@@ -324,12 +324,13 @@ class Component extends DCLogic {
      }}
     return null;}
   _coreItemsFor(lv,zmk){return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]);}
-  _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
+  _reconcileZoneCores(){this.__rangeCache=null;this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
         const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
   _reconcileZoneStairs(){
+    this.__rangeCache=null;
     if(!this.DATA)return;
     this._baseZoneStairs=this._baseZoneStairs||{};
     this._stairZoneItems={};
@@ -2937,7 +2938,15 @@ class Component extends DCLogic {
     const a=this._floorOrd(g.f),b=this._floorOrd(g.t);
     return (a==null||b==null)?null:[Math.min(a,b),Math.max(a,b)];
   }
+  /* Cached: this is called for every drawn outline on every render, and the lookup walks every
+     level's zone lists.  The key covers the mark and the source level; the cache is dropped
+     whenever the stair/core lists are rebuilt. */
   _linksFloorRange(w,lv){
+    const _ck=(this._shapeLabel(w)||'')+'|'+(lv||'');
+    this.__rangeCache=this.__rangeCache||{};
+    if(Object.prototype.hasOwnProperty.call(this.__rangeCache,_ck))return this.__rangeCache[_ck];
+    const _out=this._linksFloorRangeRaw(w,lv);this.__rangeCache[_ck]=_out;return _out;}
+  _linksFloorRangeRaw(w,lv){
     /* Name first: scanning every level's lists for this mark is position-independent, so the range
        cannot change just because the outline was drawn a little off its zone.  Only when the mark
        matches nothing do we fall back to whatever the outline currently links to. */

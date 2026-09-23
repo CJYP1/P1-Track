@@ -1295,17 +1295,6 @@
   var CANVAS_BG_DARK = "#2e2c26";
   function createHelmetManager(doc, isStreaming) {
     const mounted = /* @__PURE__ */ new Set();
-    /* The <x-dc> block is real DOM: the browser has already fetched and run every <script src> and
-       <link rel=stylesheet> inside it.  The runtime then renders the same template again, which
-       used to append a second copy of each tag to <head> and download the whole data set twice.
-       Seed them as already mounted, while the originals are still in the live document. */
-    try {
-      doc.querySelectorAll("x-dc script[src]").forEach((el) => {
-        const v = el.getAttribute("src"); if (v) mounted.add("SCRIPT|" + v);
-      });
-      /* Stylesheets are NOT seeded: the runtime removes the original <x-dc> content, so its own
-         copy of the <link> is the one that ends up applying the CSS. */
-    } catch (_e) {}
     const live = /* @__PURE__ */ new Map();
     let designDocMode = null;
     let canvasStyleEl = null;
