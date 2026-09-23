@@ -313,6 +313,15 @@ class Component extends DCLogic {
     }
     const fixed={LW10:'P12',LW9:'P5-2',CW01:'P11'},label=fixed[name];
     if(lv==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){const P=this.SUBZONES.L1.P;let i=label?P.findIndex(e=>e.label===label):-1;if(i<0&&w.pts&&w.pts.length){const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;i=P.findIndex(e=>e.pts&&this.ptIn(e.pts,cx,cy));}if(i>=0)return {lv,zmk:'L1|'+P[i].label,label:P[i].label,sub:{kind:'P',i}};}
+    /* Every other level: fall back to geometry, the same way columns and staircases are homed.
+       Levels whose zones carry no built-in core list (L5, and any floor added later) would
+       otherwise never own a drawn core wall at all. */
+    {const L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];
+     if(L&&w.pts&&w.pts.length){
+       const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;
+       const z=(L.zones||[]).find(x=>x.ring&&this.ptIn(x.ring,cx,cy));
+       if(z)return {lv,zmk:z.mk||z.lid,label:z.label,z};
+     }}
     return null;}
   _coreItemsFor(lv,zmk){return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]);}
   _reconcileZoneCores(){this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
