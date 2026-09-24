@@ -3349,10 +3349,13 @@ class Component extends DCLogic {
       (this.DATA.overlays[k]||[]).forEach(seg=>{
         const p=seg.pts.map(pt=>{const q=this.proj(pt,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
         const tag=seg.closed?'polygon':'polyline';
-        _ovlLines+=`<${tag} class="ovl" points="${p}" stroke="#ffffff" stroke-width="${(o.w*1.05+0.8).toFixed(1)}" stroke-opacity="0.9"/>`;
+        /* The width of these lines is a screen width, held by `vector-effect` in the stylesheet.  A
+           snapshot carries attributes but not always that rule, so it is written on the element too —
+           without it the stroke is measured in map units and vanishes. */
+        _ovlLines+=`<${tag} class="ovl" points="${p}" vector-effect="non-scaling-stroke" fill="none" stroke="#ffffff" stroke-width="${(o.w*1.05+0.8).toFixed(1)}" stroke-opacity="0.9"/>`;
         /* Export: outline only.  The hatch wash reads as "coloured area" in a picture whose whole
            point is which areas are coloured, so it is dropped there. */
-        _ovlLines+=`<${tag} class="ovl" points="${p}" ${(seg.closed&&!this._resExportOnly)?`style="fill:url(#hz_${k})"`:''} stroke="${o.c}" stroke-width="${(o.w*1.05).toFixed(1)}" stroke-dasharray="6 4.5" stroke-opacity="0.95"/>`;
+        _ovlLines+=`<${tag} class="ovl" points="${p}" vector-effect="non-scaling-stroke" ${(seg.closed&&!this._resExportOnly)?`style="fill:url(#hz_${k})"`:'fill="none"'} stroke="${o.c}" stroke-width="${(o.w*1.05).toFixed(1)}" stroke-dasharray="6 4.5" stroke-opacity="0.95"/>`;
       });
     });
     if(!_focusOnly&&this.rwsIsAdmin() && this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
