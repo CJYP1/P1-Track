@@ -2660,13 +2660,14 @@ class Component extends DCLogic {
                 rm:this._resourceMode,re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb},
                 cols:this.showColumns,zc:this.showSubZC,sc:this.showSubC,sp:this.showSubP,
                 acc:this.showAccess,crit:this.showCrit,dts:this.showDates,dly:this.showDelay,
-                cw:this.showCoreWalls,lf:this.showLifts};
+                cw:this.showCoreWalls,lf:this.showLifts,ovl:{...this.showOvl}};
     const shots=[];
     const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
     for(const lv of lvWanted){
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
       this._resExportOnly=true;this._resExportMonth=only||'';this.showColumns=false;
       this.showCoreWalls=false;this.showLifts=false;   /* core walls / lifts / stairs stay out of this picture */
+      this.showOvl={...this.showOvl,transfer:true};   /* the transfer slab outline gives the picture its frame */
       this.showAccess=false;this.showDates=false;this.showDelay=false;   /* overlays off */
       this.showCrit=true;   /* critical path stays — it is the point of the picture */
       this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
@@ -2686,7 +2687,7 @@ class Component extends DCLogic {
     this._resourceMode=keep.rm;this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;
     this.showColumns=keep.cols;this.showSubZC=keep.zc;this.showSubC=keep.sc;this.showSubP=keep.sp;
     this.showAccess=keep.acc;this.showCrit=keep.crit;this.showDates=keep.dts;this.showDelay=keep.dly;
-    this.showCoreWalls=keep.cw;this.showLifts=keep.lf;
+    this.showCoreWalls=keep.cw;this.showLifts=keep.lf;this.showOvl=keep.ovl;
     this._resExportOnly=false;this._resExportMonth='';
     this.render();try{this._renderResourcePanel&&this._resourceMode&&this._renderResourcePanel();}catch(e){}
     /* Trimming leaves every level a different shape, so each row is as tall as its tallest map. */
@@ -3075,6 +3076,8 @@ class Component extends DCLogic {
          team's colour — everything else is left out entirely, outline and name included. */
       if(this._resExportOnly&&this._resourceMode){
         if(!_monthEntry)return;
+        /* A slab already cast is finished work — it does not belong in a look-ahead picture. */
+        try{if((this._zoneCastInfo(this.curLevel,z)||{}).done)return;}catch(_e){}
         if(this._resExportMonth){const _ms=this._mpZoneMonths(this.curLevel,z.mk||z.lid);
           if(!_ms||_ms.indexOf(this._resExportMonth)<0)return;}}
       const pts=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
@@ -3170,7 +3173,8 @@ class Component extends DCLogic {
       /* The headline number follows the same month filter as the shapes, so a team with no work
          in the exported month leaves no number behind. */
       if(this._resourceMode&&this.zoneVisible(z)&&!(this._resExportOnly&&this._resExportMonth&&
-          !((this._mpZoneMonths(this.curLevel,z.mk||z.lid)||[]).indexOf(this._resExportMonth)>=0))){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
+          !((this._mpZoneMonths(this.curLevel,z.mk||z.lid)||[]).indexOf(this._resExportMonth)>=0))
+          &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
       if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
@@ -3259,8 +3263,11 @@ class Component extends DCLogic {
       let fill=col, fo=0, base='',drawCol=col;   /* 默认: 透明填充, 只描边 */
       const _resSub=this._resourceMode&&this._resourceEntry(this.curLevel,this.curLevel+'|'+e.label);
       if(this._resourceMode&&!this._resourceEditing&&!_resSub)return;
-      if(this._resExportOnly&&this._resExportMonth&&_resSub){const _ms2=this._mpZoneMonths(this.curLevel,this.curLevel+'|'+e.label);
-        if(!_ms2||_ms2.indexOf(this._resExportMonth)<0)return;}
+      if(this._resExportOnly&&_resSub){
+        const _z9={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')};
+        try{if((this._zoneCastInfo(this.curLevel,_z9)||{}).done)return;}catch(_e9){}
+        if(this._resExportMonth){const _ms2=this._mpZoneMonths(this.curLevel,this.curLevel+'|'+e.label);
+          if(!_ms2||_ms2.indexOf(this._resExportMonth)<0)return;}}
       if(this._resourceMode){base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;fill=_resSub?(_resSub.team.color||'#3157d5'):'#d9dee7';fo=_resSub?0.68:0.22;drawCol=_resSub?fill:col;
       } else if(this.colorMode==='castdate'){   /* Cast: marine 板也参与, 按浇筑时间上色 */
         const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:(cls==='subP'),_mslab:(cls==='subC')};
