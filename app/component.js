@@ -2616,6 +2616,19 @@ class Component extends DCLogic {
     out.sort((x,y)=>M.indexOf(x)-M.indexOf(y));
     return out;
   }
+  /* A team's centre of gravity on a level, taken from the zone geometry rather than from what was
+     drawn.  An export leaves idle zones out entirely, so a team whose figure comes from the table
+     would otherwise have nowhere to print it. */
+  _resAnchor(t,lv,H){
+    const zs=((this.DATA.levels[lv]||{}).zones||[]);const cats={};let px=0,py=0,n=0;
+    (t.zones||[]).forEach(x=>{if(x.lv!==lv)return;
+      const z=zs.find(q=>(q.mk||q.lid)===x.zmk);if(!z||!z.ring)return;
+      const c=z.cat||'NB';cats[c]=(cats[c]||0)+1;
+      z.ring.forEach(pt=>{const q=this.proj(pt,H);px+=q[0];py+=q[1];n++;});});
+    if(!n)return null;
+    let best=null;Object.keys(cats).forEach(c=>{if(!best||cats[c]>cats[best])best=c;});
+    return {x:px/n,y:py/n,r:0,cat:best||'NB'};
+  }
   /* How much ground a team is actually working on this level in a month.  This is what the
      Manpower figure gets split by, so a team on one small zone does not take the same share as a
      team on four big ones. */
@@ -3572,7 +3585,12 @@ class Component extends DCLogic {
       /* A figure typed into the Manpower table is the truth for that area and level, so the map
          prints it too: each team is scaled to its share, and the last one absorbs the rounding so
          the numbers on the picture add up to exactly what the table says. */
-      const _ovAdj={};
+      const _ovAdj={},_ovFb={};
+      /* Teams whose zones were all left out of this picture still hold ground on this level; give
+         them an anchor so a figure the Manpower table carries has somewhere to land. */
+      (((this._resourceData()||{}).teams)||[]).forEach(t9=>{const k9=t9.id||t9.name;
+        if(_resTeams[k9])return;const a9=this._resAnchor(t9,this.curLevel,H);if(!a9)return;
+        _resTeams[k9]={t:t9,pts:[a9],cat:a9.cat||'NB',syn:true};});
       /* On screen as well as in an export: the month being looked at decides which figures apply,
          so what the map prints always matches the Manpower table for that month. */
       const _ovMon=this._resExportOnly?this._resExportMonth
@@ -3582,6 +3600,7 @@ class Component extends DCLogic {
           const v2=this._resourceTeamValues(e2.t,this.curLevel),cv2=this._resourceCoreValues(e2.t,this.curLevel);
           (byCat[c2]=byCat[c2]||[]).push({k:k2,
             w:this._mpTeamArea(e2.t,this.curLevel,c2,_ovMon),
+            wa:this._mpTeamArea(e2.t,this.curLevel,c2,''),
             wk:(Number(v2.workers)||0)+(Number(cv2.workers)||0)});});
         const ovs=this._mpOv();
         Object.keys(byCat).forEach(c3=>{const list=byCat[c3],key=this._mpKey(c3,this.curLevel,_ovMon);
@@ -3590,9 +3609,17 @@ class Component extends DCLogic {
           /* Split by the ground each team actually works this month.  A team with no work this
              month gets nothing; if none of them can be dated, fall back to the headcounts and then
              to an even split, so the table figure still lands on the map instead of vanishing. */
-          const use=list.filter(x=>x.w>0);
+          let use=list.filter(x=>x.w>0);
           list.forEach(x=>{_ovAdj[x.k]=0;});
-          if(!use.length)return;   /* nobody works here this month — print nothing at all */
+          /* No datable work here this month, but the table still says there are men: show them.
+             A figure that is in the plan has to appear somewhere — the missing thing is the date,
+             not the people.  Fall back to all the team's ground, then to the headcounts. */
+          if(!use.length){
+            let fb=list.filter(x=>x.wa>0).map(x=>({k:x.k,w:x.wa}));
+            if(!fb.length)fb=list.filter(x=>x.wk>0).map(x=>({k:x.k,w:x.wk}));
+            if(!fb.length)fb=list.map(x=>({k:x.k,w:1}));
+            fb.forEach(x=>{_ovFb[x.k]=true;});
+            use=fb;}
           const tot=use.reduce((n2,x)=>n2+x.w,0);
           /* The last share absorbs the rounding, so the printed numbers add up to exactly the table. */
           let acc=0;use.forEach((x,i)=>{const v3=(i===use.length-1)?(target-acc):Math.round(target*x.w/tot);
@@ -3600,7 +3627,7 @@ class Component extends DCLogic {
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k];let ps=e.pts||[];if(!ps.length)return;
         /* Put the figure on ground the team is working THIS month.  Anchoring it on an idle zone is
            what made the map look like it had men standing where there was no work. */
-        if(_ovMon){const q=ps.filter(z=>z.zmk&&(this._mpZoneMonths(this.curLevel,z.zmk)||[]).indexOf(_ovMon)>=0);
+        if(_ovMon&&!_ovFb[k]){const q=ps.filter(z=>z.zmk&&(this._mpZoneMonths(this.curLevel,z.zmk)||[]).indexOf(_ovMon)>=0);
           if(q.length)ps=q;else if(_ovAdj[k]!=null)return;}
         const cx0=ps.reduce((a,q)=>a+q.x,0)/ps.length,cy0=ps.reduce((a,q)=>a+q.y,0)/ps.length;
         /* Anchor on the Team's Zone nearest its centre, so the number always sits on coloured
@@ -3612,6 +3639,8 @@ class Component extends DCLogic {
         /* A team with no work in the month being looked at gets no label at all — a bare 0 on the
            map only invites the question of whether something was forgotten. */
         if(_ovMon&&_ovAdj[k]===0)return;
+        /* A team only present because of the line above prints solely on the table's authority. */
+        if(e.syn&&!(_ovMon&&_ovAdj[k]>0))return;
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
           +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.04em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.16).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
