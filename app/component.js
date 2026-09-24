@@ -2668,7 +2668,9 @@ class Component extends DCLogic {
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
       this._resExportOnly=true;this._resExportMonth=only||'';this.showColumns=false;
       this.showCoreWalls=false;this.showLifts=false;   /* core walls / lifts / stairs stay out of this picture */
-      this.showOvl={...this.showOvl,transfer:true};   /* the transfer slab outline gives the picture its frame */
+      /* Keep the outlines that frame the picture: transfer slab, Podium CIS and the Podium /
+         tower outline — outlines only, nothing filled. */
+      this.showOvl={...this.showOvl,transfer:true,podcis:true,podium:true};
       this.showAccess=false;this.showDates=false;this.showDelay=false;   /* overlays off */
       this.showCrit=true;   /* critical path stays — it is the point of the picture */
       this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
