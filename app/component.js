@@ -2248,6 +2248,10 @@ class Component extends DCLogic {
           'text-anchor','letter-spacing','paint-order','display','visibility'];
         const a=src.querySelectorAll('*'),b=clone.querySelectorAll('*');
         for(let i=0;i<a.length&&i<b.length;i++){
+          /* Anything inside <defs> — the hatch patterns behind Podium CIS, the transfer slab and the
+             podium — is never rendered, so its computed style is meaningless and writing it on would
+             flatten the pattern.  Those nodes keep their own attributes untouched. */
+          if(b[i].closest&&b[i].closest('defs'))continue;
           const cs=window.getComputedStyle(a[i]);let st='';
           PROPS.forEach(k=>{const v=cs.getPropertyValue(k);if(v)st+=k+':'+v+';';});
           b[i].setAttribute('style',st);b[i].removeAttribute('class');}
@@ -2587,15 +2591,31 @@ class Component extends DCLogic {
       out.push(x.lv+' '+((z&&z.label)||String(x.zmk).replace(/^[^|]*\|/,''))+' \u00b7 '+(t.name||''));}));
     return out;
   }
+  /* Where work actually starts, team or no team: any zone of that area and level whose activity
+     begins in that month.  Cells outside this need no figure at all. */
+  _mpWorkMap(){
+    const out={};
+    (this.DATA.order||[]).forEach(lv=>{
+      const zs=((this.DATA.levels[lv]||{}).zones||[]).slice();
+      const S=(this.SUBZONES||{})[lv];
+      if(S)['C','P','ZC'].forEach(k=>(S[k]||[]).forEach(e=>zs.push({mk:lv+'|'+e.label,label:e.label,cat:'MA'})));
+      zs.forEach(z=>{const ms=this._mpZoneMonths(lv,z.mk||z.lid);if(!ms)return;
+        ms.forEach(m=>{out[this._mpKey(z.cat||'NB',lv,m)]=true;});});});
+    return out;
+  }
   _mpRows(only){
     const cats=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']];
     const lvs=(this.DATA.order||[]).filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
-    const auto=this._mpAuto(),ov=this._mpOv(),rows=[];
+    const auto=this._mpAuto(),ov=this._mpOv(),work=this._mpWorkMap(),rows=[];
     const M=(only&&this._mpMonths().indexOf(only)>=0)?[only]:this._mpMonths();
     cats.forEach(([c,label])=>lvs.forEach(lv=>{
       const cells=M.map(m=>{const k=this._mpKey(c,lv,m),o=ov[k];
-        return {m,k,auto:auto[k]||0,val:(o==null?(auto[k]||0):Number(o)||0),manual:o!=null};});
-      if(cells.some(x=>x.val||x.auto))rows.push({cat:c,label,lv,cells});}));
+        return {m,k,auto:auto[k]||0,val:(o==null?(auto[k]||0):Number(o)||0),manual:o!=null,work:!!work[k]};});
+      /* Every area/level that physically exists is listed, even with nobody on it — an empty row
+         is exactly where you decide to put men next. */
+      const exists=((this.DATA.levels[lv]||{}).zones||[]).some(z=>(z.cat||'NB')===c)
+        ||(c==='MA'&&lv==='L1'&&!!((this.SUBZONES||{}).L1||{}).P);
+      if(exists||cells.some(x=>x.val||x.auto))rows.push({cat:c,label,lv,cells});}));
     return {rows,months:M};
   }
   openManpowerMonth(){
@@ -2613,6 +2633,7 @@ class Component extends DCLogic {
       <div class="delay-admin-scroll" id="__mpBody"></div>
       <div class="delay-admin-foot"><span id="__mpNote">Bold = typed by hand. Blank cell = nobody planned there that month.</span>
         <div style="display:flex;gap:6px">
+          <button class="hbtn" id="__mpDropOld" title="Delete the old whole-project figure each team carries, so only the per-level figures count">\ud83e\uddf9 Clear old team totals</button>
           <button class="hbtn" id="__mpReset">\u21ba Reset typed cells</button>
           <button class="hbtn primary" id="__mpPng">\u2b07 PNG</button></div></div></div>`;
     document.body.appendChild(ov);
@@ -2623,15 +2644,18 @@ class Component extends DCLogic {
       ov.querySelector('#__mpBody').innerHTML=rows.length?`<table><thead><tr><th>Area</th><th>Level</th>
         ${months.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
         ${rows.map(r=>`<tr data-cat="${r.cat}" data-lv="${r.lv}"><td>${this.esc(r.label)}</td><td><b>${this.esc(r.lv)}</b></td>
-          ${r.cells.map(c=>`<td style="text-align:right">${admin
-            ?`<input class="mp-in" data-k="${this.esc(c.k)}" type="number" min="0" step="1" value="${c.val||''}" placeholder="${c.auto||0}"
-                 style="width:62px;padding:3px 5px;text-align:right;border:1px solid var(--line);border-radius:5px;background:var(--panel2);color:var(--txt);font-weight:${c.manual?800:400}">`
-            :`<span style="font-weight:${c.manual?800:400}">${c.val||'\u2014'}</span>`}</td>`).join('')}</tr>`).join('')}
+          ${r.cells.map(c=>`<td style="text-align:right${c.work?'':';background:var(--panel2)'}" ${c.work?'':'title="No activity starts here this month \u2014 nothing to fill in"'}>${
+            !c.work&&!c.val
+              ? `<span style="color:var(--faint)">\u00b7</span>`
+              : (admin
+                ?`<input class="mp-in" data-k="${this.esc(c.k)}" type="number" min="0" step="1" value="${c.val||''}" placeholder="${c.auto||0}"
+                     style="width:62px;padding:3px 5px;text-align:right;border:1px solid var(--line);border-radius:5px;background:var(--panel2);color:var(--txt);font-weight:${c.manual?800:400}">`
+                :`<span style="font-weight:${c.manual?800:400}">${c.val||'\u2014'}</span>`)}</td>`).join('')}</tr>`).join('')}
         </tbody><tfoot><tr><td colspan="2"><b>All zones combined</b></td>
           ${tot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr></tfoot></table>`
         :'<div style="padding:18px;color:var(--faint);font-size:12px">No team has zones with slab dates yet \u2014 import or set the dates first.</div>';
       const _un=this._mpUndated(),_nt=ov.querySelector('#__mpNote');
-      if(_nt)_nt.innerHTML='Bold = typed by hand. Blank cell = nobody planned there that month.'
+      if(_nt)_nt.innerHTML='Bold = typed by hand \u00b7 grey \u00b7 = no activity starts there that month, nothing to fill in.'
         +(_un.length?` <b style="color:var(--crit)">\u00b7 ${_un.length} planned zone${_un.length===1?'':'s'} have no slab dates, so they fall in no month:</b> `
           +this.esc(_un.slice(0,6).join(' ,  '))+(_un.length>6?' \u2026':''):'');
       ov.querySelectorAll('.mp-in').forEach(inp=>inp.onchange=()=>{
@@ -2645,6 +2669,12 @@ class Component extends DCLogic {
       if(!window.confirm('Drop every typed cell and go back to the calculated numbers?'))return;
       this._appCfg.manpowerMonth={};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
       if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerMonth',{},null,null);draw();};
+    ov.querySelector('#__mpDropOld').onclick=()=>{if(!admin)return;
+      const ts=this._resourceData().teams.filter(t=>t.resources);
+      if(!ts.length){this._toast&&this._toast('No team carries an old whole-project figure.');return;}
+      if(!window.confirm('Delete the old whole-project figure on '+ts.length+' team'+(ts.length===1?'':'s')+'?\nOnly the per-level figures will count after this. Zone figures and the plan itself are untouched.'))return;
+      ts.forEach(t=>{delete t.resources;});this._resourceSave();this.buildMetrics();this.render();draw();
+      this._toast&&this._toast('Cleared '+ts.length+' old team total'+(ts.length===1?'':'s')+' \u2713');};
     ov.querySelector('#__mpMon').onchange=draw;
     ov.querySelector('#__mpPng').onclick=()=>this.exportManpowerMonthPng(pick());
     draw();
@@ -2656,7 +2686,9 @@ class Component extends DCLogic {
     /* One map per level that has men in this month, top floor first, each drawn in Resource mode
        so every team's headcount is on it.  The whole view is put back exactly as it was. */
     const lvOrder=(this.DATA.order||[]).slice().reverse();
-    const lvWanted=lvOrder.filter(lv=>rows.some(r=>r.lv===lv&&r.cells.some(c=>c.val>0)));
+    /* Every level that exists gets a map, including the ones with nobody on them — an empty floor
+       is marked as such, so it is obvious where men still have to be placed. */
+    const lvWanted=lvOrder.filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
     const keep={lv:this.curLevel,cm:this.colorMode,pm:this._planMonth,mw:this.showMonthWorkOnly,
                 rm:this._resourceMode,re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb},
                 cols:this.showColumns,zc:this.showSubZC,sc:this.showSubC,sp:this.showSubP,
@@ -2685,7 +2717,7 @@ class Component extends DCLogic {
             const cs=only?r.cells.filter(c=>c.m===only):r.cells;
             const v=cs.reduce((n2,c)=>Math.max(n2,c.val||0),0);
             return v?(r.cat+' '+v):'';}).filter(Boolean).join(' \u00b7 ');
-        shots.push({lv,cv:cvv,men});}}
+        shots.push({lv,cv:cvv,men,idle:!men});}}
     this.curLevel=keep.lv;this.colorMode=keep.cm;this._planMonth=keep.pm;this.showMonthWorkOnly=keep.mw;
     this._resourceMode=keep.rm;this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;
     this.showColumns=keep.cols;this.showSubZC=keep.zc;this.showSubC=keep.sc;this.showSubP=keep.sp;
@@ -2733,9 +2765,11 @@ class Component extends DCLogic {
         const sx=PAD+col*(mapW+GAP),sy=y+rowY[row];
         x.fillStyle='#202938';x.font='700 12.5px Arial';
         x.fillText(sh.lv+' \u00b7 '+((this.DATA.levels[sh.lv]||{}).title||''),sx,sy+12);
-        if(sh.men){x.fillStyle='#8a92a2';x.font='11px Arial';
-          x.fillText(sh.men,sx+x.measureText(sh.lv+' \u00b7 '+((this.DATA.levels[sh.lv]||{}).title||'')).width+14,sy+12);}
-        x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);});}
+        {const _tw=x.measureText(sh.lv+' \u00b7 '+((this.DATA.levels[sh.lv]||{}).title||'')).width+14;
+          if(sh.men){x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(sh.men,sx+_tw,sy+12);}
+          else{x.fillStyle='#c8102e';x.font='700 11px Arial';
+            x.fillText('\u2014 no work'+(only?' in '+only:''),sx+_tw,sy+12);}}
+        x.globalAlpha=sh.idle?0.45:1;x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);x.globalAlpha=1;});}
     const name=('P1_manpower'+(only?'_'+only.replace(/[^a-z0-9]/gi,''):'-by-month')+'_'+new Date().toISOString().slice(0,10)+'.png');
     this._showPngPreview(cv.toDataURL('image/png'),name,rows.length);
   }
