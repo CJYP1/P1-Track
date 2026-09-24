@@ -2215,6 +2215,18 @@ class Component extends DCLogic {
      written onto the clone — otherwise the snapshot comes out unstyled. */
   /* Drop the white margin around a snapshot: the map's viewBox is usually much larger than the
      drawing inside it, which left half the exported picture empty. */
+  /* Wash a snapshot to grey — used for levels with no work, so they cannot be mistaken for
+     working ones even at a glance. */
+  _greyCanvas(cv){
+    try{
+      const x=cv.getContext('2d'),d=x.getImageData(0,0,cv.width,cv.height),p=d.data;
+      for(let i=0;i<p.length;i+=4){
+        const g=Math.round(0.299*p[i]+0.587*p[i+1]+0.114*p[i+2]);
+        const l=Math.round(g+(255-g)*0.45);            /* lighten so it sits back */
+        p[i]=p[i+1]=p[i+2]=l;}
+      x.putImageData(d,0,0);return cv;
+    }catch(e){return cv;}
+  }
   _trimCanvas(cv,pad){
     try{
       const x=cv.getContext('2d'),w=cv.width,h=cv.height,d=x.getImageData(0,0,w,h).data;
@@ -2698,18 +2710,23 @@ class Component extends DCLogic {
     const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
     for(const lv of lvWanted){
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
+      /* A level nobody works on this month is drawn as bare outlines and then greyed out, so it
+         reads instantly as "nothing here" next to the coloured working levels. */
+      const _busy=rows.some(r=>r.lv===lv&&(only?r.cells.some(c=>c.m===only&&c.val>0):r.cells.some(c=>c.val>0)));
       this._resExportOnly=true;this._resExportMonth=only||'';this.showColumns=false;
       this.showCoreWalls=false;this.showLifts=false;   /* core walls / lifts / stairs stay out of this picture */
       /* Keep the outlines that frame the picture: transfer slab, Podium CIS and the Podium /
          tower outline — outlines only, nothing filled. */
-      this.showOvl={...this.showOvl,transfer:true,podcis:true,podium:true};
+      this.showOvl=_busy?{...this.showOvl,transfer:true,podcis:true,podium:true}
+                       :{podium:false,transfer:false,podcis:false};
       this.showAccess=false;this.showDates=false;this.showDelay=false;   /* overlays off */
       this.showCrit=true;   /* critical path stays — it is the point of the picture */
       this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
       if(only){this._planMonth=only;}
       try{this.vb={...this.base};}catch(e){}
       this.render();
-      const cvv=await this._svgSnapshot(mapW*2);
+      let cvv=await this._svgSnapshot(mapW*2);
+      if(cvv&&!_busy)cvv=this._greyCanvas(cvv);
       if(cvv){
         /* Only areas that actually have men on this level in this month get a figure — with no
            month picked, the level's busiest month stands in. */
@@ -2769,7 +2786,7 @@ class Component extends DCLogic {
           if(sh.men){x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(sh.men,sx+_tw,sy+12);}
           else{x.fillStyle='#c8102e';x.font='700 11px Arial';
             x.fillText('\u2014 no work'+(only?' in '+only:''),sx+_tw,sy+12);}}
-        x.globalAlpha=sh.idle?0.45:1;x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);x.globalAlpha=1;});}
+        x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);});}
     const name=('P1_manpower'+(only?'_'+only.replace(/[^a-z0-9]/gi,''):'-by-month')+'_'+new Date().toISOString().slice(0,10)+'.png');
     this._showPngPreview(cv.toDataURL('image/png'),name,rows.length);
   }
