@@ -2578,7 +2578,9 @@ class Component extends DCLogic {
     teams.forEach(t=>{
       const byLv={};(t.zones||[]).forEach(x=>{(byLv[x.lv]=byLv[x.lv]||[]).push(x);});
       Object.keys(byLv).forEach(lv=>{
-        const w=Math.max(0,Math.round(Number(this._resourceTeamValues(t,lv).workers)||0));if(!w)return;   /* whole men only */
+        /* Same figure the map prints: the level's zone men plus its core-wall men. */
+        const w=Math.max(0,Math.round((Number(this._resourceTeamValues(t,lv).workers)||0)
+                                     +(Number(this._resourceCoreValues(t,lv).workers)||0)));if(!w)return;
         /* per month: which areas is this team actually working in on this level */
         /* Teams are set up per area, so a team belongs to one area and its men are never split.
            If one ever does span two areas, it counts whole against the one it works most. */
@@ -3159,7 +3161,7 @@ class Component extends DCLogic {
     /* Resource mode: each Zone only gets its small work-order badge; the Team's headline figure
        is drawn ONCE per Team, at the centre of that Team's zones, so the map stays readable. */
     const _resTeams={};
-    const _resMark=(t,x,y,r)=>{if(!t)return;const k=t.id||t.name;const e=_resTeams[k]||(_resTeams[k]={t,pts:[]});e.pts.push({x,y,r:r||0});};
+    const _resMark=(t,x,y,r,cat)=>{if(!t)return;const k=t.id||t.name;const e=_resTeams[k]||(_resTeams[k]={t,pts:[],cat:cat||'NB'});if(cat)e.cat=e.cat||cat;e.pts.push({x,y,r:r||0});};
     let _topDates='';   /* 所有浇筑/计划日期文字收集到这里, 最后画 → 永远在最上层, 不被柱子/overlay 盖住 */
     let _stairHitHtml='';   /* 楼梯独立点击层最后绘制，避免被 Column、Zone 边界或日期层挡住 */
     ['podcis','podium','transfer'].forEach(k=>{
@@ -3228,7 +3230,7 @@ class Component extends DCLogic {
          in the exported month leaves no number behind. */
       if(this._resourceMode&&this.zoneVisible(z)&&!(this._resExportOnly&&this._resExportMonth&&
           !((this._mpZoneMonths(this.curLevel,z.mk||z.lid)||[]).indexOf(this._resExportMonth)>=0))
-          &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
+          &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB');_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
       if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
@@ -3344,7 +3346,7 @@ class Component extends DCLogic {
       const _aggZone=this._marineSubCalcZone(cls.replace('sub',''),i),_aggKey=_aggZone&&String(_aggZone.mk||_aggZone.lid),_aggPicked=this.rwsIsAdmin()&&this._adminAggLevel===this.curLevel&&this._adminAggSet&&this._adminAggSet.has(_aggKey);
       s+=base+`<polygon class="subz ${cls}${_aggPicked?' aggpick':''}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
-      if(_resSub){const _rn=_resSub.item.order||((_resSub.team.zones||[]).indexOf(_resSub.item)+1),_rr=Math.max(1050,Math.min(1600,_bh*0.125));_resMark(_resSub.team,lq[0],lq[1],_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_resSub.team.name)} · Work order ${_rn}</title><circle cx="${lq[0].toFixed(0)}" cy="${lq[1].toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_resSub.team.color}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${lq[0].toFixed(0)}" y="${(lq[1]+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.02).toFixed(0)}" fill="${this._darken(_resSub.team.color||'#3157d5',0.45)}" font-weight="950">${_rn}</text></g>`;}
+      if(_resSub){const _rn=_resSub.item.order||((_resSub.team.zones||[]).indexOf(_resSub.item)+1),_rr=Math.max(1050,Math.min(1600,_bh*0.125));_resMark(_resSub.team,lq[0],lq[1],_rr,'MA');_topDates+=`<g style="pointer-events:none"><title>${this.esc(_resSub.team.name)} · Work order ${_rn}</title><circle cx="${lq[0].toFixed(0)}" cy="${lq[1].toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_resSub.team.color}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${lq[0].toFixed(0)}" y="${(lq[1]+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.02).toFixed(0)}" fill="${this._darken(_resSub.team.color||'#3157d5',0.45)}" font-weight="950">${_rn}</text></g>`;}
       if(!_focusOnly&&this.colorMode==='castdate'&&cls!=='subP'&&this._castSlabsOn()&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=cls==='subZC'?this._marineCastInfo(this.curLevel,_z2):this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
       if(!_focusOnly&&this.colorMode==='castdate'&&cls==='subP'&&this._castColumnsOn()&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.end||_cd.start); if(_mo){const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_mo.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_mo,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">COL ${this.esc(_mo)}</text>`;} }
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'&&!(cls==='subZC'&&this.showSubC)){const _z3={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')},_mi=cls==='subZC'?this._marineCastInfo(this.curLevel,_z3):this._zoneCastInfo(this.curLevel,_z3);if(_mi.start||_mi.end){const _ds=[_mi.start&&('▶ '+this._fmtDShort(_mi.start)),_mi.end&&('■ '+this._fmtDShort(_mi.end))].filter(Boolean).join(' → '),_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_ds.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_ds,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#315b96" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_ds)}</text>`;}}
@@ -3410,6 +3412,22 @@ class Component extends DCLogic {
     s+=_colHtml;   /* 柱子放到最后 → 浮在 Marine 子区图层之上, 柱名可见、可点选 */
     if(this._resourceMode){   /* one headline number per Team, anchored on one of its own Zones */
       const _bs=Math.max(this.vb.w,1)*0.024;   /* scales with the zoom so it reads the same at any level */
+      /* A figure typed into the Manpower table is the truth for that area and level, so the map
+         prints it too: each team is scaled to its share, and the last one absorbs the rounding so
+         the numbers on the picture add up to exactly what the table says. */
+      const _ovAdj={};
+      if(this._resExportOnly&&this._resExportMonth){
+        const byCat={};Object.keys(_resTeams).forEach(k2=>{const e2=_resTeams[k2];
+          const v2=this._resourceTeamValues(e2.t,this.curLevel),c2=this._resourceCoreValues(e2.t,this.curLevel);
+          const w2=(Number(v2.workers)||0)+(Number(c2.workers)||0);
+          (byCat[e2.cat||'NB']=byCat[e2.cat||'NB']||[]).push({k:k2,w:w2});});
+        const ovs=this._mpOv();
+        Object.keys(byCat).forEach(c3=>{const list=byCat[c3],key=this._mpKey(c3,this.curLevel,this._resExportMonth);
+          const o3=ovs[key];if(o3==null)return;
+          const tot=list.reduce((n2,x)=>n2+x.w,0),target=Math.max(0,Math.round(Number(o3)||0));
+          if(!tot){if(list.length)_ovAdj[list[0].k]=target;return;}
+          let acc=0;list.forEach((x,i)=>{const v3=(i===list.length-1)?(target-acc):Math.round(target*x.w/tot);
+            acc+=v3;_ovAdj[x.k]=Math.max(0,v3);});});}
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k],ps=e.pts||[];if(!ps.length)return;
         const cx0=ps.reduce((a,q)=>a+q.x,0)/ps.length,cy0=ps.reduce((a,q)=>a+q.y,0)/ps.length;
         /* Anchor on the Team's Zone nearest its centre, so the number always sits on coloured
@@ -3417,7 +3435,7 @@ class Component extends DCLogic {
         let a=ps[0],ad=Infinity;ps.forEach(q=>{const d=Math.hypot(q.x-cx0,q.y-cy0);if(d<ad){ad=d;a=q;}});
         const x=a.x,y=a.y+(a.r||0)+_bs*1.05;
         const v=this._resourceTeamValues(e.t,this.curLevel),cv=this._resourceCoreValues(e.t,this.curLevel),
-              w=(Number(v.workers)||0)+(Number(cv.workers)||0),c=this._darken(e.t.color||'#3157d5',0.42);
+              w=(_ovAdj[k]!=null?_ovAdj[k]:((Number(v.workers)||0)+(Number(cv.workers)||0))),c=this._darken(e.t.color||'#3157d5',0.42);
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
           +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.04em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.16).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
