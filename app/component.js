@@ -234,6 +234,15 @@ class Component extends DCLogic {
       if(ledger.length)zones.forEach(z=>{z.cols=[];});
       ledger.forEach(c=>{if(lv==='L1'&&l1PodiumOnly.has(String(c.id||'').trim().toUpperCase()))return;const z=this._resolvedColZone(lv,c,zones); if(!z)return; c.zone=z.label; z.cols=z.cols||[];
         if(!z.cols.some(x=>((typeof x==='string')?x:x.id)===c.id)) z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit});});
+      /* Hand-placed columns belong in the Zone's Column list exactly like mapped ones, so
+         they can be ticked off, dated and jumped to from the map. */
+      this.placedCols(lv).forEach(c=>{
+        const lab=c.zone||this._colZoneAt(lv,c,6000);if(!lab)return;
+        const z=zones.find(zz=>zz.label===lab);if(!z)return;
+        if(this._colHidden&&this._colHidden(lv,c.id))return;
+        z.cols=z.cols||[];
+        if(!z.cols.some(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(c.id)))
+          z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit,placed:true});});
       zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
     });
   }
@@ -2073,7 +2082,7 @@ class Component extends DCLogic {
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
     const elems={},isPour=aid==='ls'||aid==='act_corewall',refs=[];
-    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>refs.push({lv,zmk,r}));});});
+    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>refs.push({lv,zmk,z,r}));});});
     /* Core/Lift/Stair is reported by core wall wherever a core exists.  Members
        can sit in a different Zone from their core, so this must be resolved over
        the whole selected report scope rather than one Zone at a time. */
@@ -2083,7 +2092,22 @@ class Component extends DCLogic {
          custom-list row can point at the same item already present in the map
          ledger (and an old Zone can also retain it), so key by the normalised
          element identity.  Merge status/pouring progress from every occurrence. */
-      const uk=lv+'||'+aid+'||'+r.type+'||'+String(r.id||'').trim().toUpperCase(),o=elems[uk]||(elems[uk]={done:false,pct:0}),done=this.elemStatus(r.key)==='done',pv=isPour?this.elemPourPct(lv,zmk,aid,r.type,r.id):null;if(done)o.done=true;if(isPour)o.pct=Math.max(o.pct,pv==null?(done?100:0):pv);});
+      /* A core wall counts as ONE element however many polygons it is drawn with: every wall
+         sharing a core group collapses into that group, and the lift or stair it encloses is
+         already folded in above.  The group is done when all of its walls are. */
+      /* Everything belonging to one core counts once: the core walls drawn for it, and the
+         lifts and stairs it encloses, whether or not a wall shape exists for that group. */
+      let _grp='';
+      if(aid==='ls'){_grp=this._cwGroupKeys(r.id)[0]||'';
+        if(!_grp&&r.type!=='core'){const _cv=this._lsMemberCore&&this._lsMemberCore(x.z,r.id);
+          if(_cv)_grp=this._cwGroupKeys(_cv)[0]||String(_cv).trim().toUpperCase();}}
+      const uk=_grp?(lv+'||'+aid+'||coregrp||'+_grp)
+                   :(lv+'||'+aid+'||'+r.type+'||'+String(r.id||'').trim().toUpperCase());
+      const o=elems[uk]||(elems[uk]={done:false,pct:0,n:0,d:0,sum:0,grp:!!_grp}),
+            done=this.elemStatus(r.key)==='done',pv=isPour?this.elemPourPct(lv,zmk,aid,r.type,r.id):null;
+      o.n++;if(done)o.d++;
+      if(_grp){o.done=(o.d===o.n);if(isPour){o.sum+=(pv==null?(done?100:0):pv);o.pct=o.sum/o.n;}}
+      else{if(done)o.done=true;if(isPour)o.pct=Math.max(o.pct,pv==null?(done?100:0):pv);}});
     if(Object.keys(elems).length){
       const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;return {done,total,pct:this._reportPct(done,total),pour:isPour};} }
     const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal; (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(areaTotal==null){const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));if(t)total+=(+t||0);} this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); done=total>0?Math.min(done,total):done;return {done,total,pct:this._reportPct(done,total)}; }
@@ -2514,7 +2538,9 @@ class Component extends DCLogic {
     const fmtN=n=>String(Math.round(Number(n)||0));
     const makeRows=(reportRows)=>reportRows.map(r=>{ const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=A.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const actSub=liveA.pour?`${A.pct}% pouring · ${fmtN(den)} item${Math.round(den)===1?'':'s'}`:`(${fmtN(A.done)}/${fmtN(den)}${unit})`,planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—',inp='width:70px;padding:5px 6px;border:1px solid #cbaeb4;border-radius:5px;text-align:center;font:700 12px Segoe UI;background:#fff;color:#2b1114';
       const rc=this._reportCmtCtx(cat,r),rmeta=`data-cat="${this.esc(cat)}" data-lv="${this.esc(rc.lv)}" data-zmk="${this.esc(rc.zmk)}" data-a="${this.esc(rc.aid)}" data-raid="${this.esc(rc.reportAid)}" data-label="${this.esc(rc.label)}"`;
-      const rowEditing=editing&&!liveA.pour;
+      /* Staircase / Core wall figures are derived from each element's pour progress, but the
+         Report still has to be correctable by hand — a typed figure overrides the derived one. */
+      const rowEditing=editing;
       const planEdit=rowEditing?`<div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:6px"><label style="font-size:9px">Catch-Up<br><input class="rpt-edit" data-field="planned" type="number" min="0" step="1" value="${fmtN(P.planned)}" data-live="${fmtN(liveP.planned)}" style="${inp}"></label><label style="font-size:9px">Level total<br><input class="rpt-edit" data-field="total" type="number" min="0" step="1" value="${fmtN(den)}" data-live="${fmtN(liveTotal)}" style="${inp}"></label></div>`:'';
       const actEdit=rowEditing?`<div style="margin-top:6px"><label style="font-size:9px">Actual done<br><input class="rpt-edit" data-field="done" type="number" min="0" step="1" value="${fmtN(A.done)}" data-live="${Number(liveA.done)||0}" style="${inp}"></label></div>`:(editing&&liveA.pour?'<div style="margin-top:6px;font-size:8.5px;color:#6d3b40">Edit the individual pouring percentages in the Zone.</div>':'');
       return `<tr${rowEditing?` data-rkey="${this.esc(ev.key)}"`:''}>`
@@ -2737,7 +2763,7 @@ class Component extends DCLogic {
         const _pl=(this.curLevel==='L1')?this._colPodLabel(c.id):null,_pz=_pl?{mk:this.curLevel+'|'+_pl,label:_pl,cat:'MA',_pod:true}:zoneByLabel[c.zone],_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_ps=_pk?this.elemStatus(_pk):'todo',_pd=_pk?this.elemDate(_pk):'',_pr=_pc&&_ps!=='done',_pf=_ps==='done'?'#111111':_ps==='wip'?this.cssvar('--wip'):'#8a93a3';
         if(this.filterCat!=='all'&&(!_pz||(_pz.cat||'NB')!==this.filterCat))return;
         _colSeen.add(_nid);
-        _colHtml+=`<circle class="colmk colmk-placed" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pf}" stroke="${_pr?'#c8102e':'#ffffff'}" stroke-width="${_pr?360:220}"/>`;
+        _colHtml+=`<circle class="colmk colmk-placed" data-pcid="${this.esc(c.id)}" data-pczone="${this.esc(c.zone||'')}" style="cursor:pointer" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pf}" stroke="${_pr?'#c8102e':'#ffffff'}" stroke-width="${_pr?360:220}"/>`;
         _colHtml+=`<text class="collbl" ${_pr?`style="fill:#c8102e"`:''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id)}</text>`;
         if(this.showDates&&_pd&&_ps==='done')_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
       });
@@ -2931,6 +2957,31 @@ class Component extends DCLogic {
         const key=this.ekey(this.curLevel,z,'col',c.id);
         setTimeout(()=>{const sb=this.root.querySelector('#sidebody');
           const det=sb.querySelector('details.sec[data-sec="col"]'); if(det)det.open=true;
+          const chip=sb.querySelector(`.elchip[data-key="${(window.CSS&&CSS.escape)?CSS.escape(key):key}"]`);
+          const row=chip?(chip.closest('.idrow')||chip):null;
+          if(row){row.scrollIntoView({block:'center',behavior:'smooth'});row.classList.add('hlrow');setTimeout(()=>row.classList.remove('hlrow'),2400);}},80);
+      });
+    });
+    /* Hand-placed columns behave like mapped ones: hover for a tooltip, click to open their
+       Zone and land on their row in the Column list. */
+    this.svg.querySelectorAll('.colmk[data-pcid]').forEach(el=>{
+      const id=el.dataset.pcid,zl=el.dataset.pczone;
+      el.addEventListener('mousemove',ev=>{
+        const _z=L.zones.find(zz=>zz.label===zl),_k=_z?this.ekey(this.curLevel,_z,'col',id):'',_d=_k?this.elemDate(_k):'';
+        this.tip.innerHTML=`<h4>${this.esc(id)}</h4><div class="grp">Column (added) \u00b7 zone ${this.esc(zl||'\u2014')} \u00b7 click to open</div>${_d?`<div class="grp" style="margin-top:4px;color:var(--txt)">Completed: <b>${this.esc(this._fmtDShort(_d))}</b></div>`:''}`;
+        const r=this.svg.getBoundingClientRect();let x=ev.clientX-r.left+14,y=ev.clientY-r.top+14;
+        if(x>r.width-220)x-=240;if(y>r.height-80)y-=80;
+        this.tip.style.left=x+'px';this.tip.style.top=y+'px';this.tip.style.opacity=1;});
+      el.addEventListener('mouseleave',()=>this.tip.style.opacity=0);
+      el.addEventListener('click',ev=>{ev.stopPropagation();
+        if(this._hidingCol){this.toggleHideCol(id);return;}
+        if(this._placingCol)return;
+        this._focusCol=id;
+        const z=L.zones.find(zz=>zz.label===zl);if(!z)return;
+        this.selKey=this.zid(z);this.selectZone(z);this.paintSel();this.paintTimelineSel();
+        const key=this.ekey(this.curLevel,z,'col',id);
+        setTimeout(()=>{const sb=this.root.querySelector('#sidebody');if(!sb)return;
+          const det=sb.querySelector('details.sec[data-sec="col"]');if(det)det.open=true;
           const chip=sb.querySelector(`.elchip[data-key="${(window.CSS&&CSS.escape)?CSS.escape(key):key}"]`);
           const row=chip?(chip.closest('.idrow')||chip):null;
           if(row){row.scrollIntoView({block:'center',behavior:'smooth'});row.classList.add('hlrow');setTimeout(()=>row.classList.remove('hlrow'),2400);}},80);
@@ -3298,8 +3349,46 @@ class Component extends DCLogic {
   ptIn(ring,x,y){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))inside=!inside;}return inside;}
   _evenPtsInZone(z,n){const r=z.ring;let x0=1e18,y0=1e18,x1=-1e18,y1=-1e18;r.forEach(p=>{if(p[0]<x0)x0=p[0];if(p[0]>x1)x1=p[0];if(p[1]<y0)y0=p[1];if(p[1]>y1)y1=p[1];});const inside=[],G=14;for(let ri=1;ri<G;ri++)for(let ci=1;ci<G;ci++){const px=x0+(x1-x0)*ci/G,py=y0+(y1-y0)*ri/G;if(this.ptIn(r,px,py))inside.push([px,py]);}if(inside.length<=n)return inside;const out=[],step=inside.length/n;for(let k=0;k<n;k++)out.push(inside[Math.floor(k*step)]);return out;}
   /* ---------- 点击放置柱子(管理员, 无需坐标; 点地图取精确位置) ---------- */
-  placedCols(lv){return (this._colAdd&&this._colAdd[lv])||[];}
-  savePlacedCols(){try{localStorage.setItem('rws_col_add',JSON.stringify(this._colAdd||{}));}catch(e){}}
+  /* Zone for a hand-placed column: whichever zone of that level contains the point.  Columns
+     placed before this existed (or dropped just outside a ring) carry no zone, which left them
+     grey, out of every checklist and hidden by the area filter. */
+  _colZoneAt(lv,c,tol){
+    const L=this.DATA.levels[lv];if(!L||!c)return '';
+    const zs=L.zones||[];
+    let z=zs.find(z=>z.cat==='MA'&&z.ring&&this.ptIn(z.ring,c.x,c.y))||zs.find(z=>z.ring&&this.ptIn(z.ring,c.x,c.y));
+    if(z)return z.label;
+    /* just outside an edge (a column on the line): take the nearest zone within ~2m */
+    let best=null,bd=(tol||2000);
+    zs.forEach(z2=>{(z2.ring||[]).forEach(pt=>{const d=Math.hypot(pt[0]-c.x,pt[1]-c.y);if(d<bd){bd=d;best=z2;}});});
+    return best?best.label:'';
+  }
+  /* A placed column runs up through the structure like a real one: it shows on the level it was
+     put on and on every level above it, up to L5, wherever that level still has slab under it.
+     Set thru:false on a column to keep it on its own level only. */
+  placedCols(lv){
+    const own=(this._colAdd&&this._colAdd[lv])||[];
+    let dirty=false;
+    own.forEach(c=>{if(!c.zone){const z=this._colZoneAt(lv,c);if(z){c.zone=z;dirty=true;}}});
+    const ord=this._floorOrd(lv);
+    const out=own.slice(),seen=new Set(own.map(c=>this._colKey(c.id)));
+    if(ord!=null&&ord<=4){
+      Object.keys(this._colAdd||{}).forEach(src=>{
+        if(src===lv)return;const so=this._floorOrd(src);
+        if(so==null||so>=ord)return;                       /* only carry upward */
+        (this._colAdd[src]||[]).forEach(c=>{
+          if(c.thru===false)return;
+          const k=this._colKey(c.id);if(seen.has(k))return;
+          const zone=this._colZoneAt(lv,c,6000);if(!zone)return; /* no slab above → the column stops */
+          seen.add(k);out.push({...c,zone,_from:src,_carried:true});});});
+    }
+    if(dirty)this._savePlacedColsRaw();   /* raw: reconcile calls us, so never recurse into it */
+    return out;
+  }
+  _savePlacedColsRaw(){try{localStorage.setItem('rws_col_add',JSON.stringify(this._colAdd||{}));}catch(e){}}
+  savePlacedCols(){this._savePlacedColsRaw();
+    /* The Zone column lists are rebuilt from COLUMNS + placed columns, so they have to be
+       refreshed whenever a placed column is added, renamed or removed. */
+    try{this._colIdxCacheLv=null;this._colIdxCache=null;this._reconcileZoneCols();}catch(e){}}
   togglePlaceCol(){if(!this.rwsIsAdmin())return;this._placingCol=!this._placingCol;if(this._placingCol){this._drawingCore=false;this._hidingCol=false;}if(this.svg)this.svg.style.cursor=this._placingCol?'crosshair':'';this.refreshSubzPanel();}
   /* ---- 在图上画 Core Wall(多点围一块多边形, admin) —— 存 settings, 云端同步 ---- */
   toggleDrawCore(){if(!this.rwsIsAdmin())return;this._drawingCore=!this._drawingCore;this._coreBuf=[];if(this._drawingCore){this._placingCol=false;this._hidingCol=false;this._drawingLift=false;}if(this.svg)this.svg.style.cursor=this._drawingCore?'crosshair':'';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
