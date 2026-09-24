@@ -3596,6 +3596,9 @@ class Component extends DCLogic {
         const x=a.x,y=a.y+(a.r||0)+_bs*1.05;
         const v=this._resourceTeamValues(e.t,this.curLevel),cv=this._resourceCoreValues(e.t,this.curLevel),
               w=(_ovAdj[k]!=null?_ovAdj[k]:((Number(v.workers)||0)+(Number(cv.workers)||0))),c=this._darken(e.t.color||'#3157d5',0.42);
+        /* A team with no work in the month being looked at gets no label at all — a bare 0 on the
+           map only invites the question of whether something was forgotten. */
+        if(_ovMon&&_ovAdj[k]===0)return;
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
           +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.04em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.16).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
