@@ -1467,7 +1467,7 @@ class Component extends DCLogic {
       if(own('col_month')){this._colMonth={...(B.colMonth||{}),...(state.col_month||{})};try{localStorage.setItem('rws_col_month',JSON.stringify(this._colMonth));}catch(e){}}
       if(own('act_cmt')){this._actCmt={...(state.act_cmt||{})};this.saveActCmt();}
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
-      if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
+      if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null,_localRes=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_localRes,this._appCfg.resourcePlans);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
       try{this._migrateLW8();}catch(_e){}   /* cloud settings can carry the old LW8 name back */
       try{const _m=this.mergeSlabDemolish();if(_m)this.buildMetrics();}catch(_e){console.error('slab-demolish merge',_e);}
       this._reconcileZoneStairs();
@@ -1929,6 +1929,17 @@ class Component extends DCLogic {
   /* Cloud settings replace the local copy wholesale.  A Delay-Table edit that has not reached the
      server yet (offline, or still in the retry queue) would be wiped by that replace, so keep the
      local entry until its queued write has actually gone through. */
+  /* An incoming cloud snapshot replaces the whole settings object.  If this browser still has a
+     resource-plan edit sitting in the offline queue, the snapshot predates it — keep the local
+     copy so the edit is not silently thrown away before it is pushed. */
+  _keepPendingResource(local,cloud){
+    try{
+      const q=JSON.parse(localStorage.getItem('rws_offline_queue')||'[]')||[];
+      const pending=q.some(it=>it&&it.fn==='rws_set_kv'&&it.args&&it.args.p_store==='settings'&&it.args.p_k==='resourcePlans');
+      if(pending&&local)return local;
+    }catch(e){}
+    return cloud;
+  }
   _mergePendingDelay(local,cloud){
     const out={...(cloud||{})};
     if(!local)return out;
@@ -2095,7 +2106,10 @@ class Component extends DCLogic {
   _reportDateLabel(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?(+m[3])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+' '+m[1].slice(2):String(iso||'');}
   _reportMonthBounds(label){if(label==="Before Apr'26")return {s:Date.UTC(2000,0,1),e:Date.UTC(2026,2,31)};const m=String(label||'').match(/^([A-Z][a-z]{2})'(\d{2})$/);if(!m)return null;const mi=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);if(mi<0)return null;const y=2000+(+m[2]);return {s:Date.UTC(y,mi,1),e:Date.UTC(y,mi+1,0)};}
   _reportPlanFraction(month,start,end,asOf){const b=this._reportMonthBounds(month);if(!b)return 0;let s=b.s,e=b.e;const ds=Date.parse(String(start||'')+'T00:00:00Z'),de=Date.parse(String(end||'')+'T00:00:00Z'),now=Date.parse(asOf+'T00:00:00Z');if(Number.isFinite(ds))s=Math.max(s,ds);if(Number.isFinite(de))e=Math.min(e,de);if(e<s||now<s)return 0;if(now>=e)return 1;return Math.max(0,Math.min(1,(now-s+86400000)/(e-s+86400000)));}
-  _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});const out=Object.values(by);if(cat==='MA'&&lv==='L1'){const S=this.SUBZONES&&this.SUBZONES.L1;['C','P'].forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
+  _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});/* Marine on L1 is reported on the Podium alone — that is what the teams are planned on, so
+       the report and the resource plan line up.  Set _maL1AllSubs=true to bring the ZC parent
+       zones and the C sub-zones back in. */
+    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){if(!this._maL1AllSubs)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(this._maL1AllSubs?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
   /* m² Report activities use the full applicable zone area as their denominator.
      This includes not-yet-scheduled zones and keeps Marine Top/Bottom/Podium scopes separate. */
@@ -2517,7 +2531,10 @@ class Component extends DCLogic {
   /* Where the men are, month by month.  A team's headcount for a level is already recorded per
      level; which months it is there comes from the slab dates of the zones it holds, so nothing
      extra has to be typed.  Any cell can still be overwritten by hand when reality differs. */
-  _mpMonths(){return (this.ACT_MONTHS||[]).filter(m=>m!=="Before Apr'26");}
+  /* Manpower planning starts at Nov'26 — anything earlier is history and reads as 0.  Change
+     _mpFrom to move the start. */
+  _mpMonths(){const M=(this.ACT_MONTHS||[]).filter(m=>m!=="Before Apr'26");
+    const i=M.indexOf(this._mpFrom||"Nov'26");return i>0?M.slice(i):M;}
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
   _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
   _mpZoneMonths(lv,zmk){
@@ -2530,24 +2547,39 @@ class Component extends DCLogic {
   _mpAuto(){
     const M=this._mpMonths(),out={},teams=this._resourceData().teams;
     /* Marine on L1 is planned on its sub-zones, whose keys are "L1|<label>" and which are not in
-       DATA.levels.L1.zones — they still have to count towards Marine. */
+       DATA.levels.L1.zones — they still have to count towards Marine, with their own area. */
+    const subArea=(lab)=>{const S=(this.SUBZONES||{}).L1||{};
+      for(const k of ['C','P','ZC']){const e=(S[k]||[]).find(x=>String(x.label)===lab);if(e)return Number(e.a)||0;}
+      return 0;};
     const zoneOf=(lv,zmk)=>((this.DATA.levels[lv]||{}).zones||[]).find(z=>(z.mk||z.lid)===zmk)
-      ||(/^L1\|/.test(String(zmk||''))?{cat:'MA',label:String(zmk).slice(3)}:null);
+      ||(/^L1\|/.test(String(zmk||''))?{cat:'MA',label:String(zmk).slice(3),area:subArea(String(zmk).slice(3))}:null);
     teams.forEach(t=>{
       const byLv={};(t.zones||[]).forEach(x=>{(byLv[x.lv]=byLv[x.lv]||[]).push(x);});
       Object.keys(byLv).forEach(lv=>{
-        const w=Number(this._resourceTeamValues(t,lv).workers)||0;if(!w)return;
+        const w=Math.max(0,Math.round(Number(this._resourceTeamValues(t,lv).workers)||0));if(!w)return;   /* whole men only */
         /* per month: which areas is this team actually working in on this level */
+        /* A team working in two areas on one level is split by the AREA it is working that month,
+           not by how many zones it holds — a 1,200 m² zone is not the same job as a 200 m² one. */
         M.forEach(m=>{
           const act={};let n=0;
           byLv[lv].forEach(x=>{const z=zoneOf(lv,x.zmk);if(!z)return;
             const ms=this._mpZoneMonths(lv,x.zmk);
-            if(ms&&ms.indexOf(m)<0)return;                 /* dated, but not this month */
-            if(!ms)return;                                  /* no dates -> not placed in time */
-            const c=z.cat||'NB';act[c]=(act[c]||0)+1;n++;});
+            if(!ms||ms.indexOf(m)<0)return;                /* undated, or not this month */
+            const c=z.cat||'NB',a=Math.max(1,Number(z.area)||0);
+            act[c]=(act[c]||0)+a;n+=a;});
           if(!n)return;
-          Object.keys(act).forEach(c=>{const k=this._mpKey(c,lv,m);
-            out[k]=(out[k]||0)+Math.round(w*act[c]/n);});});});});
+          const ks=Object.keys(act);let acc=0;
+          ks.forEach((c,i)=>{const v=(i===ks.length-1)?(w-acc):Math.round(w*act[c]/n);acc+=v;
+            const k=this._mpKey(c,lv,m);out[k]=(out[k]||0)+v;});});});});
+    return out;
+  }
+  /* Zones a team holds but that have no slab dates cannot be placed in any month, so they are
+     silently absent from the table.  Name them instead of leaving a hole. */
+  _mpUndated(){
+    const out=[];this._resourceData().teams.forEach(t=>(t.zones||[]).forEach(x=>{
+      if(this._mpZoneMonths(x.lv,x.zmk))return;
+      const z=((this.DATA.levels[x.lv]||{}).zones||[]).find(q=>(q.mk||q.lid)===x.zmk);
+      out.push(x.lv+' '+((z&&z.label)||String(x.zmk).replace(/^[^|]*\|/,''))+' \u00b7 '+(t.name||''));}));
     return out;
   }
   _mpRows(only){
@@ -2593,6 +2625,10 @@ class Component extends DCLogic {
         </tbody><tfoot><tr><td colspan="2"><b>All zones combined</b></td>
           ${tot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr></tfoot></table>`
         :'<div style="padding:18px;color:var(--faint);font-size:12px">No team has zones with slab dates yet \u2014 import or set the dates first.</div>';
+      const _un=this._mpUndated(),_nt=ov.querySelector('#__mpNote');
+      if(_nt)_nt.innerHTML='Bold = typed by hand. Blank cell = nobody planned there that month.'
+        +(_un.length?` <b style="color:var(--crit)">\u00b7 ${_un.length} planned zone${_un.length===1?'':'s'} have no slab dates, so they fall in no month:</b> `
+          +this.esc(_un.slice(0,6).join(' ,  '))+(_un.length>6?' \u2026':''):'');
       ov.querySelectorAll('.mp-in').forEach(inp=>inp.onchange=()=>{
         const o=this._mpOv(),v=inp.value.trim();
         if(v==='')delete o[inp.dataset.k];else o[inp.dataset.k]=Math.max(0,Math.round(Number(v)||0));
@@ -2618,12 +2654,14 @@ class Component extends DCLogic {
     const lvWanted=lvOrder.filter(lv=>rows.some(r=>r.lv===lv&&r.cells.some(c=>c.val>0)));
     const keep={lv:this.curLevel,cm:this.colorMode,pm:this._planMonth,mw:this.showMonthWorkOnly,
                 rm:this._resourceMode,re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb},
-                cols:this.showColumns,zc:this.showSubZC,sc:this.showSubC,sp:this.showSubP};
+                cols:this.showColumns,zc:this.showSubZC,sc:this.showSubC,sp:this.showSubP,
+                acc:this.showAccess,crit:this.showCrit,dts:this.showDates,dly:this.showDelay};
     const shots=[];
     const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
     for(const lv of lvWanted){
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
       this._resExportOnly=true;this.showColumns=false;
+      this.showAccess=false;this.showCrit=false;this.showDates=false;this.showDelay=false;   /* overlays off */
       this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
       if(only){this._planMonth=only;}
       try{this.vb={...this.base};}catch(e){}
@@ -2635,6 +2673,7 @@ class Component extends DCLogic {
     this.curLevel=keep.lv;this.colorMode=keep.cm;this._planMonth=keep.pm;this.showMonthWorkOnly=keep.mw;
     this._resourceMode=keep.rm;this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;
     this.showColumns=keep.cols;this.showSubZC=keep.zc;this.showSubC=keep.sc;this.showSubP=keep.sp;
+    this.showAccess=keep.acc;this.showCrit=keep.crit;this.showDates=keep.dts;this.showDelay=keep.dly;
     this._resExportOnly=false;
     this.render();try{this._renderResourcePanel&&this._resourceMode&&this._renderResourcePanel();}catch(e){}
     /* Trimming leaves every level a different shape, so each row is as tall as its tallest map. */
@@ -5143,7 +5182,7 @@ class Component extends DCLogic {
     return false;}
   async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
-    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);}try{this._migrateLW8();}catch(_e){}
+    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);}try{this._migrateLW8();}catch(_e){}
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
     this._critOv={...(st.crit||{})};this._critPlanSet=null;this.applyCritOv&&this.applyCritOv();
     this._zpOv={...(st.slab_qty||{})};this.zpApplyOv&&this.zpApplyOv();
