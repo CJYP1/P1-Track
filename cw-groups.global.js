@@ -13,7 +13,7 @@ window.CW_GROUPS = {
             stairs:["P1-ST-44B","P1-ST-49","P1-ST-44/49"], f:"B2", t:"L4" },
   "CW5":  { lifts:["P1-FL5","P1-RSL1","P1-RSL-EL1"],
             stairs:["P1-ST-05B","P1-ST-05","P1-ST-05A"], f:"B2", t:"L4" },
-  "CW8":  { lifts:["P1-CGL1","P1-CGL2","PL-CGL1","PL-CGL2"], stairs:[], f:"B2", t:"L4M" },  /* lift 核心筒: 只到 L4M */
+  "Lift 1/2": { lifts:["P1-CGL1","P1-CGL2","PL-CGL1","PL-CGL2"], stairs:[], f:"B2", t:"L4M" },   /* lift 核心筒 (was CW8): 只到 L4M */  /* lift 核心筒: 只到 L4M */
   "CW2A": { lifts:["P1-FL3","P1-HSL/EL3","PL-HSL/EL3","P1-HSL/EL4","PL-HSL/EL4","P1-HSL/E3","P1-CSL4","PL-CSL4","P1-PL11","P1-PL12","P1-FL-03"],
             stairs:[], f:"B2", t:"L17" },
   "CW2B": { lifts:["P1-CSL1","P1-CSL2","P1-CSL3","P1-PL5","P1-PL1","P1-PL3","P1-PL2","P1-PL4","P1-PL6"],
@@ -32,3 +32,4 @@ window.CW_GROUPS = {
    spellings are listed so records saved under either name keep matching. */
 window.CW_GROUPS["ST3"]={ lifts:[], stairs:["P1-ST-03B (ST3)","P1-ST-03/3B (ST3)","P1-ST-03 (ST3)","P1-ST-03B (LW8)","P1-ST-03/3B (LW8)","P1-ST-03 (LW8)"], f:"B2", t:"L17" };
 window.CW_GROUPS["LW8"]=window.CW_GROUPS["ST3"];   /* legacy name → same group */
+window.CW_GROUPS["CW8"]=window.CW_GROUPS["Lift 1/2"];   /* CW8 was renamed to "Lift 1/2" — it is a lift core, not a core wall */

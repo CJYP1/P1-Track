@@ -203,7 +203,9 @@ class Component extends DCLogic {
      old name can still be stored: drawn core-wall / lift shapes, saved element status and dates,
      manually added items, and the resource plan.  Runs once per load and is a no-op afterwards. */
   _migrateLW8(){
-    const RE={test:v=>/\bLW8\b/.test(String(v==null?'':v))}, sub=v=>String(v==null?'':v).replace(/\bLW8\b/g,'ST3');
+    const _REN=[[/\bLW8\b/g,'ST3'],[/\bCW8\b/g,'Lift 1/2']];
+    const RE={test:v=>{const t=String(v==null?'':v);return _REN.some(([r])=>new RegExp(r.source).test(t));}},
+          sub=v=>{let t=String(v==null?'':v);_REN.forEach(([r,to])=>{t=t.replace(new RegExp(r.source,'g'),to);});return t;};
     let dirtyCfg=false, dirtyElem=false, dirtyAdd=false;
     ['coreWalls','lifts'].forEach(m=>{const store=(this._appCfg&&this._appCfg[m])||{};Object.keys(store).forEach(lv=>(store[lv]||[]).forEach(w=>{
       if(w&&w.id&&RE.test(w.id)){w.id=sub(w.id);dirtyCfg=true;}
@@ -788,7 +790,9 @@ class Component extends DCLogic {
     const close=()=>{clearTimeout(this._rtSaveT);this._rtSaveT=null;this._resourceSave();
       this.buildMetrics();this.render();this._renderResourcePanel();ov.remove();};
     ov.querySelector('#__rtClose').onclick=close;ov.querySelector('#__rtDone').onclick=close;
-    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    /* No click-outside-to-close here: this dialog holds typed input, and losing it to a stray
+       click on the backdrop is worse than one extra click on Close. */
+
     draw();
   }
   resourceClearLevel(lv){
@@ -2093,7 +2097,8 @@ class Component extends DCLogic {
        excluded, and a core counts once however many walls it is drawn with.
        Set _lsCoresOnly=false to count every element again. */
     if(aid==='ls'&&this._lsCoresOnly!==false){
-      const _lw=id=>/^LW/i.test(String(id||'').trim())||/^LW/i.test((this._cwGroupKeys(id)[0]||''));
+      /* Lift WALLS (LW…) are out; "Lift 1/2" is a core in its own right and stays in. */
+      const _lw=id=>/^LW/i.test(String(id||'').trim())||/^LW/i.test(this._cwGroupKeys(id)[0]||'');
       const _k=refs.filter(x=>(x.r.type==='core'&&!_lw(x.r.id))||x.r.type==='stair');
       if(_k.length){refs.length=0;_k.forEach(x=>refs.push(x));}}
     const coreGroups=new Set();if(aid==='ls')refs.forEach(x=>{if(x.r.type!=='core')return;this._cwGroupKeys(x.r.id).forEach(k=>coreGroups.add(k));});
@@ -2408,7 +2413,9 @@ class Component extends DCLogic {
     const v=String(txt==null?'':txt);
     if(v.indexOf('|')<0)return '';
     const f=v.split('|').map(x=>x.trim());
-    const num=(v.match(/zone\s*([0-9]+(?:\.[0-9]+)*[A-Za-z]?)/i)||[])[1];
+    /* Marine writes its zones with a P prefix — "Zone P-3.1", "ZoneP-1.2" — while the app
+       calls them 3.1 / 1.2 like every other area. */
+    const num=(v.match(/zone\s*P?\s*-?\s*([0-9]+(?:\.[0-9]+)*[A-Za-z]?)/i)||[])[1];
     if(!num)return '';
     const top=/^T$/i.test(f[3]||''), cis=/\[\s*CIS\s*\]/i.test(v)||/\bCIS\b(?!\s*\])/i.test(v.replace(/\[NCIS\]/ig,''));
     return num+(cis?'CIS':'')+(top?'T':'');
@@ -2490,18 +2497,38 @@ class Component extends DCLogic {
     ['#__siLv','#__siAct','#__siWd','#__siSplit'].forEach(x=>ov.querySelector(x).onchange=parse);
     const close=()=>ov.remove();
     ov.querySelector('#__siClose').onclick=close;ov.querySelector('#__siCancel').onclick=close;
-    ov.addEventListener('click',e=>{if(e.target===ov)close();});
-    ov.querySelector('#__siApply').onclick=()=>{
+    /* No click-outside-to-close here: this dialog holds typed input, and losing it to a stray
+       click on the backdrop is worse than one extra click on Close. */
+
+    /* Writing goes through the local maps directly.  Calling the per-field setters would save the
+       whole store, re-render the side panel and fire a request for every single month, which took
+       tens of seconds for one paste; here everything is written first, saved once, and only then
+       pushed to the cloud a few at a time with a progress line. */
+    ov.querySelector('#__siApply').onclick=async ()=>{
+      if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can import a schedule.');return;}
       const lv=ov.querySelector('#__siLv').value,aid=ov.querySelector('#__siAct').value;
-      let nz=0;
+      const btn=ov.querySelector('#__siApply'),note=ov.querySelector('#__siNote');
+      btn.disabled=true;ov.querySelector('#__siCancel').disabled=true;
+      const jobs=[];let nz=0;
+      this._actDate=this._actDate||{};this._actPlan=this._actPlan||{};
       rows.forEach(r=>{if(!r.zs||!r.zs.length||!r.start||!r.end)return;
-        r.zs.forEach(z=>{const zmk=z.mk||z.lid;
-          this.setActDate(lv,zmk,aid,'start',r.start);
-          this.setActDate(lv,zmk,aid,'end',r.end);
+        r.zs.forEach(z=>{const zmk=z.mk||z.lid,dk=lv+'||'+zmk+'||'+aid;
+          this._actDate[dk]={...(this._actDate[dk]||{}),start:r.start,end:r.end};
+          this.markEdited&&this.markEdited('act_date',dk);
+          jobs.push(['act_date',dk,this._actDate[dk],null,null]);
           const q=Math.round(Number(z.area)||0),sp=this._impMonthSplit(q,r.start,r.end,r.wd);
-          (this.ACT_MONTHS||[]).forEach(m=>{if(sp[m]!=null)this.setActPlan(lv,zmk,aid,m,sp[m],z);});
+          (this.ACT_MONTHS||[]).forEach(m=>{if(sp[m]==null)return;const pk=lv+'||'+zmk+'||'+aid+'||'+m;
+            this._actPlan[pk]=sp[m];this.markEdited&&this.markEdited('act_plan',pk);
+            jobs.push(['act_plan',pk,sp[m],lv,zmk]);});
           nz++;});});
-      this.saveAct&&this.saveAct();this.buildMetrics();this.render();close();
+      this.saveDates&&this.saveDates();this.saveAct&&this.saveAct();
+      this.buildMetrics();this.render();
+      note.textContent='Saved locally \u00b7 syncing '+jobs.length+' records\u2026';
+      if(typeof rwsSyncKV==='function'){
+        for(let i=0;i<jobs.length;i+=6){
+          await Promise.all(jobs.slice(i,i+6).map(j=>{try{return rwsSyncKV(j[0],j[1],j[2],j[3],j[4]);}catch(e){return null;}}));
+          note.textContent='Syncing '+Math.min(i+6,jobs.length)+' / '+jobs.length+'\u2026';}}
+      close();
       this._toast&&this._toast('Imported '+nz+' zone'+(nz===1?'':'s')+' on '+lv+' \u2713');};
     parse();
   }
@@ -2545,7 +2572,9 @@ class Component extends DCLogic {
         +`</div></div></div>`;
     document.body.appendChild(ov);
     const close=()=>{if(this._delaySaveT){clearTimeout(this._delaySaveT);this._delaySaveT=null;try{persist();}catch(e){}}ov.remove();};
-    ov.addEventListener('click',e=>{if(e.target===ov)close();});ov.querySelector('#__delayClose').onclick=close;
+    /* No click-outside-to-close here: this dialog holds typed input, and losing it to a stray
+       click on the backdrop is worse than one extra click on Close. */
+    ov.querySelector('#__delayClose').onclick=close;
     const refreshRow=inp=>{const tr=inp.closest('tr'),v=inp.value.trim(),out=tr.querySelector('.delay-result');
       if(v===''){out.textContent='—';out.style.color='#667085';return;}
       const n=Number(v);if(!Number.isFinite(n))return;const whole=Math.max(0,Math.round(n));if(String(whole)!==v)inp.value=String(whole);
