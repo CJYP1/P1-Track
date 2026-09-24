@@ -2589,21 +2589,31 @@ class Component extends DCLogic {
     const i=M.indexOf(this._mpFrom||"Nov'26");return i>0?M.slice(i):M;}
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
   _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
+  /* "Nov'26" -> a plain year*12+month number, so month labels and ISO dates can be compared. */
+  _mpMonVal(lab){const m=String(lab||'').match(/^([A-Za-z]{3})'(\d{2})$/);if(!m)return null;
+    const nm={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12},mo=nm[m[1]];
+    return mo?(2000+(+m[2]))*12+mo:null;}
   _mpZoneMonths(lv,zmk){
-    /* A zone counts in a month as soon as ANY of its activities STARTS in that month — not the slab
-       alone. EB zones carry no slab of their own, so a slab-only rule left them with no work at all. */
-    const D=this._actDate||{},pre=lv+'||'+zmk+'||',M=this._mpMonths(),out=[];
+    /* A zone is working in every month its activities SPAN, from start to finish — not just the month
+       one begins in.  EB work largely started before the table's window and runs on through it, so a
+       start-month-only rule left the whole package looking idle. */
+    const D=this._actDate||{},pre=lv+'||'+zmk+'||',M=this._mpMonths(),V=M.map(x=>this._mpMonVal(x));
+    if(!V.length||V[0]==null)return null;
+    const lo=V[0],hi=V[V.length-1],out=[];
+    const val=iso=>{const y=+String(iso||'').slice(0,4),mo=+String(iso||'').slice(5,7);
+      return (y&&mo)?y*12+mo:null;};
     Object.keys(D).forEach(k=>{
       if(k.indexOf(pre)!==0)return;
-      const d=D[k];
-      /* Resource is counted on the START of the activity, never on its finish: a team belongs to the
-         month the work starts in, and does not go on being counted through the rest of its duration. */
-      if(!d||!d.start)return;
-      const m=this.dateToActMonth(d.start);
-      if(M.indexOf(m)>=0&&out.indexOf(m)<0)out.push(m);
+      const d=D[k];if(!d||!d.start)return;
+      const sv=val(d.start);if(sv==null)return;
+      const ev=d.end?val(d.end):null;
+      /* Clamp the span to the window: work that began earlier still counts from the first month on. */
+      const s1=Math.max(sv,lo),e1=Math.min(Math.max(ev==null?sv:ev,sv),hi);
+      if(s1>e1)return;   /* finished before the window, or starts after it */
+      for(let i=0;i<V.length;i++)if(V[i]>=s1&&V[i]<=e1&&out.indexOf(M[i])<0)out.push(M[i]);
     });
     if(!out.length)return null;
-    out.sort((a,b)=>M.indexOf(a)-M.indexOf(b));
+    out.sort((x,y)=>M.indexOf(x)-M.indexOf(y));
     return out;
   }
   /* How much ground a team is actually working on this level in a month.  This is what the
