@@ -2801,6 +2801,11 @@ class Component extends DCLogic {
     return out.filter(r=>r.men>0);
   }
   async exportManpowerMonthPng(only){
+    /* The picture is always of ONE month: a map cannot show seven columns at once, and without a
+       month the figures on it could never line up with the table.  With none picked, the month
+       the app is currently on is used. */
+    if(!only){const M=this._mpMonths(),cur=this.actCurLabel&&this.actCurLabel();
+      only=(M.indexOf(cur)>=0?cur:M[0]);}
     const {rows,months}=this._mpRows(only);
     if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
     const W=Math.max(820,300+months.length*96),PAD=22,H0=86,RH=30,ACC='#1f3557';
