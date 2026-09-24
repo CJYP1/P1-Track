@@ -2538,7 +2538,12 @@ class Component extends DCLogic {
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
   _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
   _mpZoneMonths(lv,zmk){
-    const d=this._actDateOf(lv,zmk,'slab');if(!d.start&&!d.end)return null;
+    /* Not every zone is a slab job — the Marine Podium is columns and core walls, so whichever
+       activity of this zone carries dates decides which months the team is there. */
+    let d=null;
+    for(const aid of ['slab','slab_top','col','ls','act_corewall','rc','pcbeam','mbeam','cbeam','pile','slab_pile']){
+      const q=this._actDateOf(lv,zmk,aid);if(q&&(q.start||q.end)){d=q;break;}}
+    if(!d)return null;
     const a=this.dateToActMonth(d.start||d.end),b=this.dateToActMonth(d.end||d.start),M=this._mpMonths();
     let i=M.indexOf(a),j=M.indexOf(b);if(i<0)i=0;if(j<0)j=M.length-1;
     if(j<i){const t=i;i=j;j=t;}
@@ -2558,8 +2563,8 @@ class Component extends DCLogic {
       Object.keys(byLv).forEach(lv=>{
         const w=Math.max(0,Math.round(Number(this._resourceTeamValues(t,lv).workers)||0));if(!w)return;   /* whole men only */
         /* per month: which areas is this team actually working in on this level */
-        /* A team working in two areas on one level is split by the AREA it is working that month,
-           not by how many zones it holds — a 1,200 m² zone is not the same job as a 200 m² one. */
+        /* Teams are set up per area, so a team belongs to one area and its men are never split.
+           If one ever does span two areas, it counts whole against the one it works most. */
         M.forEach(m=>{
           const act={};let n=0;
           byLv[lv].forEach(x=>{const z=zoneOf(lv,x.zmk);if(!z)return;
@@ -2568,9 +2573,8 @@ class Component extends DCLogic {
             const c=z.cat||'NB',a=Math.max(1,Number(z.area)||0);
             act[c]=(act[c]||0)+a;n+=a;});
           if(!n)return;
-          const ks=Object.keys(act);let acc=0;
-          ks.forEach((c,i)=>{const v=(i===ks.length-1)?(w-acc):Math.round(w*act[c]/n);acc+=v;
-            const k=this._mpKey(c,lv,m);out[k]=(out[k]||0)+v;});});});});
+          let best=null;Object.keys(act).forEach(c=>{if(!best||act[c]>act[best])best=c;});
+          const k=this._mpKey(best,lv,m);out[k]=(out[k]||0)+w;});});});
     return out;
   }
   /* Zones a team holds but that have no slab dates cannot be placed in any month, so they are
@@ -2660,7 +2664,7 @@ class Component extends DCLogic {
     const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
     for(const lv of lvWanted){
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
-      this._resExportOnly=true;this.showColumns=false;
+      this._resExportOnly=true;this._resExportMonth=only||'';this.showColumns=false;
       this.showAccess=false;this.showCrit=false;this.showDates=false;this.showDelay=false;   /* overlays off */
       this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
       if(only){this._planMonth=only;}
@@ -2674,7 +2678,7 @@ class Component extends DCLogic {
     this._resourceMode=keep.rm;this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;
     this.showColumns=keep.cols;this.showSubZC=keep.zc;this.showSubC=keep.sc;this.showSubP=keep.sp;
     this.showAccess=keep.acc;this.showCrit=keep.crit;this.showDates=keep.dts;this.showDelay=keep.dly;
-    this._resExportOnly=false;
+    this._resExportOnly=false;this._resExportMonth='';
     this.render();try{this._renderResourcePanel&&this._resourceMode&&this._renderResourcePanel();}catch(e){}
     /* Trimming leaves every level a different shape, so each row is as tall as its tallest map. */
     shots.forEach(sh=>{sh.h=Math.round(sh.cv.height*mapW/sh.cv.width);});
@@ -3058,9 +3062,12 @@ class Component extends DCLogic {
       const _monthEntry=this._resourceMode&&this._resourceEntry(this.curLevel,z.mk||z.lid);
       const _monthWorking=!this.showMonthWorkOnly||this.colorMode!=='plan'||this._zoneWorksInMonth(this.curLevel,z,this.planMonth());
       const vis=this.zoneVisible(z)&&_monthWorking&&(!this._resourceMode||this._resourceEditing||!!_monthEntry);
-      /* Manpower export: a zone with nobody on it is left out altogether — no outline, no name —
-         so the picture is only the coloured team areas. */
-      if(this._resExportOnly&&this._resourceMode&&!_monthEntry)return;
+      /* Manpower export: only the zones actually worked in the chosen month are drawn, in their
+         team's colour — everything else is left out entirely, outline and name included. */
+      if(this._resExportOnly&&this._resourceMode){
+        if(!_monthEntry)return;
+        if(this._resExportMonth){const _ms=this._mpZoneMonths(this.curLevel,z.mk||z.lid);
+          if(!_ms||_ms.indexOf(this._resExportMonth)<0)return;}}
       const pts=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
       const crit=vis&&this.showCrit&&z.crit?' critln':'';
       const _strictHidden=!vis&&((this._resourceMode&&!this._resourceEditing)||(this.colorMode==='plan'&&this.showMonthWorkOnly));
@@ -3240,6 +3247,8 @@ class Component extends DCLogic {
       let fill=col, fo=0, base='',drawCol=col;   /* 默认: 透明填充, 只描边 */
       const _resSub=this._resourceMode&&this._resourceEntry(this.curLevel,this.curLevel+'|'+e.label);
       if(this._resourceMode&&!this._resourceEditing&&!_resSub)return;
+      if(this._resExportOnly&&this._resExportMonth&&_resSub){const _ms2=this._mpZoneMonths(this.curLevel,this.curLevel+'|'+e.label);
+        if(!_ms2||_ms2.indexOf(this._resExportMonth)<0)return;}
       if(this._resourceMode){base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;fill=_resSub?(_resSub.team.color||'#3157d5'):'#d9dee7';fo=_resSub?0.68:0.22;drawCol=_resSub?fill:col;
       } else if(this.colorMode==='castdate'){   /* Cast: marine 板也参与, 按浇筑时间上色 */
         const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:(cls==='subP'),_mslab:(cls==='subC')};
