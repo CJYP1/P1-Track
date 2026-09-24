@@ -2554,10 +2554,11 @@ class Component extends DCLogic {
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
   _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
   _mpZoneMonths(lv,zmk){
-    /* Not every zone is a slab job — the Marine Podium is columns and core walls, so whichever
-       activity of this zone carries dates decides which months the team is there. */
+    /* Resource follows the SLAB — except the Marine Podium, which has no slab of its own and is
+       counted on its columns instead. */
+    const _pod=(lv==='L1'&&/^L1\|P/i.test(String(zmk||'')));
     let d=null;
-    for(const aid of ['slab','slab_top','col','ls','act_corewall','rc','pcbeam','mbeam','cbeam','pile','slab_pile']){
+    for(const aid of (_pod?['col','slab','slab_top']:['slab','slab_top'])){
       const q=this._actDateOf(lv,zmk,aid);if(q&&(q.start||q.end)){d=q;break;}}
     if(!d)return null;
     /* Resource is counted on the START of the activity, never on its finish: a team belongs to the
