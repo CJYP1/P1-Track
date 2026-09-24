@@ -2927,30 +2927,20 @@ class Component extends DCLogic {
         let cat='NB';Object.keys(cnt).forEach(c=>{if(!cat||cnt[c]>(cnt[cat]||0))cat=c;});
         const w=Math.max(0,Math.round((Number(this._resourceTeamValues(t,lv).workers)||0)
                                      +(Number(this._resourceCoreValues(t,lv).workers)||0)));
-        /* A team with no headcount of its own still belongs in the list: the table's figure is what
-           gets shared out, and dropping the team here is how men went missing from the legend. */
+        if(!w)return;
         here.push({lv,cat,name:t.name||'Team',color:t.color||'#3157d5',men:w,zones:act.length});});
       /* Zone figures first, then the area figure. */
       if(only)here.forEach(r=>{const t2=this._resourceData().teams.find(q=>(q.name||'Team')===r.name);
         if(!t2)return;const v=this._mzTeamMen(t2,lv,only);if(v!=null){r.men=v;r._mz=true;}});
-      /* Every figure the table carries for this level has to end up on somebody, or the legend's
-         total silently falls short of the table's.  Teams that work this month share it first;
-         failing that, the teams that hold ground here at all; failing that, it is named unassigned. */
-      if(only){const ovs=this._mpOv(),teams=this._resourceData().teams||[];
-        ['NB','EB','MA'].forEach(c=>{
-          const o=ovs[this._mpKey(c,lv,only)];if(o==null)return;
-          const target=Math.max(0,Math.round(Number(o)||0));if(!target)return;
-          let list=here.filter(r=>r.cat===c);
+      /* a typed figure wins: scale the teams of that area to it */
+      if(only){const ovs=this._mpOv(),by={};
+        here.forEach(r=>(by[r.cat]=by[r.cat]||[]).push(r));
+        Object.keys(by).forEach(c=>{const o=ovs[this._mpKey(c,lv,only)];if(o==null)return;
+          const list=by[c];
           if(list.some(r=>r._mz))return;   /* zone figures already said it */
-          if(!list.length){
-            teams.forEach(t=>{const a=this._mpTeamArea(t,lv,c,'');if(!a)return;
-              here.push({lv,cat:c,name:t.name||'Team',color:t.color||'#3157d5',men:a,zones:0});});
-            list=here.filter(r=>r.cat===c);}
-          if(!list.length){here.push({lv,cat:c,name:'Unassigned',color:'#9aa3b2',men:target,zones:0});return;}
-          const tot=list.reduce((n,r)=>n+r.men,0);let acc=0;
-          list.forEach((r,i)=>{r.men=(i===list.length-1)?(target-acc)
-                                                       :(tot?Math.round(target*r.men/tot):Math.round(target/list.length));
-            acc+=r.men;});});}
+          const tot=list.reduce((n,r)=>n+r.men,0),target=Math.max(0,Math.round(Number(o)||0));
+          if(!tot)return;let acc=0;
+          list.forEach((r,i)=>{r.men=(i===list.length-1)?(target-acc):Math.round(target*r.men/tot);acc+=r.men;});});}
       here.forEach(r=>out.push(r));});
     return out.filter(r=>r.men>0);
   }
@@ -3067,11 +3057,17 @@ class Component extends DCLogic {
          question "how many teams" is about crews, not about rows. */
       {const _nTeam=l2=>new Set(l2.map(r=>r.name)).size;
        const _all=team.reduce((n2,r)=>n2+r.men,0),_allT=_nTeam(team);
-       const _byc=TCATS.map(([c])=>{const l2=team.filter(r=>r.cat===c);
+       /* Whatever the table carries that no team accounts for is the core-wall gangs: they are not
+          tied to a zone, so they never appear as a team.  Naming the remainder makes the legend add
+          up to the table instead of quietly falling short. */
+       const _tbl=only?rows.reduce((n2,r)=>n2+(((r.cells||[]).find(c=>c.m===only)||{}).val||0),0):0;
+       const _cw=Math.max(0,_tbl-_all);
+       let _byc=TCATS.map(([c])=>{const l2=team.filter(r=>r.cat===c);
          return l2.length?(c+' '+_nTeam(l2)+'T/'+l2.reduce((n2,r)=>n2+r.men,0)):'';})
          .filter(Boolean).join('  \u00b7  ');
+       if(_cw)_byc+=(_byc?'  \u00b7  ':'')+'Core walls '+_cw;
        x.textAlign='right';
-       const _lab='Total '+_allT+' team'+(_allT===1?'':'s')+' \u00b7 '+_all+' men';
+       const _lab='Total '+_allT+' team'+(_allT===1?'':'s')+' \u00b7 '+(_all+_cw)+' men';
        x.fillStyle='#c8102e';x.font='700 13px Arial';x.fillText(_lab,W-PAD,y);
        if(_byc){x.fillStyle='#6b7486';x.font='700 11.5px Arial';
          x.fillText(_byc,W-PAD-x.measureText(_lab).width-18,y);}
