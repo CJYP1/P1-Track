@@ -3790,11 +3790,6 @@ class Component extends DCLogic {
          prints it too: each team is scaled to its share, and the last one absorbs the rounding so
          the numbers on the picture add up to exactly what the table says. */
       const _ovAdj={},_ovFb={};
-      /* Teams whose zones were all left out of this picture still hold ground on this level; give
-         them an anchor so a figure the Manpower table carries has somewhere to land. */
-      (((this._resourceData()||{}).teams)||[]).forEach(t9=>{const k9=t9.id||t9.name;
-        if(_resTeams[k9])return;const a9=this._resAnchor(t9,this.curLevel,H);if(!a9)return;
-        _resTeams[k9]={t:t9,pts:[a9],cat:a9.cat||'NB',syn:true};});
       /* On screen as well as in an export: the month being looked at decides which figures apply,
          so what the map prints always matches the Manpower table for that month. */
       const _ovMon=this._resExportOnly?this._resExportMonth
@@ -3822,15 +3817,9 @@ class Component extends DCLogic {
              to an even split, so the table figure still lands on the map instead of vanishing. */
           let use=list.filter(x=>x.w>0);
           list.forEach(x=>{_ovAdj[x.k]=0;});
-          /* No datable work here this month, but the table still says there are men: show them.
-             A figure that is in the plan has to appear somewhere — the missing thing is the date,
-             not the people.  Fall back to all the team's ground, then to the headcounts. */
-          if(!use.length){
-            let fb=list.filter(x=>x.wa>0).map(x=>({k:x.k,w:x.wa}));
-            if(!fb.length)fb=list.filter(x=>x.wk>0).map(x=>({k:x.k,w:x.wk}));
-            if(!fb.length)fb=list.map(x=>({k:x.k,w:1}));
-            fb.forEach(x=>{_ovFb[x.k]=true;});
-            use=fb;}
+          /* Nothing datable here this month: nothing is printed.  The men stay in the table, where
+             the missing dates are the thing to fix — the picture does not guess at them. */
+          if(!use.length)return;
           const tot=use.reduce((n2,x)=>n2+x.w,0);
           /* The last share absorbs the rounding, so the printed numbers add up to exactly the table. */
           let acc=0;use.forEach((x,i)=>{const v3=(i===use.length-1)?(target-acc):Math.round(target*x.w/tot);
@@ -3850,8 +3839,6 @@ class Component extends DCLogic {
         /* A team with no work in the month being looked at gets no label at all — a bare 0 on the
            map only invites the question of whether something was forgotten. */
         if(_ovMon&&_ovAdj[k]===0)return;
-        /* A team only present because of the line above prints solely on the table's authority. */
-        if(e.syn&&!(_ovMon&&_ovAdj[k]>0))return;
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
           +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.04em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.16).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
