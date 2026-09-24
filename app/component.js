@@ -3051,6 +3051,17 @@ class Component extends DCLogic {
     x.fillText('Red = typed by hand, overriding the calculated figure.',PAD,y+18);
     if(teamBy.length){y+=32;
       x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Teams'+(only?' \u00b7 '+only:''),PAD,y);
+      /* One grand total for the whole month, so the legend can be checked against the table's own
+         "All zones combined" without adding the three areas up by hand. */
+      {const _all=team.reduce((n2,r)=>n2+r.men,0);
+       const _byc=TCATS.map(([c,lab])=>[c,team.filter(r=>r.cat===c).reduce((n2,r)=>n2+r.men,0)])
+                       .filter(q=>q[1]>0).map(q=>q[0]+' '+q[1]).join('  \u00b7  ');
+       x.textAlign='right';
+       x.fillStyle='#c8102e';x.font='700 13px Arial';
+       x.fillText('Total '+_all+' men',W-PAD,y);
+       if(_byc){x.fillStyle='#6b7486';x.font='700 11.5px Arial';
+         x.fillText(_byc,W-PAD-x.measureText('Total '+_all+' men').width-18,y);}
+       x.textAlign='left';}
       y+=10;
       const CW2=Math.floor((W-PAD*2)/3),y0=y;
       teamBy.forEach((g,gi)=>{
@@ -3058,8 +3069,8 @@ class Component extends DCLogic {
         const sum=g.rows.reduce((n2,r)=>n2+r.men,0);
         x.fillStyle='#1f3557';x.font='700 11.5px Arial';
         x.fillText(g.lab,gx,gy+12);
-        x.fillStyle='#8a92a2';x.font='11px Arial';
-        x.fillText(sum+' men',gx+CW2-92,gy+12);
+        x.fillStyle='#1f3557';x.font='700 11.5px Arial';x.textAlign='right';
+        x.fillText(sum+' men',gx+CW2-40,gy+12);x.textAlign='left';
         x.strokeStyle='#dfe4ec';x.lineWidth=1;
         x.beginPath();x.moveTo(gx,gy+18.5);x.lineTo(gx+CW2-28,gy+18.5);x.stroke();
         gy+=22;
