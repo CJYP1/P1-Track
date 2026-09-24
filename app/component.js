@@ -2279,12 +2279,12 @@ class Component extends DCLogic {
       <button class="hbtn" id="__pngClose">Close</button></div>
     <div style="flex:1;overflow:auto;padding:16px;text-align:center">
       <img src="${url}" style="max-width:100%;background:#fff;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.4)">
-      <div style="color:#e6edf6;font-size:11px;margin-top:10px">If Download does nothing, right-click the image (or press and hold on a phone) and save it.</div>
+      <div style="color:#e6edf6;font-size:11px;margin-top:10px">Preview \u00b7 press Download to save it. (Or right-click the image \u2014 press and hold on a phone \u2014 to save it yourself.)</div>
     </div>`;
     document.body.appendChild(ov);
     ov.querySelector('#__pngClose').onclick=()=>ov.remove();
     ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
-    try{ov.querySelector('#__pngDl').click();}catch(_e){}
+    /* Preview only: the file is saved when the person presses Download, not before. */
   }
   /* Band summary: one table per Level that buckets its Zones by how far behind they are,
      so a reader sees the shape of the delay before any individual zone name. */
@@ -2659,25 +2659,34 @@ class Component extends DCLogic {
     const keep={lv:this.curLevel,cm:this.colorMode,pm:this._planMonth,mw:this.showMonthWorkOnly,
                 rm:this._resourceMode,re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb},
                 cols:this.showColumns,zc:this.showSubZC,sc:this.showSubC,sp:this.showSubP,
-                acc:this.showAccess,crit:this.showCrit,dts:this.showDates,dly:this.showDelay};
+                acc:this.showAccess,crit:this.showCrit,dts:this.showDates,dly:this.showDelay,
+                cw:this.showCoreWalls,lf:this.showLifts};
     const shots=[];
     const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
     for(const lv of lvWanted){
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
       this._resExportOnly=true;this._resExportMonth=only||'';this.showColumns=false;
-      this.showAccess=false;this.showCrit=false;this.showDates=false;this.showDelay=false;   /* overlays off */
+      this.showCoreWalls=false;this.showLifts=false;   /* core walls / lifts / stairs stay out of this picture */
+      this.showAccess=false;this.showDates=false;this.showDelay=false;   /* overlays off */
+      this.showCrit=true;   /* critical path stays — it is the point of the picture */
       this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
       if(only){this._planMonth=only;}
       try{this.vb={...this.base};}catch(e){}
       this.render();
       const cvv=await this._svgSnapshot(mapW*2);
-      if(cvv){const men=rows.filter(r=>r.lv===lv).map(r=>r.cat+' '+(r.cells.find(c=>!only||c.m===only)||{}).val)
-        .filter(t=>!/ (0|undefined)$/.test(t)).join(' \u00b7 ');
+      if(cvv){
+        /* Only areas that actually have men on this level in this month get a figure — with no
+           month picked, the level's busiest month stands in. */
+        const men=rows.filter(r=>r.lv===lv).map(r=>{
+            const cs=only?r.cells.filter(c=>c.m===only):r.cells;
+            const v=cs.reduce((n2,c)=>Math.max(n2,c.val||0),0);
+            return v?(r.cat+' '+v):'';}).filter(Boolean).join(' \u00b7 ');
         shots.push({lv,cv:cvv,men});}}
     this.curLevel=keep.lv;this.colorMode=keep.cm;this._planMonth=keep.pm;this.showMonthWorkOnly=keep.mw;
     this._resourceMode=keep.rm;this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;
     this.showColumns=keep.cols;this.showSubZC=keep.zc;this.showSubC=keep.sc;this.showSubP=keep.sp;
     this.showAccess=keep.acc;this.showCrit=keep.crit;this.showDates=keep.dts;this.showDelay=keep.dly;
+    this.showCoreWalls=keep.cw;this.showLifts=keep.lf;
     this._resExportOnly=false;this._resExportMonth='';
     this.render();try{this._renderResourcePanel&&this._resourceMode&&this._renderResourcePanel();}catch(e){}
     /* Trimming leaves every level a different shape, so each row is as tall as its tallest map. */
@@ -3158,7 +3167,10 @@ class Component extends DCLogic {
             _topDates+=`<text class="zname" style="font-size:${_fz}px;font-weight:800;fill:#b23a2e;stroke:var(--stage);stroke-width:380px" x="${cx.toFixed(0)}" y="${(cy+fs*1.18).toFixed(0)}">■ ${this.esc(_e)}</text>`;
         } }   /* Slab 起(▶)/止(■)日期 — 没有 slab 日期的区域不写 TBA, 避免整张图过密 */
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'){ const _cd=this._actDateOf(this.curLevel,z.mk||z.lid,'col'); const _cm=this._dateToActMonth(_cd.start||_cd.end); if(_cm){_topDates+=`<text class="zname" style="font-size:${(fs*0.38).toFixed(0)}px;font-weight:750;fill:#315b96;stroke:var(--stage);stroke-width:${(fs*0.10).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*1.67).toFixed(0)}">COL ${this.esc(_cm)}</text>`;} }
-      if(this._resourceMode&&this.zoneVisible(z)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
+      /* The headline number follows the same month filter as the shapes, so a team with no work
+         in the exported month leaves no number behind. */
+      if(this._resourceMode&&this.zoneVisible(z)&&!(this._resExportOnly&&this._resExportMonth&&
+          !((this._mpZoneMonths(this.curLevel,z.mk||z.lid)||[]).indexOf(this._resExportMonth)>=0))){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
       if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
