@@ -3053,24 +3053,28 @@ class Component extends DCLogic {
       x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Teams'+(only?' \u00b7 '+only:''),PAD,y);
       /* One grand total for the whole month, so the legend can be checked against the table's own
          "All zones combined" without adding the three areas up by hand. */
-      {const _all=team.reduce((n2,r)=>n2+r.men,0);
-       const _byc=TCATS.map(([c,lab])=>[c,team.filter(r=>r.cat===c).reduce((n2,r)=>n2+r.men,0)])
-                       .filter(q=>q[1]>0).map(q=>q[0]+' '+q[1]).join('  \u00b7  ');
+      /* A team working on two levels is listed twice, so the count is of distinct teams — the
+         question "how many teams" is about crews, not about rows. */
+      {const _nTeam=l2=>new Set(l2.map(r=>r.name)).size;
+       const _all=team.reduce((n2,r)=>n2+r.men,0),_allT=_nTeam(team);
+       const _byc=TCATS.map(([c])=>{const l2=team.filter(r=>r.cat===c);
+         return l2.length?(c+' '+_nTeam(l2)+'T/'+l2.reduce((n2,r)=>n2+r.men,0)):'';})
+         .filter(Boolean).join('  \u00b7  ');
        x.textAlign='right';
-       x.fillStyle='#c8102e';x.font='700 13px Arial';
-       x.fillText('Total '+_all+' men',W-PAD,y);
+       const _lab='Total '+_allT+' team'+(_allT===1?'':'s')+' \u00b7 '+_all+' men';
+       x.fillStyle='#c8102e';x.font='700 13px Arial';x.fillText(_lab,W-PAD,y);
        if(_byc){x.fillStyle='#6b7486';x.font='700 11.5px Arial';
-         x.fillText(_byc,W-PAD-x.measureText('Total '+_all+' men').width-18,y);}
+         x.fillText(_byc,W-PAD-x.measureText(_lab).width-18,y);}
        x.textAlign='left';}
       y+=10;
       const CW2=Math.floor((W-PAD*2)/3),y0=y;
       teamBy.forEach((g,gi)=>{
         const gx=PAD+gi*CW2;let gy=y0;
-        const sum=g.rows.reduce((n2,r)=>n2+r.men,0);
+        const sum=g.rows.reduce((n2,r)=>n2+r.men,0),nt=new Set(g.rows.map(r=>r.name)).size;
         x.fillStyle='#1f3557';x.font='700 11.5px Arial';
         x.fillText(g.lab,gx,gy+12);
         x.fillStyle='#1f3557';x.font='700 11.5px Arial';x.textAlign='right';
-        x.fillText(sum+' men',gx+CW2-40,gy+12);x.textAlign='left';
+        x.fillText(nt+' team'+(nt===1?'':'s')+' \u00b7 '+sum+' men',gx+CW2-40,gy+12);x.textAlign='left';
         x.strokeStyle='#dfe4ec';x.lineWidth=1;
         x.beginPath();x.moveTo(gx,gy+18.5);x.lineTo(gx+CW2-28,gy+18.5);x.stroke();
         gy+=22;
