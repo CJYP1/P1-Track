@@ -2554,11 +2554,12 @@ class Component extends DCLogic {
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
   _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
   _mpZoneMonths(lv,zmk){
-    /* Resource follows the SLAB — except the Marine Podium, which has no slab of its own and is
-       counted on its columns instead. */
-    const _pod=(lv==='L1'&&/^L1\|P/i.test(String(zmk||'')));
+    /* Resource follows the SLAB everywhere — except Marine on L1, which has no slab of its own
+       (the Podium is a column job) and is counted on its COLUMNS instead. */
+    const _z=((this.DATA.levels[lv]||{}).zones||[]).find(q=>(q.mk||q.lid)===zmk);
+    const _ma=lv==='L1'&&(_z?((_z.cat||'NB')==='MA'):/^L1\|/i.test(String(zmk||'')));
     let d=null;
-    for(const aid of (_pod?['col','slab','slab_top']:['slab','slab_top'])){
+    for(const aid of (_ma?['col','slab','slab_top']:['slab','slab_top'])){
       const q=this._actDateOf(lv,zmk,aid);if(q&&(q.start||q.end)){d=q;break;}}
     if(!d)return null;
     /* Resource is counted on the START of the activity, never on its finish: a team belongs to the
