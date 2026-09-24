@@ -91,6 +91,7 @@ class Component extends DCLogic {
     this.loadUpdates();
     this.loadElem();
     this._migrateLW8();
+    try{this._mergeB2SlabPile();}catch(e){console.error('B2 slab merge',e);}
     /* 先把地图柱子与实际 Zone 边界对齐，再计算进度；否则旧的柱子归属会让
        Column List、区域完成量和地图点击分别使用不同的 Zone。 */
     this._reconcileZoneCols();
@@ -127,6 +128,7 @@ class Component extends DCLogic {
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
     if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
+    if(aid==='slab_pile')return false;   /* merged into 'slab' everywhere */
     switch(aid){case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
   mval(z,k){if(k==='area')return z.area||0;if(k==='liftstairAll')return this.lsAll(z.counts);return z.counts[k]||0;}
   fmt(n){return (n||0).toLocaleString('en-US');}
@@ -202,6 +204,23 @@ class Component extends DCLogic {
   /* LW8 was renamed to ST3 (it is the CW8 staircase, not a lift wall).  Rename it everywhere the
      old name can still be stored: drawn core-wall / lift shapes, saved element status and dates,
      manually added items, and the resource plan.  Runs once per load and is a no-op afterwards. */
+  /* "Slab + Pilecap" was a second activity next to "Slab".  It is retired: whatever was recorded
+     under it moves into 'slab' on every level — but never over a figure 'slab' already has, so an
+     imported programme always wins. */
+  _mergeB2SlabPile(){
+    if(this._appCfg&&this._appCfg.slabPileMerged)return;
+    const move=(obj,save)=>{if(!obj)return false;let hit=false;
+      Object.keys(obj).forEach(k=>{const p=k.split('||');if(p[2]!=='slab_pile')return;
+        p[2]='slab';const nk=p.join('||');
+        if(obj[nk]==null)obj[nk]=obj[k];
+        delete obj[k];hit=true;});
+      if(hit&&save)save();return hit;};
+    move(this._actPlan,null);move(this._actDoneM,null);move(this._actTotal,null);
+    if(this.saveAct)this.saveAct();
+    if(move(this._actDate,null)&&this.saveDates)this.saveDates();
+    this._appCfg=this._appCfg||{};this._appCfg.slabPileMerged=true;this._appCfg.b2SlabMerged=true;
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+  }
   _migrateLW8(){
     const _REN=[[/\bLW8\b/g,'ST3'],[/\bCW8\b/g,'Lift 1/2']];
     const RE={test:v=>{const t=String(v==null?'':v);return _REN.some(([r])=>new RegExp(r.source).test(t));}},
@@ -884,8 +903,8 @@ class Component extends DCLogic {
       if(el.classList.contains('resource-core-qty')){const card=el.closest('.resource-core-card'),i=card?Number(card.dataset.i):-1;if(i<0||!cs[i])return;cs[i][el.dataset.key]=this._resourceNum(el.value);this._resourceSave();this.render();this._renderResourcePanel();}};
     if(p._resourceCapture)p.removeEventListener('click',p._resourceCapture,true);p._resourceCapture=e=>{const editBtn=e.target.closest&&e.target.closest('#resourceEdit');if(editBtn){e.preventDefault();e.stopImmediatePropagation();this._resourceEditing=!this._resourceEditing;this.render();this._renderResourcePanel();return;}const cb=e.target.closest&&e.target.closest('.resource-core-remove');if(cb&&t){e.preventDefault();e.stopImmediatePropagation();const cc=cb.closest('.resource-core-card'),k=cc?Number(cc.dataset.i):-1;if(k>=0&&cs[k]){const at=t.cores.indexOf(cs[k]);if(at>=0)t.cores.splice(at,1);this._resourceInspect=null;this._resourceCoreRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();}return;}
     const b=e.target.closest&&e.target.closest('.resource-up,.resource-down,.resource-remove');if(!b||!t)return;e.preventDefault();e.stopImmediatePropagation();const card=b.closest('.resource-zone-card'),i=card?Number(card.dataset.i):-1;if(i<0||!zs[i])return;if(b.classList.contains('resource-remove')){const at=t.zones.indexOf(zs[i]);if(at>=0)t.zones.splice(at,1);this._resourceInspect=null;}else{const j=b.classList.contains('resource-up')?i-1:i+1;if(j<0||j>=zs.length)return;const a=zs[i].order,c=zs[j].order;zs[i].order=c;zs[j].order=a;}this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};p.addEventListener('click',p._resourceCapture,true);
-    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}<button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button><button class="hbtn" id="resourceSeqPng" style="padding:5px 8px" title="Export the work sequence of every team on this level as a PNG">\u2b07 PNG</button><button class="hbtn" id="resourceTable" style="padding:5px 8px" title="Edit the whole plan as a table">\u25a4 Table</button><button class="hbtn" id="resourceClearLv" style="padding:5px 8px;color:var(--crit)" title="Remove every Team\u2019s zones and core walls on the level you are looking at">\ud83d\uddd1 Clear level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
-    p.querySelector('#resourceClose').onclick=()=>this._closeResourcePlanner();{const _cl=p.querySelector('#resourceCopyLv');if(_cl)_cl.onclick=()=>this.openResourceCopyLevel();}{const _xl=p.querySelector('#resourceClearLv');if(_xl)_xl.onclick=()=>this.resourceClearLevel();}{const _rt=p.querySelector('#resourceTable');if(_rt)_rt.onclick=()=>this.openResourceTable();}{const _sp=p.querySelector('#resourceSeqPng');if(_sp)_sp.onclick=()=>this.exportResourceSeqPng();}const edit=p.querySelector('#resourceEdit');if(edit)edit.onclick=()=>{this._resourceEditing=!this._resourceEditing;this._renderResourcePanel();};p.querySelectorAll('.resource-team-tab').forEach(b=>b.onclick=()=>{this._resourceTeamId=b.dataset.team;this._resourceInspect=null;this.render();this._renderResourcePanel();});const add=p.querySelector('#resourceAddTeam');if(add)add.onclick=()=>{const name=window.prompt('Team name','Team '+String.fromCharCode(65+d.teams.length));if(!name||!name.trim())return;const id='team_'+Date.now().toString(36);const _used=new Set(d.teams.map(q=>String(q.color||'').toLowerCase()));const _free=colors.find(c=>!_used.has(String(c).toLowerCase()))||colors[d.teams.length%colors.length];d.teams.push({id,name:name.trim(),color:_free,zones:[]});this._resourceTeamId=id;this._resourceSave();this.render();this._renderResourcePanel();};if(!t)return;const tn=p.querySelector('#resourceTeamName'),tc=p.querySelector('#resourceTeamColor');if(tn)tn.onchange=()=>{t.name=tn.value.trim()||t.name;this._resourceSave();this.render();this._renderResourcePanel();};if(tc)tc.onchange=()=>{t.color=tc.value;this._resourceSave();this.render();this._renderResourcePanel();};const del=p.querySelector('#resourceDeleteTeam');if(del)del.onclick=()=>this._confirmModal('Delete this team and its Zone assignment?',()=>{d.teams=d.teams.filter(q=>q.id!==t.id);this._resourceTeamId=(d.teams[0]||{}).id;this._resourceSave();this.render();this._renderResourcePanel();});p.querySelectorAll('.resource-core-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;if(!cs[i])return;this._resourceInspect={core:true,lv:cs[i].lv,id:cs[i].id};this.render();this._renderResourcePanel();};});
+    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}<button class="hbtn" id="resourceMpMonth" style="padding:5px 8px" title="Men per area and level, month by month">\u25a6 Month</button><button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button><button class="hbtn" id="resourceSeqPng" style="padding:5px 8px" title="Export the work sequence of every team on this level as a PNG">\u2b07 PNG</button><button class="hbtn" id="resourceTable" style="padding:5px 8px" title="Edit the whole plan as a table">\u25a4 Table</button><button class="hbtn" id="resourceClearLv" style="padding:5px 8px;color:var(--crit)" title="Remove every Team\u2019s zones and core walls on the level you are looking at">\ud83d\uddd1 Clear level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
+    p.querySelector('#resourceClose').onclick=()=>this._closeResourcePlanner();{const _cl=p.querySelector('#resourceCopyLv');if(_cl)_cl.onclick=()=>this.openResourceCopyLevel();}{const _xl=p.querySelector('#resourceClearLv');if(_xl)_xl.onclick=()=>this.resourceClearLevel();}{const _rt=p.querySelector('#resourceTable');if(_rt)_rt.onclick=()=>this.openResourceTable();}{const _sp=p.querySelector('#resourceSeqPng');if(_sp)_sp.onclick=()=>this.exportResourceSeqPng();}{const _mp=p.querySelector('#resourceMpMonth');if(_mp)_mp.onclick=()=>this.openManpowerMonth();}const edit=p.querySelector('#resourceEdit');if(edit)edit.onclick=()=>{this._resourceEditing=!this._resourceEditing;this._renderResourcePanel();};p.querySelectorAll('.resource-team-tab').forEach(b=>b.onclick=()=>{this._resourceTeamId=b.dataset.team;this._resourceInspect=null;this.render();this._renderResourcePanel();});const add=p.querySelector('#resourceAddTeam');if(add)add.onclick=()=>{const name=window.prompt('Team name','Team '+String.fromCharCode(65+d.teams.length));if(!name||!name.trim())return;const id='team_'+Date.now().toString(36);const _used=new Set(d.teams.map(q=>String(q.color||'').toLowerCase()));const _free=colors.find(c=>!_used.has(String(c).toLowerCase()))||colors[d.teams.length%colors.length];d.teams.push({id,name:name.trim(),color:_free,zones:[]});this._resourceTeamId=id;this._resourceSave();this.render();this._renderResourcePanel();};if(!t)return;const tn=p.querySelector('#resourceTeamName'),tc=p.querySelector('#resourceTeamColor');if(tn)tn.onchange=()=>{t.name=tn.value.trim()||t.name;this._resourceSave();this.render();this._renderResourcePanel();};if(tc)tc.onchange=()=>{t.color=tc.value;this._resourceSave();this.render();this._renderResourcePanel();};const del=p.querySelector('#resourceDeleteTeam');if(del)del.onclick=()=>this._confirmModal('Delete this team and its Zone assignment?',()=>{d.teams=d.teams.filter(q=>q.id!==t.id);this._resourceTeamId=(d.teams[0]||{}).id;this._resourceSave();this.render();this._renderResourcePanel();});p.querySelectorAll('.resource-core-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;if(!cs[i])return;this._resourceInspect={core:true,lv:cs[i].lv,id:cs[i].id};this.render();this._renderResourcePanel();};});
     p.querySelectorAll('.resource-zone-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();};card.querySelectorAll('.resource-qty').forEach(inp=>inp.onchange=()=>{zs[i][inp.dataset.key]=this._resourceNum(inp.value);this._resourceSave();this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();});const up=card.querySelector('.resource-up'),dn=card.querySelector('.resource-down'),rm=card.querySelector('.resource-remove');if(up)up.onclick=()=>{if(i<1)return;[zs[i-1],zs[i]]=[zs[i],zs[i-1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(dn)dn.onclick=()=>{if(i>=zs.length-1)return;[zs[i+1],zs[i]]=[zs[i],zs[i+1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(rm)rm.onclick=()=>{const gone=zs[i];zs.splice(i,1);if(this._resourceInspect&&this._resourceInspect.lv===gone.lv&&this._resourceInspect.zmk===gone.zmk)this._resourceInspect=null;this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};});}
   _monthlySummaryRows(cat,mon){
     const M=this.ACT_MONTHS||[],mi=M.indexOf(mon),prev=mi>0?M[mi-1]:null,earlier=mi>1?M[mi-2]:null,by={critical:{},noncritical:{}};if(mi<0)return {critical:[],noncritical:[],prev,earlier};
@@ -2177,6 +2196,42 @@ class Component extends DCLogic {
   }
   /* Ask which areas and levels go into the delay image.  Only the ones that actually carry a
      delay are offered, so the choice is never a dead end. */
+  /* A picture of the map as it is on screen, for pasting on top of an exported table.  The SVG
+     leans on the stylesheet for most of its colours, so the computed style of every node is
+     written onto the clone — otherwise the snapshot comes out unstyled. */
+  _svgSnapshot(maxW){
+    return new Promise((resolve)=>{
+      try{
+        const src=this.svg;if(!src)return resolve(null);
+        const vb=(src.getAttribute('viewBox')||'').split(/\s+/).map(Number);
+        const w=vb[2]||src.clientWidth||1200,h=vb[3]||src.clientHeight||800;
+        const clone=src.cloneNode(true);
+        const PROPS=['fill','fill-opacity','stroke','stroke-opacity','stroke-width','stroke-dasharray',
+          'stroke-linejoin','stroke-linecap','opacity','font-size','font-family','font-weight',
+          'text-anchor','letter-spacing','paint-order','display','visibility'];
+        const a=src.querySelectorAll('*'),b=clone.querySelectorAll('*');
+        for(let i=0;i<a.length&&i<b.length;i++){
+          const cs=window.getComputedStyle(a[i]);let st='';
+          PROPS.forEach(k=>{const v=cs.getPropertyValue(k);if(v)st+=k+':'+v+';';});
+          b[i].setAttribute('style',st);b[i].removeAttribute('class');}
+        clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+        clone.setAttribute('width',w);clone.setAttribute('height',h);
+        const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        bg.setAttribute('x',vb[0]||0);bg.setAttribute('y',vb[1]||0);
+        bg.setAttribute('width',w);bg.setAttribute('height',h);bg.setAttribute('fill','#ffffff');
+        clone.insertBefore(bg,clone.firstChild);
+        const xml=new XMLSerializer().serializeToString(clone);
+        const url='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml);
+        const img=new Image();
+        img.onload=()=>{const sc=Math.min(1,(maxW||1100)/w);
+          const cv=document.createElement('canvas');cv.width=Math.round(w*sc);cv.height=Math.round(h*sc);
+          const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
+          x.drawImage(img,0,0,cv.width,cv.height);resolve(cv);};
+        img.onerror=()=>resolve(null);
+        img.src=url;
+      }catch(e){resolve(null);}
+    });
+  }
   _showPngPreview(url,name,n){
     const old=document.getElementById('__pngPrev');if(old)old.remove();
     const ov=document.createElement('div');ov.id='__pngPrev';
@@ -2435,6 +2490,146 @@ class Component extends DCLogic {
     const ks=Object.keys(days);let acc=0;
     ks.forEach((m,i)=>{const v=(i===ks.length-1)?(total-acc):Math.round(total*days[m]/n);out[m]=v;acc+=v;});
     return out;
+  }
+  /* Where the men are, month by month.  A team's headcount for a level is already recorded per
+     level; which months it is there comes from the slab dates of the zones it holds, so nothing
+     extra has to be typed.  Any cell can still be overwritten by hand when reality differs. */
+  _mpMonths(){return (this.ACT_MONTHS||[]).filter(m=>m!=="Before Apr'26");}
+  _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
+  _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
+  _mpZoneMonths(lv,zmk){
+    const d=this._actDateOf(lv,zmk,'slab');if(!d.start&&!d.end)return null;
+    const a=this.dateToActMonth(d.start||d.end),b=this.dateToActMonth(d.end||d.start),M=this._mpMonths();
+    let i=M.indexOf(a),j=M.indexOf(b);if(i<0)i=0;if(j<0)j=M.length-1;
+    if(j<i){const t=i;i=j;j=t;}
+    return M.slice(i,j+1);
+  }
+  _mpAuto(){
+    const M=this._mpMonths(),out={},teams=this._resourceData().teams;
+    const zoneOf=(lv,zmk)=>((this.DATA.levels[lv]||{}).zones||[]).find(z=>(z.mk||z.lid)===zmk);
+    teams.forEach(t=>{
+      const byLv={};(t.zones||[]).forEach(x=>{(byLv[x.lv]=byLv[x.lv]||[]).push(x);});
+      Object.keys(byLv).forEach(lv=>{
+        const w=Number(this._resourceTeamValues(t,lv).workers)||0;if(!w)return;
+        /* per month: which areas is this team actually working in on this level */
+        M.forEach(m=>{
+          const act={};let n=0;
+          byLv[lv].forEach(x=>{const z=zoneOf(lv,x.zmk);if(!z)return;
+            const ms=this._mpZoneMonths(lv,x.zmk);
+            if(ms&&ms.indexOf(m)<0)return;                 /* dated, but not this month */
+            if(!ms)return;                                  /* no dates -> not placed in time */
+            const c=z.cat||'NB';act[c]=(act[c]||0)+1;n++;});
+          if(!n)return;
+          Object.keys(act).forEach(c=>{const k=this._mpKey(c,lv,m);
+            out[k]=(out[k]||0)+Math.round(w*act[c]/n);});});});});
+    return out;
+  }
+  _mpRows(only){
+    const cats=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']];
+    const lvs=(this.DATA.order||[]).filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
+    const auto=this._mpAuto(),ov=this._mpOv(),rows=[];
+    const M=(only&&this._mpMonths().indexOf(only)>=0)?[only]:this._mpMonths();
+    cats.forEach(([c,label])=>lvs.forEach(lv=>{
+      const cells=M.map(m=>{const k=this._mpKey(c,lv,m),o=ov[k];
+        return {m,k,auto:auto[k]||0,val:(o==null?(auto[k]||0):Number(o)||0),manual:o!=null};});
+      if(cells.some(x=>x.val||x.auto))rows.push({cat:c,label,lv,cells});}));
+    return {rows,months:M};
+  }
+  openManpowerMonth(){
+    if(!this.rwsCanResource()){this.rwsDeny('Resource permission is required.');return;}
+    const old=document.getElementById('__mpMonth');if(old)old.remove();
+    const admin=this.rwsIsAdmin();
+    const ov=document.createElement('div');ov.id='__mpMonth';
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483500;background:rgba(15,20,30,.5);display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML=`<div class="delay-admin-box" style="width:min(1320px,97vw)">
+      <div class="delay-admin-head"><div><b>Manpower by month</b><span>Men per area and level, from the Resource plan and each zone's slab dates \u00b7 any cell can be typed over</span></div>
+        <label style="font-size:10px;font-weight:700;color:var(--dim);display:flex;align-items:center;gap:5px">Month
+          <select id="__mpMon" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px;font-weight:700">
+            <option value="">All months</option>${this._mpMonths().map(m=>`<option value="${this.esc(m)}">${this.esc(m)}</option>`).join('')}</select></label>
+        <button class="hbtn" id="__mpClose">\u00d7</button></div>
+      <div class="delay-admin-scroll" id="__mpBody"></div>
+      <div class="delay-admin-foot"><span id="__mpNote">Bold = typed by hand. Blank cell = nobody planned there that month.</span>
+        <div style="display:flex;gap:6px">
+          <button class="hbtn" id="__mpReset">\u21ba Reset typed cells</button>
+          <button class="hbtn primary" id="__mpPng">\u2b07 PNG</button></div></div></div>`;
+    document.body.appendChild(ov);
+    const pick=()=>ov.querySelector('#__mpMon').value||'';
+    const draw=()=>{
+      const {rows,months}=this._mpRows(pick());
+      const tot=months.map(m=>rows.reduce((n,r)=>n+(r.cells.find(c=>c.m===m).val||0),0));
+      ov.querySelector('#__mpBody').innerHTML=rows.length?`<table><thead><tr><th>Area</th><th>Level</th>
+        ${months.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
+        ${rows.map(r=>`<tr data-cat="${r.cat}" data-lv="${r.lv}"><td>${this.esc(r.label)}</td><td><b>${this.esc(r.lv)}</b></td>
+          ${r.cells.map(c=>`<td style="text-align:right">${admin
+            ?`<input class="mp-in" data-k="${this.esc(c.k)}" type="number" min="0" step="1" value="${c.val||''}" placeholder="${c.auto||0}"
+                 style="width:62px;padding:3px 5px;text-align:right;border:1px solid var(--line);border-radius:5px;background:var(--panel2);color:var(--txt);font-weight:${c.manual?800:400}">`
+            :`<span style="font-weight:${c.manual?800:400}">${c.val||'\u2014'}</span>`}</td>`).join('')}</tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="2"><b>All zones combined</b></td>
+          ${tot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr></tfoot></table>`
+        :'<div style="padding:18px;color:var(--faint);font-size:12px">No team has zones with slab dates yet \u2014 import or set the dates first.</div>';
+      ov.querySelectorAll('.mp-in').forEach(inp=>inp.onchange=()=>{
+        const o=this._mpOv(),v=inp.value.trim();
+        if(v==='')delete o[inp.dataset.k];else o[inp.dataset.k]=Math.max(0,Math.round(Number(v)||0));
+        try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+        if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerMonth',o,null,null);
+        draw();});};
+    ov.querySelector('#__mpClose').onclick=()=>ov.remove();
+    ov.querySelector('#__mpReset').onclick=()=>{if(!admin)return;
+      if(!window.confirm('Drop every typed cell and go back to the calculated numbers?'))return;
+      this._appCfg.manpowerMonth={};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+      if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerMonth',{},null,null);draw();};
+    ov.querySelector('#__mpMon').onchange=draw;
+    ov.querySelector('#__mpPng').onclick=()=>this.exportManpowerMonthPng(pick());
+    draw();
+  }
+  async exportManpowerMonthPng(only){
+    const {rows,months}=this._mpRows(only);
+    if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
+    const W=Math.max(820,300+months.length*96),PAD=22,H0=86,RH=30,ACC='#1f3557';
+    /* With one month picked, the map is shown as that month as well, so the picture matches the
+       column beside it.  The view is put back exactly as it was afterwards. */
+    let _keep=null;
+    if(only){_keep={cm:this.colorMode,pm:this._planMonth,only:this.showMonthWorkOnly};
+      this.colorMode='plan';this._planMonth=only;this.showMonthWorkOnly=true;this.render();}
+    const snap=await this._svgSnapshot(W-PAD*2);
+    if(_keep){this.colorMode=_keep.cm;this._planMonth=_keep.pm;this.showMonthWorkOnly=_keep.only;this.render();}
+    const mapH=snap?Math.round(snap.height*(W-PAD*2)/snap.width)+34:0;
+    const cv=document.createElement('canvas'),x=cv.getContext('2d');
+    const H=H0+34+rows.length*RH+40+46+mapH;
+    cv.width=W;cv.height=H;
+    x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
+    x.fillStyle='#c8102e';x.fillRect(0,0,W,58);
+    x.fillStyle='#fff';x.font='700 19px Arial';x.fillText('RC Manpower by month',PAD,26);
+    x.font='600 11.5px Arial';
+    x.fillText('From the Resource plan and each zone\u2019s slab dates \u00b7 '+new Date().toISOString().slice(0,10),PAD,46);
+    const c0=PAD,c1=PAD+150,cw=(W-PAD*2-210)/months.length,cx=i=>PAD+210+cw*i+cw-6;
+    let y=H0;
+    x.fillStyle=ACC;x.fillRect(PAD,y,W-PAD*2,34);
+    x.fillStyle='#fff';x.font='700 12px Arial';x.fillText('Area',c0+8,y+22);x.fillText('Level',c1+8,y+22);
+    x.textAlign='right';months.forEach((m,i)=>x.fillText(m,cx(i),y+22));x.textAlign='left';
+    y+=34;
+    rows.forEach((r,i)=>{
+      x.fillStyle=(i%2)?'#f7f9fb':'#ffffff';x.fillRect(PAD,y,W-PAD*2,RH);
+      x.fillStyle='#202938';x.font='12px Arial';x.fillText(r.label,c0+8,y+20);
+      x.font='700 12px Arial';x.fillText(r.lv,c1+8,y+20);
+      x.textAlign='right';
+      r.cells.forEach((c,j)=>{x.fillStyle=c.manual?'#c8102e':'#202938';
+        x.font=(c.manual?'700 ':'')+'12px Arial';x.fillText(c.val?String(c.val):'\u2014',cx(j),y+20);});
+      x.textAlign='left';y+=RH;});
+    x.fillStyle='#eef1f6';x.fillRect(PAD,y,W-PAD*2,34);
+    x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('All zones combined',c0+8,y+22);
+    x.textAlign='right';
+    months.forEach((m,i)=>{const v=rows.reduce((n,r)=>n+(r.cells.find(c=>c.m===m).val||0),0);
+      x.fillText(String(v||0),cx(i),y+22);});
+    x.textAlign='left';y+=34;
+    x.fillStyle='#8a92a2';x.font='10px Arial';
+    x.fillText('Red = typed by hand, overriding the calculated figure.',PAD,y+18);
+    if(snap){y+=34;
+      x.fillStyle='#202938';x.font='700 13px Arial';
+      x.fillText(this.curLevel+' \u00b7 '+((this.DATA.levels[this.curLevel]||{}).title||'')+(only?'  \u00b7  '+only:''),PAD,y);
+      y+=10;x.drawImage(snap,PAD,y,W-PAD*2,mapH-34);}
+    const name=('P1_manpower'+(only?'_'+only.replace(/[^a-z0-9]/gi,''):'-by-month')+'_'+new Date().toISOString().slice(0,10)+'.png');
+    this._showPngPreview(cv.toDataURL('image/png'),name,rows.length);
   }
   openScheduleImport(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can import a schedule.');return;}
@@ -2706,7 +2901,7 @@ class Component extends DCLogic {
       return `<tr${rowEditing?` data-rkey="${this.esc(ev.key)}"`:''}>`
         +`<td style="background:#6d1327;color:#fff;font-weight:800;padding:11px 9px;font-size:11.5px;vertical-align:middle;width:27%">${this.esc(r.a)}${this._reportCmtBtn(rc)}${rowEditing?`<button type="button" class="rpt-live" style="display:block;margin-top:8px;padding:3px 7px;border:1px solid rgba(255,255,255,.65);border-radius:5px;background:${ev.has?'#fff':'transparent'};color:${ev.has?'#6d1327':'#fff'};font-size:8.5px;cursor:pointer">↺ Use live</button>`:''}</td>`
         +`<td style="background:#f4dbdf;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:37%"><div style="font-size:13px">${tgt}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px;line-height:1.35">${planSub}<br>Complete by ${this.esc(by)}</div>${planEdit}</td>`
-        +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:36%"><div style="font-size:13px">${A.pct}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px">${actSub}</div>${actEdit}</td>`
+        +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:36%"><div style="font-size:13px">${A.pct}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px">${actSub}</div>${ev.has?`<div style="font-size:8.5px;color:#a33; margin-top:4px;font-weight:800" title="This row shows a figure typed in Report Edit. Open Edit and press \u21ba Use live to go back to the live numbers.">\u270e manual \u00b7 live ${fmtN(liveA.done)}/${fmtN(liveTotal)}</div>`:''}${actEdit}</td>`
         +`</tr>`+(this._cmtOpen===rc.key?`<tr class="rpt-cmt-wrap" ${rmeta}><td colspan="3" style="background:#fff;padding:8px 10px">${this._cmtPanel(rc.lv,rc.zmk,rc.aid,cat)}</td></tr>`:''); }).join('');
     const makeTable=(lv)=>{const rows=makeRows(this._liveReportRows(cat,[lv]))||`<tr><td colspan="3" style="background:#f4dbdf;color:#6d1327;text-align:center;padding:18px 8px;font-size:11px">当前 HTML 数据源里还没有 ${this.esc(cat+' '+lv)} Structure Activity 数据。</td></tr>`;return `<section style="min-width:0"><div style="font-size:14px;font-weight:900;color:#6d1327;margin:0 0 5px 5px">${this.esc(lv)} Structure</div><div style="background:#efe9df;padding:4px;border-radius:5px;width:100%"><table style="width:100%;border-collapse:separate;border-spacing:4px;font-family:'Segoe UI',Arial,sans-serif"><thead><tr>`
       +`<th style="background:#6d1327;color:#fff;padding:11px 8px;font-size:11px;font-weight:800;text-align:center">Activity</th>`
@@ -3949,14 +4144,15 @@ class Component extends DCLogic {
       {id:'piling',label:'Piling',unit:'nos',total:this.actTotal(lv,zmk,'piling',this.actAutoTotal(lv,zmk,'piling'))},
       {id:'demo_wall',label:'Demolished Wall',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
       {id:'demo',label:'Demolished Slab',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
-      {id:'slab_pile',label:'Slab + Pilecap',unit:'m²',total:this.actTotal(lv,zmk,'slab_pile',this.actAutoTotal(lv,zmk,'slab_pile'))},
+      /* 'Slab + Pilecap' is gone as an activity of its own: B2 keeps the pile caps inside its
+         Slab row, every level above only ever had Slab. */
       /* 数量一律来自 CSV 各月计划量求和(可手改覆盖);没放计划量就留空 — 不再借用图纸台账数/区域面积 */
       {id:'pile',label:'Pilecap',unit:'nos',total:this.actTotal(lv,zmk,'pile',this.actAutoTotal(lv,zmk,'pile'))},
       {id:'col',label:'Column',unit:'nos',total:this.actTotal(lv,zmk,'col',this.actAutoTotal(lv,zmk,'col'))},
       {id:'ls',label:'Core/Lift/Stair Wall',unit:'nos',total:this.actTotal(lv,zmk,'ls',this.actAutoTotal(lv,zmk,'ls'))},
       {id:'mbeam',label:'Steel Main Beam',unit:'nos',total:this.actTotal(lv,zmk,'mbeam',this.actAutoTotal(lv,zmk,'mbeam'))},
       {id:'cbeam',label:'Cast Steel Main Beam',unit:'nos',total:this.actTotal(lv,zmk,'cbeam',this.actAutoTotal(lv,zmk,'cbeam'))},
-      {id:'slab',label:'Slab',unit:'m²',total:this.actTotal(lv,zmk,'slab',this.actAutoTotal(lv,zmk,'slab')),info:'Enter the completed area under \u201cDone\u201d based on the work stage: 40% for formwork, 50% for rebar, and 10% for slab casting.'},
+      {id:'slab',label:(lv==='B2'?'Slab + Pilecap':'Slab'),unit:'m²',total:this.actTotal(lv,zmk,'slab',this.actAutoTotal(lv,zmk,'slab')),info:'Enter the completed area under \u201cDone\u201d based on the work stage: 40% for formwork, 50% for rebar, and 10% for slab casting.'},
       {id:'act_wall',label:'Wall',unit:'nos',total:this.actTotal(lv,zmk,'act_wall',this.actAutoTotal(lv,zmk,'act_wall'))},
       {id:'slab_top',label:'Top Slab',unit:'m²',total:this.actTotal(lv,zmk,'slab_top',this.actAutoTotal(lv,zmk,'slab_top'))},
       {id:'rc',label:'RC Works',unit:'m³',total:this.actTotal(lv,zmk,'rc',this.actAutoTotal(lv,zmk,'rc'))},
