@@ -2850,7 +2850,9 @@ class Component extends DCLogic {
       only=(M.indexOf(cur)>=0?cur:M[0]);}
     const {rows,months}=this._mpRows(only);
     if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
-    const W=Math.max(820,300+months.length*96),PAD=22,H0=86,RH=30,ACC='#1f3557';
+    /* Landscape sheet: the maps run four across, so a seven-month table and every floor of the
+       project fit on one page that is wider than it is tall. */
+    const W=Math.max(1680,300+months.length*96),PAD=26,H0=86,RH=30,ACC='#1f3557';
     /* One map per level that has men in this month, top floor first, each drawn in Resource mode
        so every team's headcount is on it.  The whole view is put back exactly as it was. */
     const lvOrder=(this.DATA.order||[]).slice().reverse();
@@ -2863,7 +2865,7 @@ class Component extends DCLogic {
                 acc:this.showAccess,crit:this.showCrit,dts:this.showDates,dly:this.showDelay,
                 cw:this.showCoreWalls,lf:this.showLifts,ovl:{...this.showOvl}};
     const shots=[];
-    const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
+    const COLS=Math.min(4,Math.max(1,lvWanted.length)),GAP=16,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
     for(const lv of lvWanted){
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
       /* A level nobody works on this month is drawn as bare outlines and then greyed out, so it
@@ -2913,21 +2915,24 @@ class Component extends DCLogic {
     x.fillStyle='#fff';x.font='700 19px Arial';x.fillText('RC Manpower by month',PAD,26);
     x.font='600 11.5px Arial';
     x.fillText('From the Resource plan and each zone\u2019s slab dates \u00b7 '+new Date().toISOString().slice(0,10),PAD,46);
-    const c0=PAD,c1=PAD+150,cw=(W-PAD*2-210)/months.length,cx=i=>PAD+210+cw*i+cw-6;
+    /* The table keeps its own width: stretching one month's column across a landscape sheet
+       leaves the figure marooned at the far edge. */
+    const TW=Math.min(W-PAD*2,430+months.length*118);
+    const c0=PAD,c1=PAD+150,cw=(TW-210)/months.length,cx=i=>PAD+210+cw*i+cw-6;
     let y=H0;
-    x.fillStyle=ACC;x.fillRect(PAD,y,W-PAD*2,34);
+    x.fillStyle=ACC;x.fillRect(PAD,y,TW,34);
     x.fillStyle='#fff';x.font='700 12px Arial';x.fillText('Area',c0+8,y+22);x.fillText('Level',c1+8,y+22);
     x.textAlign='right';months.forEach((m,i)=>x.fillText(m,cx(i),y+22));x.textAlign='left';
     y+=34;
     rows.forEach((r,i)=>{
-      x.fillStyle=(i%2)?'#f7f9fb':'#ffffff';x.fillRect(PAD,y,W-PAD*2,RH);
+      x.fillStyle=(i%2)?'#f7f9fb':'#ffffff';x.fillRect(PAD,y,TW,RH);
       x.fillStyle='#202938';x.font='12px Arial';x.fillText(r.label,c0+8,y+20);
       x.font='700 12px Arial';x.fillText(r.lv,c1+8,y+20);
       x.textAlign='right';
       r.cells.forEach((c,j)=>{x.fillStyle=c.manual?'#c8102e':'#202938';
         x.font=(c.manual?'700 ':'')+'12px Arial';x.fillText(c.val?String(c.val):'\u2014',cx(j),y+20);});
       x.textAlign='left';y+=RH;});
-    x.fillStyle='#eef1f6';x.fillRect(PAD,y,W-PAD*2,34);
+    x.fillStyle='#eef1f6';x.fillRect(PAD,y,TW,34);
     x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('All zones combined',c0+8,y+22);
     x.textAlign='right';
     months.forEach((m,i)=>{const v=rows.reduce((n,r)=>n+(r.cells.find(c=>c.m===m).val||0),0);
