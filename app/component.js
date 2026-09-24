@@ -2544,10 +2544,11 @@ class Component extends DCLogic {
     for(const aid of ['slab','slab_top','col','ls','act_corewall','rc','pcbeam','mbeam','cbeam','pile','slab_pile']){
       const q=this._actDateOf(lv,zmk,aid);if(q&&(q.start||q.end)){d=q;break;}}
     if(!d)return null;
-    const a=this.dateToActMonth(d.start||d.end),b=this.dateToActMonth(d.end||d.start),M=this._mpMonths();
-    let i=M.indexOf(a),j=M.indexOf(b);if(i<0)i=0;if(j<0)j=M.length-1;
-    if(j<i){const t=i;i=j;j=t;}
-    return M.slice(i,j+1);
+    /* Resource is counted on the START of the activity, never on its finish: a team belongs to the
+       month the work starts in, and does not go on being counted through the rest of its duration. */
+    if(!d.start)return null;
+    const m=this.dateToActMonth(d.start),M=this._mpMonths();
+    return M.indexOf(m)>=0?[m]:null;
   }
   _mpAuto(){
     const M=this._mpMonths(),out={},teams=this._resourceData().teams;
