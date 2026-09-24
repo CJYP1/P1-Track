@@ -2590,21 +2590,21 @@ class Component extends DCLogic {
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
   _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
   _mpZoneMonths(lv,zmk){
-    /* Resource follows the SLAB everywhere — except Marine on L1, which has no slab of its own
-       (the Podium is a column job) and is counted on its COLUMNS instead. */
-    const _z=((this.DATA.levels[lv]||{}).zones||[]).find(q=>(q.mk||q.lid)===zmk);
-    const _ma=lv==='L1'&&(_z?((_z.cat||'NB')==='MA'):/^L1\|/i.test(String(zmk||'')));
-    let d=null;
-    /* L1 Marine has no slab of its own, so any activity it does record — columns first — places it
-       in time; everywhere else only the slab counts. */
-    for(const aid of (_ma?['col','ls','act_corewall','rc','pcbeam','mbeam','cbeam','slab','slab_top']:['slab','slab_top'])){
-      const q=this._actDateOf(lv,zmk,aid);if(q&&(q.start||q.end)){d=q;break;}}
-    if(!d)return null;
-    /* Resource is counted on the START of the activity, never on its finish: a team belongs to the
-       month the work starts in, and does not go on being counted through the rest of its duration. */
-    if(!d.start)return null;
-    const m=this.dateToActMonth(d.start),M=this._mpMonths();
-    return M.indexOf(m)>=0?[m]:null;
+    /* A zone counts in a month as soon as ANY of its activities STARTS in that month — not the slab
+       alone. EB zones carry no slab of their own, so a slab-only rule left them with no work at all. */
+    const D=this._actDate||{},pre=lv+'||'+zmk+'||',M=this._mpMonths(),out=[];
+    Object.keys(D).forEach(k=>{
+      if(k.indexOf(pre)!==0)return;
+      const d=D[k];
+      /* Resource is counted on the START of the activity, never on its finish: a team belongs to the
+         month the work starts in, and does not go on being counted through the rest of its duration. */
+      if(!d||!d.start)return;
+      const m=this.dateToActMonth(d.start);
+      if(M.indexOf(m)>=0&&out.indexOf(m)<0)out.push(m);
+    });
+    if(!out.length)return null;
+    out.sort((a,b)=>M.indexOf(a)-M.indexOf(b));
+    return out;
   }
   _mpAuto(){
     const M=this._mpMonths(),out={},teams=this._resourceData().teams;
