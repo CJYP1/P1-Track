@@ -3544,13 +3544,17 @@ class Component extends DCLogic {
          prints it too: each team is scaled to its share, and the last one absorbs the rounding so
          the numbers on the picture add up to exactly what the table says. */
       const _ovAdj={};
-      if(this._resExportOnly&&this._resExportMonth){
+      /* On screen as well as in an export: the month being looked at decides which figures apply,
+         so what the map prints always matches the Manpower table for that month. */
+      const _ovMon=this._resExportOnly?this._resExportMonth
+        :((this._mpMonths().indexOf(this.planMonth())>=0)?this.planMonth():'');
+      if(_ovMon){
         const byCat={};Object.keys(_resTeams).forEach(k2=>{const e2=_resTeams[k2];
           const v2=this._resourceTeamValues(e2.t,this.curLevel),c2=this._resourceCoreValues(e2.t,this.curLevel);
           const w2=(Number(v2.workers)||0)+(Number(c2.workers)||0);
           (byCat[e2.cat||'NB']=byCat[e2.cat||'NB']||[]).push({k:k2,w:w2});});
         const ovs=this._mpOv();
-        Object.keys(byCat).forEach(c3=>{const list=byCat[c3],key=this._mpKey(c3,this.curLevel,this._resExportMonth);
+        Object.keys(byCat).forEach(c3=>{const list=byCat[c3],key=this._mpKey(c3,this.curLevel,_ovMon);
           const o3=ovs[key];if(o3==null)return;
           const tot=list.reduce((n2,x)=>n2+x.w,0),target=Math.max(0,Math.round(Number(o3)||0));
           if(!tot){if(list.length)_ovAdj[list[0].k]=target;return;}
