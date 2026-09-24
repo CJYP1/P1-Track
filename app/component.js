@@ -2927,20 +2927,30 @@ class Component extends DCLogic {
         let cat='NB';Object.keys(cnt).forEach(c=>{if(!cat||cnt[c]>(cnt[cat]||0))cat=c;});
         const w=Math.max(0,Math.round((Number(this._resourceTeamValues(t,lv).workers)||0)
                                      +(Number(this._resourceCoreValues(t,lv).workers)||0)));
-        if(!w)return;
+        /* A team with no headcount of its own still belongs in the list: the table's figure is what
+           gets shared out, and dropping the team here is how men went missing from the legend. */
         here.push({lv,cat,name:t.name||'Team',color:t.color||'#3157d5',men:w,zones:act.length});});
       /* Zone figures first, then the area figure. */
       if(only)here.forEach(r=>{const t2=this._resourceData().teams.find(q=>(q.name||'Team')===r.name);
         if(!t2)return;const v=this._mzTeamMen(t2,lv,only);if(v!=null){r.men=v;r._mz=true;}});
-      /* a typed figure wins: scale the teams of that area to it */
-      if(only){const ovs=this._mpOv(),by={};
-        here.forEach(r=>(by[r.cat]=by[r.cat]||[]).push(r));
-        Object.keys(by).forEach(c=>{const o=ovs[this._mpKey(c,lv,only)];if(o==null)return;
-          const list=by[c];
+      /* Every figure the table carries for this level has to end up on somebody, or the legend's
+         total silently falls short of the table's.  Teams that work this month share it first;
+         failing that, the teams that hold ground here at all; failing that, it is named unassigned. */
+      if(only){const ovs=this._mpOv(),teams=this._resourceData().teams||[];
+        ['NB','EB','MA'].forEach(c=>{
+          const o=ovs[this._mpKey(c,lv,only)];if(o==null)return;
+          const target=Math.max(0,Math.round(Number(o)||0));if(!target)return;
+          let list=here.filter(r=>r.cat===c);
           if(list.some(r=>r._mz))return;   /* zone figures already said it */
-          const tot=list.reduce((n,r)=>n+r.men,0),target=Math.max(0,Math.round(Number(o)||0));
-          if(!tot)return;let acc=0;
-          list.forEach((r,i)=>{r.men=(i===list.length-1)?(target-acc):Math.round(target*r.men/tot);acc+=r.men;});});}
+          if(!list.length){
+            teams.forEach(t=>{const a=this._mpTeamArea(t,lv,c,'');if(!a)return;
+              here.push({lv,cat:c,name:t.name||'Team',color:t.color||'#3157d5',men:a,zones:0});});
+            list=here.filter(r=>r.cat===c);}
+          if(!list.length){here.push({lv,cat:c,name:'Unassigned',color:'#9aa3b2',men:target,zones:0});return;}
+          const tot=list.reduce((n,r)=>n+r.men,0);let acc=0;
+          list.forEach((r,i)=>{r.men=(i===list.length-1)?(target-acc)
+                                                       :(tot?Math.round(target*r.men/tot):Math.round(target/list.length));
+            acc+=r.men;});});}
       here.forEach(r=>out.push(r));});
     return out.filter(r=>r.men>0);
   }
