@@ -2,3 +2,9 @@
 # one-off report files (superseded by Construction Schedule)
 progress-lookahead.html
 EB-NB-MA_月度前瞻_P1数据.html
+docs/fix_zone_area_marine_L5_run_in_supabase.sql
+docs/fix_report_edit_and_zone_area_run_in_supabase.sql
+Claude outputs/mp-table.png
+Claude outputs/mp-idle.png
+Claude outputs/manpower-month.png
+Claude outputs/L5-alignment-check.png

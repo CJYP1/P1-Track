@@ -2559,7 +2559,9 @@ class Component extends DCLogic {
     const _z=((this.DATA.levels[lv]||{}).zones||[]).find(q=>(q.mk||q.lid)===zmk);
     const _ma=lv==='L1'&&(_z?((_z.cat||'NB')==='MA'):/^L1\|/i.test(String(zmk||'')));
     let d=null;
-    for(const aid of (_ma?['col','slab','slab_top']:['slab','slab_top'])){
+    /* L1 Marine has no slab of its own, so any activity it does record — columns first — places it
+       in time; everywhere else only the slab counts. */
+    for(const aid of (_ma?['col','ls','act_corewall','rc','pcbeam','mbeam','cbeam','slab','slab_top']:['slab','slab_top'])){
       const q=this._actDateOf(lv,zmk,aid);if(q&&(q.start||q.end)){d=q;break;}}
     if(!d)return null;
     /* Resource is counted on the START of the activity, never on its finish: a team belongs to the
@@ -2671,7 +2673,16 @@ class Component extends DCLogic {
           ${tot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr></tfoot></table>`
         :'<div style="padding:18px;color:var(--faint);font-size:12px">No team has zones with slab dates yet \u2014 import or set the dates first.</div>';
       const _un=this._mpUndated(),_nt=ov.querySelector('#__mpNote');
+      /* Say exactly which zones carry no dates — an empty row is otherwise impossible to explain. */
+      const _noDate=[];
+      (this.DATA.order||[]).forEach(lv2=>{
+        const zs2=((this.DATA.levels[lv2]||{}).zones||[]).slice();
+        const S2=(this.SUBZONES||{})[lv2];
+        if(S2)['C','P','ZC'].forEach(k2=>(S2[k2]||[]).forEach(e2=>zs2.push({mk:lv2+'|'+e2.label,label:e2.label,cat:'MA'})));
+        zs2.forEach(z2=>{if(!this._mpZoneMonths(lv2,z2.mk||z2.lid))_noDate.push(lv2+' '+(z2.label||z2.mk));});});
       if(_nt)_nt.innerHTML='Bold = typed by hand \u00b7 grey \u00b7 = no activity starts there that month, nothing to fill in.'
+        +(_noDate.length?` <b style="color:var(--crit)">\u00b7 ${_noDate.length} zone${_noDate.length===1?'':'s'} carry no dates at all:</b> `
+          +this.esc(_noDate.slice(0,8).join(' ,  '))+(_noDate.length>8?' \u2026':''):'')
         +(_un.length?` <b style="color:var(--crit)">\u00b7 ${_un.length} planned zone${_un.length===1?'':'s'} have no slab dates, so they fall in no month:</b> `
           +this.esc(_un.slice(0,6).join(' ,  '))+(_un.length>6?' \u2026':''):'');
       ov.querySelectorAll('.mp-in').forEach(inp=>inp.onchange=()=>{
