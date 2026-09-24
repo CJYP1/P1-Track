@@ -2606,6 +2606,25 @@ class Component extends DCLogic {
     out.sort((a,b)=>M.indexOf(a)-M.indexOf(b));
     return out;
   }
+  /* How much ground a team is actually working on this level in a month.  This is what the
+     Manpower figure gets split by, so a team on one small zone does not take the same share as a
+     team on four big ones. */
+  _mpTeamArea(t,lv,cat,m){
+    const subArea=(lab)=>{const S=(this.SUBZONES||{}).L1||{};
+      for(const k of ['C','P','ZC']){const e=(S[k]||[]).find(x=>String(x.label)===lab);if(e)return Number(e.a)||0;}
+      return 0;};
+    let a=0;
+    (t.zones||[]).forEach(x=>{
+      if(x.lv!==lv)return;
+      const z=((this.DATA.levels[lv]||{}).zones||[]).find(q=>(q.mk||q.lid)===x.zmk)
+        ||(/^L1\|/.test(String(x.zmk||''))?{cat:'MA',area:subArea(String(x.zmk).slice(3))}:null);
+      if(!z)return;
+      if(cat&&(z.cat||'NB')!==cat)return;
+      if(m){const ms=this._mpZoneMonths(lv,x.zmk);if(!ms||ms.indexOf(m)<0)return;}
+      a+=Math.max(1,Number(z.area)||0);
+    });
+    return a;
+  }
   _mpAuto(){
     const M=this._mpMonths(),out={},teams=this._resourceData().teams;
     /* Marine on L1 is planned on its sub-zones, whose keys are "L1|<label>" and which are not in
@@ -3549,16 +3568,25 @@ class Component extends DCLogic {
       const _ovMon=this._resExportOnly?this._resExportMonth
         :((this._mpMonths().indexOf(this.planMonth())>=0)?this.planMonth():'');
       if(_ovMon){
-        const byCat={};Object.keys(_resTeams).forEach(k2=>{const e2=_resTeams[k2];
-          const v2=this._resourceTeamValues(e2.t,this.curLevel),c2=this._resourceCoreValues(e2.t,this.curLevel);
-          const w2=(Number(v2.workers)||0)+(Number(c2.workers)||0);
-          (byCat[e2.cat||'NB']=byCat[e2.cat||'NB']||[]).push({k:k2,w:w2});});
+        const byCat={};Object.keys(_resTeams).forEach(k2=>{const e2=_resTeams[k2],c2=e2.cat||'NB';
+          const v2=this._resourceTeamValues(e2.t,this.curLevel),cv2=this._resourceCoreValues(e2.t,this.curLevel);
+          (byCat[c2]=byCat[c2]||[]).push({k:k2,
+            w:this._mpTeamArea(e2.t,this.curLevel,c2,_ovMon),
+            wk:(Number(v2.workers)||0)+(Number(cv2.workers)||0)});});
         const ovs=this._mpOv();
         Object.keys(byCat).forEach(c3=>{const list=byCat[c3],key=this._mpKey(c3,this.curLevel,_ovMon);
           const o3=ovs[key];if(o3==null)return;
-          const tot=list.reduce((n2,x)=>n2+x.w,0),target=Math.max(0,Math.round(Number(o3)||0));
-          if(!tot){if(list.length)_ovAdj[list[0].k]=target;return;}
-          let acc=0;list.forEach((x,i)=>{const v3=(i===list.length-1)?(target-acc):Math.round(target*x.w/tot);
+          const target=Math.max(0,Math.round(Number(o3)||0));
+          /* Split by the ground each team actually works this month.  A team with no work this
+             month gets nothing; if none of them can be dated, fall back to the headcounts and then
+             to an even split, so the table figure still lands on the map instead of vanishing. */
+          let use=list.filter(x=>x.w>0);
+          if(!use.length)use=list.filter(x=>x.wk>0).map(x=>({k:x.k,w:x.wk}));
+          if(!use.length)use=list.map(x=>({k:x.k,w:1}));
+          list.forEach(x=>{_ovAdj[x.k]=0;});
+          const tot=use.reduce((n2,x)=>n2+x.w,0);
+          /* The last share absorbs the rounding, so the printed numbers add up to exactly the table. */
+          let acc=0;use.forEach((x,i)=>{const v3=(i===use.length-1)?(target-acc):Math.round(target*x.w/tot);
             acc+=v3;_ovAdj[x.k]=Math.max(0,v3);});});}
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k],ps=e.pts||[];if(!ps.length)return;
         const cx0=ps.reduce((a,q)=>a+q.x,0)/ps.length,cy0=ps.reduce((a,q)=>a+q.y,0)/ps.length;
