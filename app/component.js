@@ -2875,8 +2875,10 @@ class Component extends DCLogic {
       this.showCoreWalls=false;this.showLifts=false;   /* core walls / lifts / stairs stay out of this picture */
       /* Keep the outlines that frame the picture: transfer slab, Podium CIS and the Podium /
          tower outline — outlines only, nothing filled. */
-      this.showOvl=_busy?{...this.showOvl,transfer:true,podcis:true,podium:true}
-                       :{podium:false,transfer:false,podcis:false};
+      /* The transfer slab, Podium CIS and Podium / tower outlines frame every floor, busy or not —
+         a level without them is hard to place at a glance.  They are outlines only, and an idle
+         level is greyed as a whole afterwards. */
+      this.showOvl={...this.showOvl,transfer:true,podcis:true,podium:true};
       this.showAccess=false;this.showDates=false;this.showDelay=false;   /* overlays off */
       this.showCrit=true;   /* critical path stays — it is the point of the picture */
       this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
@@ -3301,14 +3303,19 @@ class Component extends DCLogic {
       const _monthEntry=this._resourceMode&&this._resourceEntry(this.curLevel,z.mk||z.lid);
       const _monthWorking=!this.showMonthWorkOnly||this.colorMode!=='plan'||this._zoneWorksInMonth(this.curLevel,z,this.planMonth());
       const vis=this.zoneVisible(z)&&_monthWorking&&(!this._resourceMode||this._resourceEditing||!!_monthEntry);
-      /* Manpower export: only the zones actually worked in the chosen month are drawn, in their
-         team's colour — everything else is left out entirely, outline and name included. */
+      /* Manpower export: only the zones actually worked in the chosen month are coloured.  The rest
+         keep a thin outline, so the floor still reads as a plan of zones instead of one empty
+         silhouette — outline only, no fill, no name, no figure. */
       if(this._resExportOnly&&this._resourceMode){
-        if(!_monthEntry)return;
+        let _ghost=!_monthEntry;
         /* A slab already cast is finished work — it does not belong in a look-ahead picture. */
-        try{if((this._zoneCastInfo(this.curLevel,z)||{}).done)return;}catch(_e){}
-        if(this._resExportMonth){const _ms=this._mpZoneMonths(this.curLevel,z.mk||z.lid);
-          if(!_ms||_ms.indexOf(this._resExportMonth)<0)return;}}
+        if(!_ghost){try{if((this._zoneCastInfo(this.curLevel,z)||{}).done)_ghost=true;}catch(_e){}}
+        if(!_ghost&&this._resExportMonth){const _ms=this._mpZoneMonths(this.curLevel,z.mk||z.lid);
+          if(!_ms||_ms.indexOf(this._resExportMonth)<0)_ghost=true;}
+        if(_ghost){
+          const _gp=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
+          s+=`<polygon class="zone dim" points="${_gp}" fill="none" stroke="#c2cad7" stroke-width="240" stroke-opacity="0.95" pointer-events="none"/>`;
+          return;}}
       const pts=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
       const crit=vis&&this.showCrit&&z.crit?' critln':'';
       const _strictHidden=!vis&&((this._resourceMode&&!this._resourceEditing)||(this.colorMode==='plan'&&this.showMonthWorkOnly));
