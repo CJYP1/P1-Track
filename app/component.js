@@ -2549,6 +2549,42 @@ class Component extends DCLogic {
      extra has to be typed.  Any cell can still be overwritten by hand when reality differs. */
   /* Manpower planning starts at Nov'26 — anything earlier is history and reads as 0.  Change
      _mpFrom to move the start. */
+  /* The agreed RC manpower plan, loaded once so everyone starts from the same figures.  It is
+     written only if it has never been applied on this account; after that the table is yours. */
+  _seedManpower(){
+    if(this._appCfg&&this._appCfg.manpowerSeed1)return;
+    if(!this.rwsIsAdmin||!this.rwsIsAdmin())return;
+    const M=this._mpMonths();if(M.length<7)return;
+    const SEED=[
+      ["NB","B2",[120,120,120,120,100,100,100]],
+      ["NB","B1",[60,40,40,40,50,50,50]],
+      ["NB","B1M",[40,40,40,40,0,0,0]],
+      ["NB","L1",[null,null,0,0,0,0,0]],
+      ["NB","L2",[35,65,95,65,45,45,45]],
+      ["NB","L3",[80,79,79,109,135,168,168]],
+      ["NB","L4",[78,62,92,115,135,0,0]],
+      ["NB","L5",[0,49,49,86,113,215,215]],
+      ["EB","B2",[42,26,26,26,26,0,0]],
+      ["EB","B1",[42,40,41,51,51,33,0]],
+      ["EB","L1",[85,30,60,65,35,35,0]],
+      ["EB","L2",[84,60,77,42,82,62,65]],
+      ["EB","L3",[0,79,50,40,46,56,72]],
+      ["EB","L4",[0,42,46,68,65,62,82]],
+      ["EB","L5",[0,0,0,33,44,101,130]],
+      ["MA","L1",[173,110,80,50,40,0,0]],
+      ["MA","L2",[58,94,90,70,90,90,90]],
+      ["MA","L3",[0,56,40,100,90,90,90]],
+      ["MA","L4",[0,0,50,60,85,85,85]],
+      ["MA","L5",[0,0,30,40,60,100,100]]
+    ];
+    const o=this._mpOv();
+    SEED.forEach(([cat,lv,vals])=>vals.forEach((v,i)=>{if(v==null||!M[i])return;
+      o[this._mpKey(cat,lv,M[i])]=Math.max(0,Math.round(v));}));
+    this._appCfg.manpowerSeed1=true;
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function'){rwsSyncKV('settings','manpowerMonth',o,null,null);
+      rwsSyncKV('settings','manpowerSeed1',true,null,null);}
+  }
   _mpMonths(){const M=(this.ACT_MONTHS||[]).filter(m=>m!=="Before Apr'26");
     const i=M.indexOf(this._mpFrom||"Nov'26");return i>0?M.slice(i):M;}
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
@@ -2638,6 +2674,7 @@ class Component extends DCLogic {
   }
   openManpowerMonth(){
     if(!this.rwsCanResource()){this.rwsDeny('Resource permission is required.');return;}
+    try{this._seedManpower();}catch(e){console.error('manpower seed',e);}
     const old=document.getElementById('__mpMonth');if(old)old.remove();
     const admin=this.rwsIsAdmin();
     const ov=document.createElement('div');ov.id='__mpMonth';
@@ -2651,6 +2688,7 @@ class Component extends DCLogic {
       <div class="delay-admin-scroll" id="__mpBody"></div>
       <div class="delay-admin-foot"><span id="__mpNote">Bold = typed by hand. Blank cell = nobody planned there that month.</span>
         <div style="display:flex;gap:6px">
+          <button class="hbtn" id="__mpPaste" title="Paste the whole table from Excel">\ud83d\udccb Paste</button>
           <button class="hbtn" id="__mpDropOld" title="Delete the old whole-project figure each team carries, so only the per-level figures count">\ud83e\uddf9 Clear old team totals</button>
           <button class="hbtn" id="__mpReset">\u21ba Reset typed cells</button>
           <button class="hbtn primary" id="__mpPng">\u2b07 PNG</button></div></div></div>`;
@@ -2662,12 +2700,14 @@ class Component extends DCLogic {
       ov.querySelector('#__mpBody').innerHTML=rows.length?`<table><thead><tr><th>Area</th><th>Level</th>
         ${months.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
         ${rows.map(r=>`<tr data-cat="${r.cat}" data-lv="${r.lv}"><td>${this.esc(r.label)}</td><td><b>${this.esc(r.lv)}</b></td>
-          ${r.cells.map(c=>`<td style="text-align:right${c.work?'':';background:var(--panel2)'}" ${c.work?'':'title="No activity starts here this month \u2014 nothing to fill in"'}>${
-            !c.work&&!c.val
+          ${r.cells.map(c=>`<td style="text-align:right${c.work?'':';background:var(--panel2)'}" ${c.work?'':'title="Nothing starts here this month \u2014 you can still type a figure if men are on site"'}>${
+            !c.work&&!c.val&&!admin
               ? `<span style="color:var(--faint)">\u00b7</span>`
               : (admin
-                ?`<input class="mp-in" data-k="${this.esc(c.k)}" type="number" min="0" step="1" value="${c.val||''}" placeholder="${c.auto||0}"
-                     style="width:62px;padding:3px 5px;text-align:right;border:1px solid var(--line);border-radius:5px;background:var(--panel2);color:var(--txt);font-weight:${c.manual?800:400}">`
+                ?`<input class="mp-in" data-k="${this.esc(c.k)}" type="number" min="0" step="1" value="${c.val||''}" placeholder="${c.work?(c.auto||0):'\u00b7'}"
+                     style="width:62px;padding:3px 5px;text-align:right;border-radius:5px;font-weight:${c.manual?800:400};${
+                       c.work?'border:1px solid var(--line);background:var(--panel2);color:var(--txt)'
+                             :'border:1px dashed var(--line);background:transparent;color:var(--faint);opacity:.75'}">`
                 :`<span style="font-weight:${c.manual?800:400}">${c.val||'\u2014'}</span>`)}</td>`).join('')}</tr>`).join('')}
         </tbody><tfoot><tr><td colspan="2"><b>All zones combined</b></td>
           ${tot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr></tfoot></table>`
@@ -2680,7 +2720,7 @@ class Component extends DCLogic {
         const S2=(this.SUBZONES||{})[lv2];
         if(S2)['C','P','ZC'].forEach(k2=>(S2[k2]||[]).forEach(e2=>zs2.push({mk:lv2+'|'+e2.label,label:e2.label,cat:'MA'})));
         zs2.forEach(z2=>{if(!this._mpZoneMonths(lv2,z2.mk||z2.lid))_noDate.push(lv2+' '+(z2.label||z2.mk));});});
-      if(_nt)_nt.innerHTML='Bold = typed by hand \u00b7 grey \u00b7 = no activity starts there that month, nothing to fill in.'
+      if(_nt)_nt.innerHTML='Bold = typed by hand \u00b7 dashed box = nothing starts there that month (you can still type one in).'
         +(_noDate.length?` <b style="color:var(--crit)">\u00b7 ${_noDate.length} zone${_noDate.length===1?'':'s'} carry no dates at all:</b> `
           +this.esc(_noDate.slice(0,8).join(' ,  '))+(_noDate.length>8?' \u2026':''):'')
         +(_un.length?` <b style="color:var(--crit)">\u00b7 ${_un.length} planned zone${_un.length===1?'':'s'} have no slab dates, so they fall in no month:</b> `
@@ -2702,6 +2742,31 @@ class Component extends DCLogic {
       if(!window.confirm('Delete the old whole-project figure on '+ts.length+' team'+(ts.length===1?'':'s')+'?\nOnly the per-level figures will count after this. Zone figures and the plan itself are untouched.'))return;
       ts.forEach(t=>{delete t.resources;});this._resourceSave();this.buildMetrics();this.render();draw();
       this._toast&&this._toast('Cleared '+ts.length+' old team total'+(ts.length===1?'':'s')+' \u2713');};
+    /* Paste the whole grid straight out of Excel: Area, Level, then one figure per month in the
+       order of the columns.  "\u2014" or a blank leaves that cell alone. */
+    ov.querySelector('#__mpPaste').onclick=()=>{if(!admin)return;
+      const M=this._mpMonths();
+      const txt=window.prompt('Paste rows from Excel \u2014 Area, Level, then '+M.length+' figures ('+M[0]+' \u2026 '+M[M.length-1]+')','');
+      if(txt==null)return;
+      const A={'new basement':'NB','existing basement':'EB','marine':'MA','nb':'NB','eb':'EB','ma':'MA','mr':'MA'};
+      const o2=this._mpOv();let n=0,bad=[];
+      String(txt).split(/\r?\n/).forEach(line=>{
+        if(!line.trim())return;
+        const cells=line.split(/\t|\s{2,}|\s*,\s*/).map(c=>c.trim()).filter(c=>c!=='');
+        if(cells.length<3)return;
+        if(/^all\s/i.test(cells[0]))return;                       /* the totals row */
+        const cat=A[String(cells[0]).toLowerCase()];
+        const lv=String(cells[1]).toUpperCase();
+        if(!cat||(this.DATA.order||[]).indexOf(lv)<0){bad.push(cells[0]+' '+cells[1]);return;}
+        const nums=cells.slice(2);
+        M.forEach((m,i)=>{const raw=String(nums[i]==null?'':nums[i]).replace(/[, ]/g,'');
+          if(raw===''||/^[\u2014\u2013-]$/.test(raw))return;      /* dash = leave as it is */
+          const v=Number(raw);if(!Number.isFinite(v))return;
+          o2[this._mpKey(cat,lv,m)]=Math.max(0,Math.round(v));n++;});});
+      try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+      if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerMonth',o2,null,null);
+      draw();
+      this._toast&&this._toast('Pasted '+n+' figure'+(n===1?'':'s')+(bad.length?' \u00b7 skipped: '+bad.slice(0,3).join(', '):'')+' \u2713');};
     ov.querySelector('#__mpMon').onchange=draw;
     ov.querySelector('#__mpPng').onclick=()=>this.exportManpowerMonthPng(pick());
     draw();
