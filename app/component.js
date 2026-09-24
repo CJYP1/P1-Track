@@ -2199,6 +2199,29 @@ class Component extends DCLogic {
   /* A picture of the map as it is on screen, for pasting on top of an exported table.  The SVG
      leans on the stylesheet for most of its colours, so the computed style of every node is
      written onto the clone — otherwise the snapshot comes out unstyled. */
+  /* Drop the white margin around a snapshot: the map's viewBox is usually much larger than the
+     drawing inside it, which left half the exported picture empty. */
+  _trimCanvas(cv,pad){
+    try{
+      const x=cv.getContext('2d'),w=cv.width,h=cv.height,d=x.getImageData(0,0,w,h).data;
+      const white=(i)=>d[i]>247&&d[i+1]>247&&d[i+2]>247;
+      let top=-1,bot=-1,left=-1,right=-1,STEP=2;
+      for(let y=0;y<h&&top<0;y+=STEP)for(let X=0;X<w;X+=STEP){if(!white((y*w+X)*4)){top=y;break;}}
+      if(top<0)return cv;
+      for(let y=h-1;y>=0&&bot<0;y-=STEP)for(let X=0;X<w;X+=STEP){if(!white((y*w+X)*4)){bot=y;break;}}
+      for(let X=0;X<w&&left<0;X+=STEP)for(let y=top;y<=bot;y+=STEP){if(!white((y*w+X)*4)){left=X;break;}}
+      for(let X=w-1;X>=0&&right<0;X-=STEP)for(let y=top;y<=bot;y+=STEP){if(!white((y*w+X)*4)){right=X;break;}}
+      const P=pad==null?10:pad;
+      const x0=Math.max(0,left-P),y0=Math.max(0,top-P),
+            x1=Math.min(w,right+P+1),y1=Math.min(h,bot+P+1);
+      const nw=x1-x0,nh=y1-y0;
+      if(nw<10||nh<10||(nw===w&&nh===h))return cv;
+      const out=document.createElement('canvas');out.width=nw;out.height=nh;
+      const o=out.getContext('2d');o.fillStyle='#fff';o.fillRect(0,0,nw,nh);
+      o.drawImage(cv,x0,y0,nw,nh,0,0,nw,nh);
+      return out;
+    }catch(e){return cv;}
+  }
   _svgSnapshot(maxW){
     return new Promise((resolve)=>{
       try{
@@ -2226,7 +2249,7 @@ class Component extends DCLogic {
         img.onload=()=>{const sc=Math.min(1,(maxW||1100)/w);
           const cv=document.createElement('canvas');cv.width=Math.round(w*sc);cv.height=Math.round(h*sc);
           const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cv.width,cv.height);
-          x.drawImage(img,0,0,cv.width,cv.height);resolve(cv);};
+          x.drawImage(img,0,0,cv.width,cv.height);resolve(this._trimCanvas(cv));};
         img.onerror=()=>resolve(null);
         img.src=url;
       }catch(e){resolve(null);}
@@ -2586,14 +2609,31 @@ class Component extends DCLogic {
     const {rows,months}=this._mpRows(only);
     if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
     const W=Math.max(820,300+months.length*96),PAD=22,H0=86,RH=30,ACC='#1f3557';
-    /* With one month picked, the map is shown as that month as well, so the picture matches the
-       column beside it.  The view is put back exactly as it was afterwards. */
-    let _keep=null;
-    if(only){_keep={cm:this.colorMode,pm:this._planMonth,only:this.showMonthWorkOnly};
-      this.colorMode='plan';this._planMonth=only;this.showMonthWorkOnly=true;this.render();}
-    const snap=await this._svgSnapshot(W-PAD*2);
-    if(_keep){this.colorMode=_keep.cm;this._planMonth=_keep.pm;this.showMonthWorkOnly=_keep.only;this.render();}
-    const mapH=snap?Math.round(snap.height*(W-PAD*2)/snap.width)+34:0;
+    /* One map per level that has men in this month, top floor first, each drawn in Resource mode
+       so every team's headcount is on it.  The whole view is put back exactly as it was. */
+    const lvOrder=(this.DATA.order||[]).slice().reverse();
+    const lvWanted=lvOrder.filter(lv=>rows.some(r=>r.lv===lv&&r.cells.some(c=>c.val>0)));
+    const keep={lv:this.curLevel,cm:this.colorMode,pm:this._planMonth,mw:this.showMonthWorkOnly,
+                rm:this._resourceMode,re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb}};
+    const shots=[];
+    const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
+    for(const lv of lvWanted){
+      this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
+      if(only){this._planMonth=only;}
+      try{this.vb={...this.base};}catch(e){}
+      this.render();
+      const cvv=await this._svgSnapshot(mapW*2);
+      if(cvv){const men=rows.filter(r=>r.lv===lv).map(r=>r.cat+' '+(r.cells.find(c=>!only||c.m===only)||{}).val)
+        .filter(t=>!/ (0|undefined)$/.test(t)).join(' \u00b7 ');
+        shots.push({lv,cv:cvv,men});}}
+    this.curLevel=keep.lv;this.colorMode=keep.cm;this._planMonth=keep.pm;this.showMonthWorkOnly=keep.mw;
+    this._resourceMode=keep.rm;this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;
+    this.render();try{this._renderResourcePanel&&this._resourceMode&&this._renderResourcePanel();}catch(e){}
+    /* Trimming leaves every level a different shape, so each row is as tall as its tallest map. */
+    shots.forEach(sh=>{sh.h=Math.round(sh.cv.height*mapW/sh.cv.width);});
+    const rowH=[];shots.forEach((sh,i)=>{const r=Math.floor(i/COLS);rowH[r]=Math.max(rowH[r]||0,sh.h);});
+    const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+34;});
+    const mapH=shots.length?(_acc+16):0;
     const cv=document.createElement('canvas'),x=cv.getContext('2d');
     const H=H0+34+rows.length*RH+40+46+mapH;
     cv.width=W;cv.height=H;
@@ -2624,10 +2664,14 @@ class Component extends DCLogic {
     x.textAlign='left';y+=34;
     x.fillStyle='#8a92a2';x.font='10px Arial';
     x.fillText('Red = typed by hand, overriding the calculated figure.',PAD,y+18);
-    if(snap){y+=34;
-      x.fillStyle='#202938';x.font='700 13px Arial';
-      x.fillText(this.curLevel+' \u00b7 '+((this.DATA.levels[this.curLevel]||{}).title||'')+(only?'  \u00b7  '+only:''),PAD,y);
-      y+=10;x.drawImage(snap,PAD,y,W-PAD*2,mapH-34);}
+    if(shots.length){y+=26;
+      shots.forEach((sh,i)=>{const col=i%COLS,row=Math.floor(i/COLS);
+        const sx=PAD+col*(mapW+GAP),sy=y+rowY[row];
+        x.fillStyle='#202938';x.font='700 12.5px Arial';
+        x.fillText(sh.lv+' \u00b7 '+((this.DATA.levels[sh.lv]||{}).title||''),sx,sy+12);
+        if(sh.men){x.fillStyle='#8a92a2';x.font='11px Arial';
+          x.fillText(sh.men,sx+x.measureText(sh.lv+' \u00b7 '+((this.DATA.levels[sh.lv]||{}).title||'')).width+14,sy+12);}
+        x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);});}
     const name=('P1_manpower'+(only?'_'+only.replace(/[^a-z0-9]/gi,''):'-by-month')+'_'+new Date().toISOString().slice(0,10)+'.png');
     this._showPngPreview(cv.toDataURL('image/png'),name,rows.length);
   }
