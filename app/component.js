@@ -2529,7 +2529,10 @@ class Component extends DCLogic {
   }
   _mpAuto(){
     const M=this._mpMonths(),out={},teams=this._resourceData().teams;
-    const zoneOf=(lv,zmk)=>((this.DATA.levels[lv]||{}).zones||[]).find(z=>(z.mk||z.lid)===zmk);
+    /* Marine on L1 is planned on its sub-zones, whose keys are "L1|<label>" and which are not in
+       DATA.levels.L1.zones — they still have to count towards Marine. */
+    const zoneOf=(lv,zmk)=>((this.DATA.levels[lv]||{}).zones||[]).find(z=>(z.mk||z.lid)===zmk)
+      ||(/^L1\|/.test(String(zmk||''))?{cat:'MA',label:String(zmk).slice(3)}:null);
     teams.forEach(t=>{
       const byLv={};(t.zones||[]).forEach(x=>{(byLv[x.lv]=byLv[x.lv]||[]).push(x);});
       Object.keys(byLv).forEach(lv=>{
@@ -2614,11 +2617,14 @@ class Component extends DCLogic {
     const lvOrder=(this.DATA.order||[]).slice().reverse();
     const lvWanted=lvOrder.filter(lv=>rows.some(r=>r.lv===lv&&r.cells.some(c=>c.val>0)));
     const keep={lv:this.curLevel,cm:this.colorMode,pm:this._planMonth,mw:this.showMonthWorkOnly,
-                rm:this._resourceMode,re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb}};
+                rm:this._resourceMode,re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb},
+                cols:this.showColumns,zc:this.showSubZC,sc:this.showSubC,sp:this.showSubP};
     const shots=[];
     const COLS=lvWanted.length>1?2:1,GAP=14,mapW=Math.floor((W-PAD*2-GAP*(COLS-1))/COLS);
     for(const lv of lvWanted){
       this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
+      this._resExportOnly=true;this.showColumns=false;
+      this.showSubZC=true;this.showSubC=true;this.showSubP=true;   /* L1 Marine lives in the sub-zones */
       if(only){this._planMonth=only;}
       try{this.vb={...this.base};}catch(e){}
       this.render();
@@ -2628,6 +2634,8 @@ class Component extends DCLogic {
         shots.push({lv,cv:cvv,men});}}
     this.curLevel=keep.lv;this.colorMode=keep.cm;this._planMonth=keep.pm;this.showMonthWorkOnly=keep.mw;
     this._resourceMode=keep.rm;this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;
+    this.showColumns=keep.cols;this.showSubZC=keep.zc;this.showSubC=keep.sc;this.showSubP=keep.sp;
+    this._resExportOnly=false;
     this.render();try{this._renderResourcePanel&&this._resourceMode&&this._renderResourcePanel();}catch(e){}
     /* Trimming leaves every level a different shape, so each row is as tall as its tallest map. */
     shots.forEach(sh=>{sh.h=Math.round(sh.cv.height*mapW/sh.cv.width);});
@@ -3011,6 +3019,9 @@ class Component extends DCLogic {
       const _monthEntry=this._resourceMode&&this._resourceEntry(this.curLevel,z.mk||z.lid);
       const _monthWorking=!this.showMonthWorkOnly||this.colorMode!=='plan'||this._zoneWorksInMonth(this.curLevel,z,this.planMonth());
       const vis=this.zoneVisible(z)&&_monthWorking&&(!this._resourceMode||this._resourceEditing||!!_monthEntry);
+      /* Manpower export: a zone with nobody on it is left out altogether — no outline, no name —
+         so the picture is only the coloured team areas. */
+      if(this._resExportOnly&&this._resourceMode&&!_monthEntry)return;
       const pts=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
       const crit=vis&&this.showCrit&&z.crit?' critln':'';
       const _strictHidden=!vis&&((this._resourceMode&&!this._resourceEditing)||(this.colorMode==='plan'&&this.showMonthWorkOnly));
