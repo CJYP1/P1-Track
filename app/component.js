@@ -3388,7 +3388,7 @@ class Component extends DCLogic {
   savePlacedCols(){this._savePlacedColsRaw();
     /* The Zone column lists are rebuilt from COLUMNS + placed columns, so they have to be
        refreshed whenever a placed column is added, renamed or removed. */
-    try{this._colIdxCacheLv=null;this._colIdxCache=null;this._reconcileZoneCols();}catch(e){}}
+    try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();}catch(e){}}
   togglePlaceCol(){if(!this.rwsIsAdmin())return;this._placingCol=!this._placingCol;if(this._placingCol){this._drawingCore=false;this._hidingCol=false;}if(this.svg)this.svg.style.cursor=this._placingCol?'crosshair':'';this.refreshSubzPanel();}
   /* ---- 在图上画 Core Wall(多点围一块多边形, admin) —— 存 settings, 云端同步 ---- */
   toggleDrawCore(){if(!this.rwsIsAdmin())return;this._drawingCore=!this._drawingCore;this._coreBuf=[];if(this._drawingCore){this._placingCol=false;this._hidingCol=false;this._drawingLift=false;}if(this.svg)this.svg.style.cursor=this._drawingCore?'crosshair':'';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
@@ -4432,6 +4432,17 @@ class Component extends DCLogic {
       });
       (cell.x||[]).forEach(al=>{ cell.a.forEach(a=>{ out.push({term:al, lv:k, mk:a.mk, label:a.n, area:r.area, alias:al}); }); });
     }); });
+    /* Elements are searchable too: a beam, column, pile cap, stair, lift or core mark finds the
+       Zone that holds it, on every level it appears on — the cross-reference table only covers
+       zone names, and only down to L2. */
+    (this.DATA&&this.DATA.order||[]).forEach(lv=>{
+      ((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{
+        const mk=z.mk||('_'+z.lid),AREA={EB:'Existing Basement',NB:'New Basement',MA:'Marine'}[z.cat||'NB']||z.cat;
+        [['cols','Column'],['piles','Pile cap'],['beams','Beam'],['lifts','Lift'],['stairs','Stair'],['cores','Core wall']]
+          .forEach(([k,what])=>{(z[k]||[]).forEach(it=>{
+            const id=(typeof it==='string')?it:(it&&(it.id||it.n));if(!id)return;
+            out.push({term:String(id),lv,mk,label:z.label||mk,area:AREA,alias:what+' '+id,elem:true});});});
+      });});
     this._zxIdx=out; return out; }
   _zxSearch(q){ q=(q||'').trim().toLowerCase(); if(!q)return []; const idx=this._zxIndex(); const seen={}; const hits=[];
     idx.forEach(e=>{ const t=(e.term||'').toLowerCase(); if(t.indexOf(q)<0)return; const key=e.lv+'||'+e.mk; if(seen[key])return; seen[key]=1;
