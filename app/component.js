@@ -2700,7 +2700,37 @@ class Component extends DCLogic {
     });
     return a;
   }
+  /* The monthly workload of every area and level: each zone counts as its own floor area divided
+     by the number of months its work runs for, so a zone being poured in one month weighs four
+     times a zone of the same size spread over four.  Work in the month, nothing else. */
+  _mpLoad(){
+    const out={};
+    (this.DATA.order||[]).forEach(lv=>{
+      const zs=((this.DATA.levels[lv]||{}).zones||[]).map(z=>({zmk:z.mk||z.lid,cat:z.cat||'NB',a:Number(z.area)||0}));
+      const S=(this.SUBZONES||{})[lv];
+      if(S)['C','P','ZC'].forEach(k=>(S[k]||[]).forEach(e=>zs.push({zmk:lv+'|'+e.label,cat:'MA',a:Number(e.a)||0})));
+      zs.forEach(z=>{
+        const ms=this._mpZoneMonths(lv,z.zmk);if(!ms||!ms.length)return;
+        const per=Math.max(1,z.a)/ms.length;
+        ms.forEach(m=>{const k=this._mpKey(z.cat,lv,m);out[k]=(out[k]||0)+per;});});});
+    return out;
+  }
+  /* Men per unit of that workload, calibrated on the figures already typed in: whatever rate the
+     plan is really being staffed at is the rate the untyped cells are filled at.  With nothing
+     typed yet there is nothing to calibrate on, and the teams' own headcounts stand in. */
+  _mpRate(){
+    const load=this._mpLoad(),ov=this._mpOv();let men=0,work=0;
+    Object.keys(ov).forEach(k=>{const v=Number(ov[k]);if(!Number.isFinite(v)||v<=0)return;
+      const w=load[k];if(!w)return;men+=v;work+=w;});
+    return work>0?(men/work):0;
+  }
   _mpAuto(){
+    const load=this._mpLoad(),rate=this._mpRate(),out={};
+    if(rate>0){Object.keys(load).forEach(k=>{const v=Math.round(load[k]*rate);if(v>0)out[k]=v;});
+      return out;}
+    return this._mpAutoByTeam();
+  }
+  _mpAutoByTeam(){
     const M=this._mpMonths(),out={},teams=this._resourceData().teams;
     /* Marine on L1 is planned on its sub-zones, whose keys are "L1|<label>" and which are not in
        DATA.levels.L1.zones — they still have to count towards Marine, with their own area. */
