@@ -1247,7 +1247,10 @@ class Component extends DCLogic {
   setElemDate(key,iso){this._elemDate=this._elemDate||{};if(iso)this._elemDate[key]=iso;else delete this._elemDate[key];this.saveElemDate();const _p=key.split('||');rwsSyncKV('elem_date',key,(iso||null),_p[0],_p[1]);}
   todayISOStr(){return new Date().toISOString().slice(0,10);}
   /* Map a YYYY-MM-DD completion date to one of the activity month buckets */
-  dateToActMonth(iso){const M=this.ACT_MONTHS;if(!iso)return M[M.length-1];const y=+iso.slice(0,4),mo=+iso.slice(5,7);const val=y*12+mo;const aprVal=2026*12+4;if(val<aprVal)return "Before Apr'26";const nm=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];if(y===2026&&mo>=4&&mo<=12)return nm[mo]+"'26";return M[M.length-1];}
+  dateToActMonth(iso){const M=this.ACT_MONTHS;if(!iso)return M[M.length-1];const y=+iso.slice(0,4),mo=+iso.slice(5,7);const val=y*12+mo;const aprVal=2026*12+4;if(val<aprVal)return "Before Apr'26";const nm=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const lab=nm[mo]+"'"+String(y).slice(2);
+    /* Any month the Activity list actually carries maps to itself; only dates past the end of
+       the list fall into the last bucket.  2027 used to be swallowed whole by that fallback. */
+    return M.indexOf(lab)>=0?lab:M[M.length-1];}
   /* Columns completed in a given month bucket for a zone (drives the Columns activity) */
   /* Activities whose monthly Done is derived from an element checklist (in sync with the list below) */
   _elemAct(id){return {col:{types:['col'],sec:'col',label:'columns'},pile:{types:['pile'],sec:'pile',label:'pile caps'},mbeam:{types:['beam'],sec:'beam',label:'steel main beams'},cbeam:{types:['cbeam'],sec:'cbeam',label:'cast s main beams'},ls:{types:['core','lift','stair'],sec:'lift',label:'core/lift/stair items'},act_corewall:{types:['core'],sec:'core',label:'core walls'}}[id]||null;}
@@ -1347,7 +1350,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
@@ -2086,6 +2089,13 @@ class Component extends DCLogic {
     /* Core/Lift/Stair is reported by core wall wherever a core exists.  Members
        can sit in a different Zone from their core, so this must be resolved over
        the whole selected report scope rather than one Zone at a time. */
+    /* This row counts core walls and staircases.  Lift walls (LW…) and standalone lifts are
+       excluded, and a core counts once however many walls it is drawn with.
+       Set _lsCoresOnly=false to count every element again. */
+    if(aid==='ls'&&this._lsCoresOnly!==false){
+      const _lw=id=>/^LW/i.test(String(id||'').trim())||/^LW/i.test((this._cwGroupKeys(id)[0]||''));
+      const _k=refs.filter(x=>(x.r.type==='core'&&!_lw(x.r.id))||x.r.type==='stair');
+      if(_k.length){refs.length=0;_k.forEach(x=>refs.push(x));}}
     const coreGroups=new Set();if(aid==='ls')refs.forEach(x=>{if(x.r.type!=='core')return;this._cwGroupKeys(x.r.id).forEach(k=>coreGroups.add(k));});
     refs.forEach(x=>{const lv=x.lv,zmk=x.zmk,r=x.r;if(aid==='ls'&&r.type!=='core'){const groups=this._cwGroupKeys(r.id);if(groups.some(k=>coreGroups.has(k)))return;}
       /* Report quantities count physical elements, not storage rows.  A legacy
@@ -2135,7 +2145,8 @@ class Component extends DCLogic {
     EB:{label:'EB Report', title:'Existing Basement Superstructure', scope:'Existing Basement · working levels with live Activity data',levels:['B2','B1','B1M','L1','L2','L3','L4','L5']},
     MA:{label:'MA Report', title:'Marine Superstructure', scope:'Marine · working levels with live Activity data',levels:['B2','B1','B1M','L1','L2','L3','L4','L5']} }; }
   _reportEditKey(cat,r){return [cat,(r.levels&&r.levels[0])||'',r.aid||'',r.filter||''].join('||');}
-  _reportEditedValues(cat,r,A,P,liveTotal){const key=this._reportEditKey(cat,r),cfg=this._appCfg||{},all={...(cfg.reportOverrides||{}),...(cfg['reportOverrides:'+cat]||{})},rawHas=Object.prototype.hasOwnProperty.call(all,key),o=all[key]||{},round=v=>Math.max(0,Math.round(Number(v)||0)),clean=v=>Math.max(0,Number(v)||0),same=(a,b)=>Math.abs(clean(a)-clean(b))<0.0001,baseKnown=['basePlanned','baseDone','baseTotal'].every(k=>Number.isFinite(Number(o[k]))),baseSame=baseKnown&&same(o.basePlanned,P.planned)&&same(o.baseDone,A.done)&&same(o.baseTotal,liveTotal),has=rawHas&&baseSame,num=(v,d)=>Number.isFinite(Number(v))?round(v):round(d),total=has?num(o.total,liveTotal):round(liveTotal),done=Math.min(total,has?num(o.done,A.done):clean(A.done)),planned=Math.min(total,has?num(o.planned,P.planned):clean(P.planned));return {key,has,stale:rawHas&&!has,A:{...A,done,total,pct:this._reportPct(done,total)},P:{...P,planned,total}};}
+  _reportEditedValues(cat,r,A,P,liveTotal){const key=this._reportEditKey(cat,r),cfg=this._appCfg||{},all={...(cfg.reportOverrides||{}),...(cfg['reportOverrides:'+cat]||{})},rawHas=Object.prototype.hasOwnProperty.call(all,key),o=all[key]||{},round=v=>Math.max(0,Math.round(Number(v)||0)),clean=v=>Math.max(0,Number(v)||0),same=(a,b)=>Math.abs(clean(a)-clean(b))<0.0001,baseKnown=['basePlanned','baseDone','baseTotal'].every(k=>Number.isFinite(Number(o[k]))),baseSame=baseKnown&&same(o.basePlanned,P.planned)&&same(o.baseDone,A.done)&&same(o.baseTotal,liveTotal),/* A typed figure stays typed.  It used to be dropped as soon as the underlying numbers moved,
+   which made a correction vanish silently; now it is kept and only flagged as stale. */has=rawHas,stale=rawHas&&baseKnown&&!baseSame,num=(v,d)=>Number.isFinite(Number(v))?round(v):round(d),total=has?num(o.total,liveTotal):round(liveTotal),done=Math.min(total,has?num(o.done,A.done):clean(A.done)),planned=Math.min(total,has?num(o.planned,P.planned):clean(P.planned));return {key,has,stale,A:{...A,done,total,pct:this._reportPct(done,total)},P:{...P,planned,total}};}
   _reportCats(){ const u=this._rwsUser; if(!u)return []; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; const who=String(u.username||u.display_name||'').trim().toUpperCase(); if(u.role==='admin'||a.indexOf('RWS')>=0||who==='RWS')return ['NB','EB','MA']; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
   rwsCanEditReport(cat){const u=this._rwsUser;if(!u)return false;if(u.role==='admin')return true;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[];return a.indexOf('REPEDIT')>=0&&a.indexOf(cat)>=0;}
   _reportCmtCtx(cat,r){const lv=(r.levels&&r.levels[0])||'',base=(((this.DATA.levels[lv]||{}).zones)||[]).filter(z=>(z.cat||'NB')===cat),z=base.find(x=>this._reportAidApplies(lv,x,r.aid))||base[0],zmk=z?(z.mk||z.lid):'',aid='__report_'+cat+'_'+lv+'_'+r.aid+(r.filter?'_'+r.filter:'');return {cat,lv,zmk,aid,label:r.a,reportAid:r.aid,key:lv+'||'+zmk+'||'+aid};}
@@ -2373,6 +2384,126 @@ class Component extends DCLogic {
        blockers, mobile).  So the image is always shown as well: the picture on screen can
        be saved by hand even when the automatic download never fires. */
     this._showPngPreview(cv.toDataURL('image/png'),name,rows.length);
+  }
+  /* Paste a programme extract (zone, area, start, finish) and have it written straight into the
+     Activity dates and the monthly Plan, instead of typing every zone by hand. */
+  _impDate(v){
+    v=String(v==null?'':v).trim();if(!v)return '';
+    let m=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(m)return m[1]+'-'+String(+m[2]).padStart(2,'0')+'-'+String(+m[3]).padStart(2,'0');
+    const MN={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    m=v.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3,})[-\/ ](\d{2,4})$/);          /* 11-Jan-27 */
+    if(m){const mo=MN[m[2].slice(0,3).toLowerCase()];if(!mo)return '';
+      let y=+m[3];if(y<100)y+=2000;return y+'-'+String(mo).padStart(2,'0')+'-'+String(+m[1]).padStart(2,'0');}
+    m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);                       /* 13/8/2026 = d/m/y */
+    if(m){let y=+m[3];if(y<100)y+=2000;return y+'-'+String(+m[2]).padStart(2,'0')+'-'+String(+m[1]).padStart(2,'0');}
+    return '';
+  }
+  _impZoneKey(v){return String(v==null?'':v).replace(/[^a-z0-9]/gi,'').toUpperCase();}
+  /* A P6 activity name carries the zone in its own shape:
+       CON|EB|SLB|T| Zone4.1 CIS [CIS]   ->  4.1CIST
+       CON|NB|SLB|NT| Zone 2.1 [NCIS]    ->  2.1
+     The 4th field is T / NT (top slab) and the trailing tag is CIS / NCIS. */
+  _impP6Label(txt){
+    const v=String(txt==null?'':txt);
+    if(v.indexOf('|')<0)return '';
+    const f=v.split('|').map(x=>x.trim());
+    const num=(v.match(/zone\s*([0-9]+(?:\.[0-9]+)*[A-Za-z]?)/i)||[])[1];
+    if(!num)return '';
+    const top=/^T$/i.test(f[3]||''), cis=/\[\s*CIS\s*\]/i.test(v)||/\bCIS\b(?!\s*\])/i.test(v.replace(/\[NCIS\]/ig,''));
+    return num+(cis?'CIS':'')+(top?'T':'');
+  }
+  /* Split a quantity across the months a task spans, in proportion to the days it works in each.
+     Rounding is absorbed by the last month so the months always add back up to the total. */
+  _impMonthSplit(total,startISO,endISO,workdaysOnly){
+    const out={};if(!startISO||!endISO)return out;
+    const d0=new Date(startISO+'T00:00:00'),d1=new Date(endISO+'T00:00:00');
+    if(isNaN(d0)||isNaN(d1)||d1<d0)return out;
+    const days={};let n=0;
+    for(let d=new Date(d0);d<=d1;d.setDate(d.getDate()+1)){
+      if(workdaysOnly){const w=d.getDay();if(w===0||w===6)continue;}
+      const iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const m=this.dateToActMonth(iso);days[m]=(days[m]||0)+1;n++;}
+    if(!n)return out;
+    const ks=Object.keys(days);let acc=0;
+    ks.forEach((m,i)=>{const v=(i===ks.length-1)?(total-acc):Math.round(total*days[m]/n);out[m]=v;acc+=v;});
+    return out;
+  }
+  openScheduleImport(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can import a schedule.');return;}
+    const old=document.getElementById('__schImp');if(old)old.remove();
+    const lvs=(this.DATA.order||[]).filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
+    const acts=[['slab','Slab'],['slab_top','Slab (top)'],['col','Columns'],['ls','Lift / Stair / Core'],['beam','Beams'],['pile','Pile caps']];
+    const ov=document.createElement('div');ov.id='__schImp';
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483500;background:rgba(15,20,30,.5);display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML=`<div class="delay-admin-box">
+      <div class="delay-admin-head"><div><b>Import schedule</b><span>Paste rows from Excel: zone, area, start, finish \u00b7 dates and monthly Plan are written together</span></div>
+        <button class="hbtn" id="__siClose">Close \u00d7</button></div>
+      <div class="delay-admin-tools"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:4px">Level <select id="__siLv">${lvs.map(l=>`<option${l===this.curLevel?' selected':''}>${l}</option>`).join('')}</select></label>
+        <label style="display:flex;align-items:center;gap:4px">Activity <select id="__siAct">${acts.map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></label>
+        <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="__siWd" checked>Spread over working days only</label>
+        <label style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="__siSplit" checked>Split merged rows by area</label>
+      </div><span id="__siCount"></span></div>
+      <div style="padding:10px 16px;border-bottom:1px solid var(--line)">
+        <textarea id="__siText" placeholder="B2-S7&#9;1030&#9;2/1/2027&#9;23/1/2027" style="width:100%;box-sizing:border-box;height:90px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--txt);font:12px/1.5 Consolas,monospace"></textarea></div>
+      <div class="delay-admin-scroll"><table><thead><tr><th>Row</th><th>Zone</th><th>Start</th><th>Finish</th><th>Qty</th><th>Monthly plan</th></tr></thead><tbody id="__siBody"></tbody></table></div>
+      <div class="delay-admin-foot"><span id="__siNote">Each zone's quantity is its own area in the app, so the months always add up to the Report total.</span>
+        <div style="display:flex;gap:6px"><button class="hbtn" id="__siCancel">Cancel</button>
+          <button class="hbtn primary" id="__siApply">Apply</button></div></div></div>`;
+    document.body.appendChild(ov);
+    let rows=[];
+    const parse=()=>{
+      const lv=ov.querySelector('#__siLv').value,zs=((this.DATA.levels[lv]||{}).zones||[]);
+      const byKey={};zs.forEach(z=>{const k=this._impZoneKey(z.label);(byKey[k]=byKey[k]||[]).push(z);});
+      /* B2-S3 in a programme can cover B2-S3-1 and B2-S3-2 in the app */
+      const prefix={};zs.forEach(z=>{const m=String(z.label).match(/^(.*?)-\d+$/);if(m){const k=this._impZoneKey(m[1]);(prefix[k]=prefix[k]||[]).push(z);}});
+      const wd=ov.querySelector('#__siWd').checked,doSplit=ov.querySelector('#__siSplit').checked;
+      rows=[];
+      ov.querySelector('#__siText').value.split(/\r?\n/).forEach((line,i)=>{
+        if(!line.trim())return;
+        const cells=line.split(/\t|\s*,\s*|\s{2,}/).map(c=>c.trim()).filter(c=>c!=='');
+        if(!cells.length)return;
+        const ds=[];cells.forEach(c=>{const d=this._impDate(c);if(d)ds.push(d);});
+        const name=cells[0],p6=this._impP6Label(line);
+        const key=this._impZoneKey(p6||name);
+        let zz=byKey[key]||(doSplit?prefix[key]:null)||null,note='';
+        /* A programme can name a plain zone that only exists as its T variant on this level
+           (and the other way round); fall back to the sibling rather than dropping the row. */
+        if(!zz&&p6){const alt=/T$/.test(key)?key.slice(0,-1):key+'T';
+          if(byKey[alt]){zz=byKey[alt];note=' (matched '+alt+')';}}
+        rows.push({i:i+1,raw:(p6?p6+note:name),zs:zz,start:ds[0]||'',end:ds[ds.length-1]||'',wd});});
+      const body=ov.querySelector('#__siBody');
+      let ok=0;
+      body.innerHTML=rows.map(r=>{
+        if(!r.zs||!r.zs.length)return `<tr><td>${r.i}</td><td colspan="5" style="color:var(--crit)">${this.esc(r.raw)} \u2014 no matching zone on this level</td></tr>`;
+        if(!r.start||!r.end)return `<tr><td>${r.i}</td><td colspan="5" style="color:var(--crit)">${this.esc(r.raw)} \u2014 could not read both dates</td></tr>`;
+        ok++;
+        return r.zs.map((z,j)=>{const q=Math.round(Number(z.area)||0),sp=this._impMonthSplit(q,r.start,r.end,r.wd);
+          return `<tr><td>${j?'':r.i}</td><td><b>${this.esc(z.label)}</b>${r.zs.length>1?` <span style="color:var(--faint)">\u2190 ${this.esc(r.raw)}</span>`:''}</td>
+            <td>${r.start}</td><td>${r.end}</td><td style="text-align:right">${q}</td>
+            <td>${Object.keys(sp).map(m=>`${this.esc(m)} <b>${sp[m]}</b>`).join(' \u00b7 ')}</td></tr>`;}).join('');
+      }).join('')||'<tr><td colspan="6" style="color:var(--faint);padding:14px">Paste rows above to see what will be written.</td></tr>';
+      ov.querySelector('#__siCount').textContent=ok+' of '+rows.length+' rows ready';
+      ov.querySelector('#__siApply').disabled=!ok;};
+    ov.querySelector('#__siText').addEventListener('input',parse);
+    ['#__siLv','#__siAct','#__siWd','#__siSplit'].forEach(x=>ov.querySelector(x).onchange=parse);
+    const close=()=>ov.remove();
+    ov.querySelector('#__siClose').onclick=close;ov.querySelector('#__siCancel').onclick=close;
+    ov.addEventListener('click',e=>{if(e.target===ov)close();});
+    ov.querySelector('#__siApply').onclick=()=>{
+      const lv=ov.querySelector('#__siLv').value,aid=ov.querySelector('#__siAct').value;
+      let nz=0;
+      rows.forEach(r=>{if(!r.zs||!r.zs.length||!r.start||!r.end)return;
+        r.zs.forEach(z=>{const zmk=z.mk||z.lid;
+          this.setActDate(lv,zmk,aid,'start',r.start);
+          this.setActDate(lv,zmk,aid,'end',r.end);
+          const q=Math.round(Number(z.area)||0),sp=this._impMonthSplit(q,r.start,r.end,r.wd);
+          (this.ACT_MONTHS||[]).forEach(m=>{if(sp[m]!=null)this.setActPlan(lv,zmk,aid,m,sp[m],z);});
+          nz++;});});
+      this.saveAct&&this.saveAct();this.buildMetrics();this.render();close();
+      this._toast&&this._toast('Imported '+nz+' zone'+(nz===1?'':'s')+' on '+lv+' \u2713');};
+    parse();
   }
   openDelayAdmin(){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit Delay days.');return;}const old=document.getElementById('__delayAdmin');if(old)old.remove();
     /* Delay days are a purely manual figure: whatever is typed here is what the map shows.
@@ -4557,6 +4688,7 @@ class Component extends DCLogic {
     {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>this._openCombinedReport(this._reportCat));}
     {const _d=this.root.querySelector('#toggleDelayTop');if(_d)_d.addEventListener('click',()=>this._toggleFocus('delay'));}
     {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
+    {const _si=this.root.querySelector('#openSchedImport');if(_si)_si.addEventListener('click',()=>this.openScheduleImport());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
     {const _hm=this.root.querySelector('#headerMore');if(_hm){_hm.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>setTimeout(()=>_hm.removeAttribute('open'),0)));document.addEventListener('click',e=>{if(_hm.open&&!e.target.closest('#headerMore'))_hm.removeAttribute('open');});}}
     const _zfi=this.root.querySelector('#zoneFind')||document.getElementById('zoneFind');const _zfr=document.getElementById('zoneFindRes');if(_zfi&&_zfr){const _run=()=>{const hits=this._zxSearch(_zfi.value);if(!hits.length){_zfr.style.display='none';return;}_zfr.innerHTML=hits.map((h,ix)=>`<div class="zfrow" data-ix="${ix}" style="padding:7px 9px;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px">`+`<span style="font-size:9px;font-weight:800;color:#fff;background:${({EB:'#e8590c',NB:'#c2255c',MA:'#1c7ed6'})[h.area]||'#888'};padding:1px 6px;border-radius:20px">${h.lv}</span>`+`<b style="color:var(--txt)">${this.esc(h.label)}</b>${h.via?`<span style="color:var(--dim);font-size:10px">← ${this.esc(h.via)}</span>`:''}</div>`).join('');_zfr.style.display='block';this._zfHits=hits;};_zfi.addEventListener('input',_run);_zfi.addEventListener('focus',_run);_zfi.addEventListener('keydown',e=>{if(e.key==='Enter'){const h=(this._zfHits||[])[0];if(h)this.gotoZone(h.lv,h.mk);}else if(e.key==='Escape'){_zfr.style.display='none';_zfi.blur();}});_zfr.addEventListener('click',e=>{const r=e.target.closest('.zfrow');if(!r)return;const h=(this._zfHits||[])[+r.dataset.ix];if(h)this.gotoZone(h.lv,h.mk);});_zfr.addEventListener('mouseover',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='var(--panel2)';});_zfr.addEventListener('mouseout',e=>{const r=e.target.closest('.zfrow');if(r)r.style.background='';});document.addEventListener('click',e=>{if(!e.target.closest('#zoneFindWrap'))_zfr.style.display='none';});}
