@@ -2661,6 +2661,26 @@ class Component extends DCLogic {
   }
   _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
+  /* How much work a team actually faces on a level in a month.  Floor space alone is the wrong
+     measure — 1000 m2 to be poured in one month needs far more men than the same 1000 m2 spread
+     over four — so each zone counts as its area divided by the months its activity runs. */
+  _mpTeamLoad(t,lv,cat,m){
+    const subArea=(lab)=>{const S=(this.SUBZONES||{}).L1||{};
+      for(const k of ['C','P','ZC']){const e=(S[k]||[]).find(x=>String(x.label)===lab);if(e)return Number(e.a)||0;}
+      return 0;};
+    let n=0;
+    (t.zones||[]).forEach(x=>{
+      if(x.lv!==lv)return;
+      const z=((this.DATA.levels[lv]||{}).zones||[]).find(q=>(q.mk||q.lid)===x.zmk)
+        ||(/^L1\|/.test(String(x.zmk||''))?{cat:'MA',area:subArea(String(x.zmk).slice(3))}:null);
+      if(!z)return;
+      if(cat&&(z.cat||'NB')!==cat)return;
+      const ms=this._mpZoneMonths(lv,x.zmk)||[];
+      if(m&&ms.indexOf(m)<0)return;
+      n+=Math.max(1,Number(z.area)||0)/Math.max(1,ms.length);
+    });
+    return n;
+  }
   /* How much ground a team is actually working on this level in a month.  This is what the
      Manpower figure gets split by, so a team on one small zone does not take the same share as a
      team on four big ones. */
@@ -3748,7 +3768,7 @@ class Component extends DCLogic {
         const byCat={};Object.keys(_resTeams).forEach(k2=>{const e2=_resTeams[k2],c2=e2.cat||'NB';
           const v2=this._resourceTeamValues(e2.t,this.curLevel),cv2=this._resourceCoreValues(e2.t,this.curLevel);
           (byCat[c2]=byCat[c2]||[]).push({k:k2,
-            w:this._mpTeamArea(e2.t,this.curLevel,c2,_ovMon),
+            w:this._mpTeamLoad(e2.t,this.curLevel,c2,_ovMon),
             wa:this._mpTeamArea(e2.t,this.curLevel,c2,''),
             wk:(Number(v2.workers)||0)+(Number(cv2.workers)||0)});});
         const ovs=this._mpOv();
