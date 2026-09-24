@@ -2977,19 +2977,24 @@ class Component extends DCLogic {
         let cat='NB';Object.keys(cnt).forEach(c=>{if(!cat||cnt[c]>(cnt[cat]||0))cat=c;});
         const w=Math.max(0,Math.round((Number(this._resourceTeamValues(t,lv).workers)||0)
                                      +(Number(this._resourceCoreValues(t,lv).workers)||0)));
-        if(!w)return;
-        here.push({lv,cat,name:t.name||'Team',color:t.color||'#3157d5',men:w,zones:act.length});});
+        if(!only&&!w)return;
+        /* For a single month the starting weight is the same workload the map splits by — same
+           weights, same rounding, so the legend and the picture can never disagree. */
+        here.push({lv,cat,name:t.name||'Team',color:t.color||'#3157d5',
+                   men:only?this._mpTeamLoad(t,lv,cat,only):w,_w:w,zones:act.length});});
       /* Zone figures first, then the area figure. */
       if(only)here.forEach(r=>{const t2=this._resourceData().teams.find(q=>(q.name||'Team')===r.name);
         if(!t2)return;const v=this._mzTeamMen(t2,lv,only);if(v!=null){r.men=v;r._mz=true;}});
       /* a typed figure wins: scale the teams of that area to it */
       if(only){const ovs=this._mpOv(),by={};
         here.forEach(r=>(by[r.cat]=by[r.cat]||[]).push(r));
-        Object.keys(by).forEach(c=>{const o=ovs[this._mpKey(c,lv,only)];if(o==null)return;
+        Object.keys(by).forEach(c=>{const o=ovs[this._mpKey(c,lv,only)];
           const list=by[c];
           if(list.some(r=>r._mz))return;   /* zone figures already said it */
+          if(o==null){list.forEach(r=>{r.men=Math.max(0,Math.round(r._w||0));});return;}
           const tot=list.reduce((n,r)=>n+r.men,0),target=Math.max(0,Math.round(Number(o)||0));
-          if(!tot)return;let acc=0;
+          if(!tot){list.forEach(r=>{r.men=0;});return;}
+          let acc=0;
           list.forEach((r,i)=>{r.men=(i===list.length-1)?(target-acc):Math.round(target*r.men/tot);acc+=r.men;});});}
       here.forEach(r=>out.push(r));});
     return out.filter(r=>r.men>0);
