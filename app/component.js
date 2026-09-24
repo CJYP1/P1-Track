@@ -2693,6 +2693,35 @@ class Component extends DCLogic {
     ov.querySelector('#__mpPng').onclick=()=>this.exportManpowerMonthPng(pick());
     draw();
   }
+  /* Who is where, team by team — the same figures the map prints, including a typed override. */
+  _mpTeamRows(only){
+    const out=[],zoneOf=(lv,zmk)=>((this.DATA.levels[lv]||{}).zones||[]).find(z=>(z.mk||z.lid)===zmk)
+      ||(/^L1\|/.test(String(zmk||''))?{cat:'MA'}:null);
+    (this.DATA.order||[]).slice().reverse().forEach(lv=>{
+      const here=[];
+      this._resourceData().teams.forEach(t=>{
+        const act=(t.zones||[]).filter(x=>x.lv===lv).filter(x=>{
+          const ms=this._mpZoneMonths(lv,x.zmk);return ms&&(!only||ms.indexOf(only)>=0);});
+        const cores=(t.cores||[]).filter(x=>x.lv===lv);
+        if(!act.length&&!cores.length)return;
+        if(only&&!act.length)return;
+        const cnt={};act.forEach(x=>{const z=zoneOf(lv,x.zmk);if(!z)return;
+          const c=z.cat||'NB';cnt[c]=(cnt[c]||0)+Math.max(1,Number(z.area)||0);});
+        let cat='NB';Object.keys(cnt).forEach(c=>{if(!cat||cnt[c]>(cnt[cat]||0))cat=c;});
+        const w=Math.max(0,Math.round((Number(this._resourceTeamValues(t,lv).workers)||0)
+                                     +(Number(this._resourceCoreValues(t,lv).workers)||0)));
+        if(!w)return;
+        here.push({lv,cat,name:t.name||'Team',color:t.color||'#3157d5',men:w,zones:act.length});});
+      /* a typed figure wins: scale the teams of that area to it */
+      if(only){const ovs=this._mpOv(),by={};
+        here.forEach(r=>(by[r.cat]=by[r.cat]||[]).push(r));
+        Object.keys(by).forEach(c=>{const o=ovs[this._mpKey(c,lv,only)];if(o==null)return;
+          const list=by[c],tot=list.reduce((n,r)=>n+r.men,0),target=Math.max(0,Math.round(Number(o)||0));
+          if(!tot)return;let acc=0;
+          list.forEach((r,i)=>{r.men=(i===list.length-1)?(target-acc):Math.round(target*r.men/tot);acc+=r.men;});});}
+      here.forEach(r=>out.push(r));});
+    return out.filter(r=>r.men>0);
+  }
   async exportManpowerMonthPng(only){
     const {rows,months}=this._mpRows(only);
     if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
@@ -2750,7 +2779,9 @@ class Component extends DCLogic {
     const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+34;});
     const mapH=shots.length?(_acc+16):0;
     const cv=document.createElement('canvas'),x=cv.getContext('2d');
-    const H=H0+34+rows.length*RH+40+46+mapH;
+    const team=this._mpTeamRows(only);
+    const teamH=team.length?(26+team.length*20+14):0;
+    const H=H0+34+rows.length*RH+40+46+teamH+mapH;
     cv.width=W;cv.height=H;
     x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
     x.fillStyle='#c8102e';x.fillRect(0,0,W,58);
@@ -2779,6 +2810,18 @@ class Component extends DCLogic {
     x.textAlign='left';y+=34;
     x.fillStyle='#8a92a2';x.font='10px Arial';
     x.fillText('Red = typed by hand, overriding the calculated figure.',PAD,y+18);
+    if(team.length){y+=32;
+      x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Teams'+(only?' \u00b7 '+only:''),PAD,y);
+      y+=8;
+      team.forEach(r=>{
+        x.fillStyle=r.color;x.fillRect(PAD,y+3,10,10);
+        x.fillStyle='#202938';x.font='700 11.5px Arial';x.fillText(r.name,PAD+17,y+12);
+        x.fillStyle='#8a92a2';x.font='11px Arial';
+        x.fillText(r.lv+' \u00b7 '+r.cat+' \u00b7 '+r.zones+' zone'+(r.zones===1?'':'s'),PAD+150,y+12);
+        x.fillStyle='#202938';x.font='700 11.5px Arial';x.textAlign='right';
+        x.fillText(r.men+' men',PAD+320,y+12);x.textAlign='left';
+        y+=20;});
+      y+=6;}
     if(shots.length){y+=26;
       shots.forEach((sh,i)=>{const col=i%COLS,row=Math.floor(i/COLS);
         const sx=PAD+col*(mapW+GAP),sy=y+rowY[row];
