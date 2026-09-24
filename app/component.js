@@ -3057,17 +3057,12 @@ class Component extends DCLogic {
          question "how many teams" is about crews, not about rows. */
       {const _nTeam=l2=>new Set(l2.map(r=>r.name)).size;
        const _all=team.reduce((n2,r)=>n2+r.men,0),_allT=_nTeam(team);
-       /* Whatever the table carries that no team accounts for is the core-wall gangs: they are not
-          tied to a zone, so they never appear as a team.  Naming the remainder makes the legend add
-          up to the table instead of quietly falling short. */
-       const _tbl=only?rows.reduce((n2,r)=>n2+(((r.cells||[]).find(c=>c.m===only)||{}).val||0),0):0;
-       const _cw=Math.max(0,_tbl-_all);
-       let _byc=TCATS.map(([c])=>{const l2=team.filter(r=>r.cat===c);
+       /* The total is simply what the teams above add up to \u2014 nothing is inferred or topped up. */
+       const _byc=TCATS.map(([c])=>{const l2=team.filter(r=>r.cat===c);
          return l2.length?(c+' '+_nTeam(l2)+'T/'+l2.reduce((n2,r)=>n2+r.men,0)):'';})
          .filter(Boolean).join('  \u00b7  ');
-       if(_cw)_byc+=(_byc?'  \u00b7  ':'')+'Core walls '+_cw;
        x.textAlign='right';
-       const _lab='Total '+_allT+' team'+(_allT===1?'':'s')+' \u00b7 '+(_all+_cw)+' men';
+       const _lab='Total '+_allT+' team'+(_allT===1?'':'s')+' \u00b7 '+_all+' men';
        x.fillStyle='#c8102e';x.font='700 13px Arial';x.fillText(_lab,W-PAD,y);
        if(_byc){x.fillStyle='#6b7486';x.font='700 11.5px Arial';
          x.fillText(_byc,W-PAD-x.measureText(_lab).width-18,y);}
