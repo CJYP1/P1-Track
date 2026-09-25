@@ -2119,7 +2119,12 @@ class Component extends DCLogic {
       const rows=Object.keys(acts).map(k=>{const o=acts[k];return {lv:o.lv,label:o.lv+' · '+o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),mplan:Math.round(o.mp),mdone:Math.round(o.md),mpct:o.mp>0?Math.min(100,Math.round(o.md/o.mp*100)):(o.md>0?100:0),end:o.end};}).filter(r=>this._laMonth?(r.mplan>0||r.mdone>0):r.total>0).sort((a,b)=>(lvOrder.indexOf(a.lv)-lvOrder.indexOf(b.lv))||a.label.localeCompare(b.label));
       if(rows.length)out.push({cat,label,rows}); });
     return out; }
-  _reportZoneOk(z,cat,filter){if(cat&&(z.cat||'NB')!==cat)return false;if(filter==='cis')return /CIS/i.test(String(z.label||'')+' '+String(z.mk||''));return true;}
+  _reportZoneOk(z,cat,filter){if(cat&&(z.cat||'NB')!==cat)return false;
+    const _isCis=()=>/CIS/i.test(String(z.label||'')+' '+String(z.mk||''));
+    if(filter==='cis')return _isCis();
+    /* The whole level's slab with the CIS zones taken out. */
+    if(filter==='nocis')return !_isCis();
+    return true;}
   _reportToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
   _reportDateLabel(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?(+m[3])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+' '+m[1].slice(2):String(iso||'');}
   _reportMonthBounds(label){if(label==="Before Apr'26")return {s:Date.UTC(2000,0,1),e:Date.UTC(2026,2,31)};const m=String(label||'').match(/^([A-Z][a-z]{2})'(\d{2})$/);if(!m)return null;const mi=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);if(mi<0)return null;const y=2000+(+m[2]);return {s:Date.UTC(y,mi,1),e:Date.UTC(y,mi+1,0)};}
@@ -2191,9 +2196,10 @@ class Component extends DCLogic {
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
-        if(!this._reportStructureAid(a.id))return;const filter=(cat==='NB'&&lv==='L2'&&a.id==='slab')?'cis':null;
+        if(!this._reportStructureAid(a.id))return;/* Every Slab row is the whole level, NB L2 included: it used to be the one exception. */
+        const filter=null;
         const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
-        const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':((cat==='MA'&&maLabel[a.id])||a.label)),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
+        const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':(filter==='nocis'?'Slab (excl. CIS)':((cat==='MA'&&maLabel[a.id])||a.label))),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
     return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0||r.hasSchedule).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
   /* NB/EB/MA 三份 Report: 普通账号按区域权限查看; admin / RWS 看全部 */
   _reportDefs(){ return {
@@ -3839,7 +3845,7 @@ class Component extends DCLogic {
     const tabs=cats.length>1?`<div class="seg" id="rptSeg" style="margin:0 0 14px">${cats.map(c=>`<button data-c="${c}" class="${c===cat?'on':''}">${this.esc(c+' Report')}</button>`).join('')}</div>`:'';
     const _leg=[['#f3aeb8','In progress'],['#74c043','Completed'],['#7ea6d4','CIS area'],['#f0b24a','Tie beam']].map(([c,l])=>`<span style="white-space:nowrap"><span style="display:inline-block;width:14px;height:14px;background:${c};border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:5px"></span>${l}</span>`).join('');
     const editBtns=canReportEdit?(editing?'<button class="hbtn primary" id="rptSave">Save</button><button class="hbtn" id="rptCancel">Cancel</button>':'<button class="hbtn" id="rptEdit">✎ Edit</button>'):'';
-    ov.innerHTML=`<div style="max-width:1120px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><div style="display:flex;gap:7px">${editBtns}<button class="hbtn" id="laClose">Close ✕</button></div></div><div class="seg" id="rptViewSeg" style="margin:0 0 10px"><button data-view="area" class="on">Area Report</button><button data-view="combined">Combined Status</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">Scope: ${this.esc(def.scope)} · Structure + Excavation · Both percentages use the same full level total. Catch-Up = plan due by today ÷ level total; Actual = completed quantity ÷ level total. NB L2 Slab includes CIS/CIST zones only.${editing?' · Report edit mode: all values must be whole numbers.':''}</div>${tables}</div>`;
+    ov.innerHTML=`<div style="max-width:1120px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><div style="display:flex;gap:7px">${editBtns}<button class="hbtn" id="laClose">Close ✕</button></div></div><div class="seg" id="rptViewSeg" style="margin:0 0 10px"><button data-view="area" class="on">Area Report</button><button data-view="combined">Combined Status</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">Scope: ${this.esc(def.scope)} · Structure + Excavation · Both percentages use the same full level total. Catch-Up = plan due by today ÷ level total; Actual = completed quantity ÷ level total. Every Slab row covers its whole level.${editing?' · Report edit mode: all values must be whole numbers.':''}</div>${tables}</div>`;
     ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=close;
     const combinedBtn=ov.querySelector('[data-view="combined"]');if(combinedBtn)combinedBtn.onclick=()=>this._openCombinedReport(cat);
     ov.querySelectorAll('#rptSeg button[data-c]').forEach(b=>b.onclick=()=>{this._reportCat=b.dataset.c;this.openLookAhead();});
@@ -4370,7 +4376,10 @@ class Component extends DCLogic {
      IDs are normalised (case + punctuation stripped) so a hand-typed "WF-B2C41." still resolves to
      "WF-B2C41".  The same mark can legitimately exist in more than one zone, so the row's own zone
      always wins: only when the mark is unique on the level do we link without a zone match. */
-  _colKey(id){return String(id==null?'':id).replace(/[^a-z0-9]/gi,'').toUpperCase();}
+  /* Column ids are matched on spacing and dashes only.  Everything else is part of the name:
+     "WF-B2C41." is a different column from "WF-B2C41", and folding the two together is what made
+     one of them disappear from the list and both of them answer to the same map click. */
+  _colKey(id){return String(id==null?'':id).replace(/[\s\-_]+/g,'').toUpperCase();}
   _colIdxMap(lv){
     const level=lv||this.curLevel;
     if(this._colIdxCache&&this._colIdxCacheLv===level)return this._colIdxCache;
