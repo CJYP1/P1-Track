@@ -2789,6 +2789,17 @@ class Component extends DCLogic {
         changes.push({lv,zmk,m,v:nv,label:lab});});});
     return {changes,same,bad};
   }
+  /* The month the map is showing \u2014 an export forces one, otherwise the plan month. */
+  _resMon(){return this._resExportOnly?(this._resExportMonth||'')
+    :((this._mpMonths().indexOf(this.planMonth())>=0)?this.planMonth():'');}
+  /* The men typed against a core wall or staircase for the month on screen, drawn on the shape. */
+  _cwMenSVG(lv,name,x,y){
+    if(!this._resourceMode)return '';
+    const m=this._resMon();if(!m)return '';
+    const v=this._mzVal(lv,'CW:'+this._lw8Name(name),m);
+    if(v==null||!v)return '';
+    return `<text x="${x.toFixed(0)}" y="${(y+2450).toFixed(0)}" font-size="2600" fill="#15803d" text-anchor="middle" style="font-weight:950;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:700">${this.fmt(v)}</text>`;
+  }
   _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
   /* How much work a team actually faces on a level in a month.  Floor space alone is the wrong
@@ -3943,7 +3954,8 @@ class Component extends DCLogic {
           if(!_rc&&!this._resourceEditing)return;                       /* view mode shows only planned core walls */
           _cc=_rc?[_rc.team.color||'#3157d5',_rc.team.color||'#3157d5']:['#d9dee7','#9aa3b0'];}   /* 未开始=亮绿底色; 做完=深绿, 在做=黄(按成员状态) */
         s+=`<polygon class="corewall${_top?' shape-top':''}" data-cwi="${wi}" data-cwlv="${swlv}" points="${pp}" fill="${_cc[0]}" fill-opacity="${_focusOnly?0.16:(this._resourceMode?(this._resourceCoreEntry(swlv,this._shapeLabel(w))?0.72:0.18):(_foreign?0.14:0.22))}" stroke="${_cc[1]}" stroke-width="520"${_foreign?' stroke-dasharray="1400,700"':''} style="${_top?'pointer-events:none':'cursor:pointer'}"/>`;
-        s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none;opacity:${_top?0.75:1}">${this.esc(this._shapeLabel(w))}${_top?' \u23f9':''}</text>`;});
+        s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none;opacity:${_top?0.75:1}">${this.esc(this._shapeLabel(w))}${_top?' \u23f9':''}</text>`
+          +(_top?'':this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]));});
       }
       if(this._drawingCore&&this._coreBuf&&this._coreBuf.length){
         const bp=this._coreBuf.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
@@ -3957,7 +3969,8 @@ class Component extends DCLogic {
         let _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',this.curLevel,'stair'); const _foreign=(swlv!==this.curLevel);
         if(_top)_lc=['#c3c8d1','#8b93a1'];   /* tops out here: grey marker only */
         s+=`<polygon class="liftwall${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" points="${pp}" fill="${_lc[0]}" fill-opacity="${_foreign?0.13:0.2}" stroke="${_lc[1]}" stroke-width="500"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
-        s+=`<text class="liftlbl${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`;
+        s+=`<text class="liftlbl${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`
+          +(_top?'':this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]));
         /* Large, almost-invisible top hit layer.  The staircase line sits on top
            of zone/column shapes, and stopping mousedown prevents a small hand
            movement from turning the intended click into map-pan. */
