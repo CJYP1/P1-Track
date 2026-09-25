@@ -2731,10 +2731,15 @@ class Component extends DCLogic {
       rows.push([g.lab].concat(new Array(6+M.length).fill('')).map(q).join(','));
       g.zs.forEach(z=>{
         const d=(g.c==='CW')?{}:this._mzDates(z.lv,z.zmk);
+        const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(z.lv,z.zmk)||[]);
         rows.push([z.lv,z.label,z.cat,z.area?Math.round(z.area):'',
                    teamOf[z.lv+'||'+z.zmk]||'',
                    (g.c==='CW')?'every month':(d.start||''),(g.c==='CW')?'':(d.end||'')]
-          .concat(M.map(m=>{const v=this._mzVal(z.lv,z.zmk,m);return v==null?'':v;})).map(q).join(','));});});
+          /* A month with no work on this zone is marked with a dash rather than left blank, so the
+             empty cells in the sheet are the ones actually waiting for a figure.  A dash is not a
+             number, so it is ignored if the sheet comes back in. */
+          .concat(M.map(m=>{const v=this._mzVal(z.lv,z.zmk,m);
+            return v!=null?v:((ms.indexOf(m)>=0)?'':'-');})).map(q).join(','));});});
     const sum=(list,m)=>list.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0);
     const zT=M.map(m=>sum(zRows,m)),cT=M.map(m=>sum(cRows,m));
     const aT=M.map(m=>lvList.reduce((n,l)=>n+['NB','EB','MA'].reduce((n2,c)=>{
@@ -2745,6 +2750,44 @@ class Component extends DCLogic {
     foot('Zones + core walls',zT.map((v,i)=>v+cT[i]));
     foot('Area figures',aT);
     return rows.join('\r\n');
+  }
+  /* Read back a sheet that was downloaded from this table and edited.  Rows are matched on Level +
+     Zone, so the group headings and the totals at the bottom are simply ignored.  A blank cell is
+     left alone rather than cleared — someone who fills in three months must not wipe the rest;
+     type a 0 to say "nobody here". */
+  _mzParseView(text){
+    const rows=[];let f='',row=[],inq=false;
+    const src=String(text||'').replace(/^﻿/,'').replace(/\r\n/g,'\n');
+    for(let i=0;i<src.length;i++){const ch=src[i];
+      if(inq){if(ch==='"'){if(src[i+1]==='"'){f+='"';i++;}else inq=false;}else f+=ch;}
+      else if(ch==='"')inq=true;
+      else if(ch===','){row.push(f);f='';}
+      else if(ch==='\n'){row.push(f);f='';rows.push(row);row=[];}
+      else f+=ch;}
+    if(f!==''||row.length){row.push(f);rows.push(row);}
+    if(!rows.length)return {changes:[],same:0,bad:0};
+    const head=rows[0].map(x=>String(x).trim());
+    const iLv=head.indexOf('Lv'),iZone=head.indexOf('Zone');
+    const M=this._mpMonths(),cols=M.map(m=>({m,i:head.indexOf(m)})).filter(x=>x.i>=0);
+    if(iLv<0||iZone<0||!cols.length)return {changes:[],same:0,bad:0,head:true};
+    const key={};
+    (this.DATA.order||[]).forEach(l=>this._mzZones(l).concat(this._mzCores(l))
+      .forEach(z=>{key[l+'|'+String(z.label).trim().toUpperCase()]=z.zmk;}));
+    const changes=[];let same=0,bad=0;
+    rows.slice(1).forEach(r=>{
+      const lv=String(r[iLv]==null?'':r[iLv]).trim();
+      const lab=String(r[iZone]==null?'':r[iZone]).trim();
+      if(!lv&&!lab)return;                                   /* blank or a heading row */
+      const zmk=key[lv+'|'+lab.toUpperCase()];
+      if(!zmk){if(lv&&lab)bad++;return;}                     /* totals rows have no Lv, so they fall out here */
+      cols.forEach(({m,i})=>{
+        const raw=String(r[i]==null?'':r[i]).replace(/[, ]/g,'').trim();
+        if(raw==='')return;                                  /* left blank: leave it as it is */
+        const v=Number(raw);if(!Number.isFinite(v))return;
+        const nv=Math.max(0,Math.round(v)),cur=this._mzVal(lv,zmk,m);
+        if(cur===nv){same++;return;}
+        changes.push({lv,zmk,m,v:nv,label:lab});});});
+    return {changes,same,bad};
   }
   _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
@@ -3007,6 +3050,8 @@ class Component extends DCLogic {
       <div class="delay-admin-foot"><span id="__mzNote"></span>
         <div style="display:flex;gap:6px">
           <button class="hbtn" id="__mzCsv" title="Save what is on screen \u2014 same columns, same figures">\u2b07 Download</button>
+          <button class="hbtn" id="__mzUp" title="Load back a sheet you downloaded and filled in">\u2b06 Import</button>
+          <input type="file" id="__mzFile" accept=".csv,text/csv,text/plain" style="display:none">
           <button class="hbtn" id="__mzFill" title="Write the calculated figures into the empty cells of this level \u2014 typed cells are left as they are">\u2935 Fill from plan</button>
           <button class="hbtn" id="__mzClear">\u21ba Clear this level</button>
           <button class="hbtn primary" id="__mzDone">Done</button></div></div></div>`;
@@ -3077,6 +3122,24 @@ class Component extends DCLogic {
       a2.download='P1_manpower_by_zone_'+(lv||'all')+(mon?'_'+mon.replace(/[^a-z0-9]/gi,''):'')+'_'+new Date().toISOString().slice(0,10)+'.csv';
       document.body.appendChild(a2);a2.click();a2.remove();
       setTimeout(()=>URL.revokeObjectURL(a2.href),4000);};
+    ov.querySelector('#__mzUp').onclick=()=>{if(!admin)return;ov.querySelector('#__mzFile').click();};
+    ov.querySelector('#__mzFile').onchange=e=>{
+      const f=e.target.files&&e.target.files[0];if(!f)return;
+      const rd=new FileReader();
+      rd.onload=()=>{
+        let r;try{r=this._mzParseView(String(rd.result||''));}
+        catch(err){this._toast&&this._toast('Could not read that file.');return;}
+        if(r.head){this._toast&&this._toast('That file has no Lv / Zone / month columns \u2014 download the table first, then fill it in.');return;}
+        if(!r.changes.length){this._toast&&this._toast(r.same?('Nothing to change \u00b7 '+r.same+' figure'+(r.same===1?'':'s')+' already match'):'No figures found in that file.');return;}
+        if(!window.confirm(r.changes.length+' figure'+(r.changes.length===1?'':'s')+' will change'
+          +(r.same?'\n'+r.same+' already match':'')
+          +(r.bad?'\n'+r.bad+' row'+(r.bad===1?'':'s')+' did not match any zone and will be skipped':'')
+          +'\n\nBlank cells are left as they are. Apply?'))return;
+        const o2=this._mzOv();
+        r.changes.forEach(c=>{o2[this._mzKey(c.lv,c.zmk,c.m)]=c.v;});
+        this._mzSave();this.render();draw();
+        this._toast&&this._toast('Imported '+r.changes.length+' figure'+(r.changes.length===1?'':'s')+' \u2713');};
+      rd.readAsText(f);e.target.value='';};
     ov.querySelector('#__mzClose').onclick=()=>ov.remove();
     ov.querySelector('#__mzDone').onclick=()=>{ov.remove();this.render();};
     ov.querySelector('#__mzFill').onclick=()=>{if(!admin)return;
