@@ -2076,11 +2076,16 @@ class Component extends DCLogic {
     Object.keys(L.c2zc||{}).forEach(c=>{if(L.c2zc[c]===lab)labs.push(c);});Object.keys(L.p2zone||{}).forEach(p=>{if((L.p2zone[p]||[]).indexOf(lab)>=0)labs.push(p);});
     const inf=labs.map(x=>this._zoneCastInfo(lv,{mk:lv+'|'+x,label:x,cat:'MA',_mslab:/^C/i.test(x)})).filter(x=>x.start||x.end||x.date);if(!inf.length)return this._zoneCastInfo(lv,z);
     const starts=inf.map(x=>x.start).filter(Boolean).sort(),ends=inf.map(x=>x.end).filter(Boolean).sort(),start=starts[0]||null,end=ends[ends.length-1]||null,date=end||start;return {aid:'marine',done:inf.every(x=>x.done),date,start,end,month:this._dateToActMonth(date)};}
-  _mapZoneCastInfo(lv,z){return lv==='L1'&&z&&z.cat==='MA'&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z);}
+  /* A month past the admin's cutoff is not this user's to see, so the date behind it is withheld:
+     the zone is drawn as undated rather than coloured and labelled with a future pour date. */
+  _monAllowed(m){if(!m)return true;const V=this.visMonths();return V.indexOf(m)>=0||m==="Before Apr'26";}
+  _castCut(info){if(!info||this._monAllowed(info.month))return info;
+    return {aid:info.aid,done:false,date:null,start:null,end:null,month:null,hidden:true};}
+  _mapZoneCastInfo(lv,z){return this._castCut(lv==='L1'&&z&&z.cat==='MA'&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z));}
   _castSlabsOn(){ return this._castShowSlabs!==false; }
   _castColumnsOn(){ return this._castShowColumns!==false; }
   _zoneCastColor(z){ if(!this._castSlabsOn())return '#efeaec'; const info=this._mapZoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
-  _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.end||d.start); return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
+  _colCastColor(lv,z){ const d=this._actDateOf(lv,z.mk||z.lid,'col'); const mo=this._dateToActMonth(d.end||d.start); if(!this._monAllowed(mo))return '#8a93a3'; return mo?(this._castPal()[mo]||'#9aa6b6'):'#8a93a3'; }
   /* Marine 柱子归属: 按 marine-col-map.csv 反查这根柱属于哪个 Podium(P) 区 → 用 P 区的 col 活动读取浇筑时间/上色 */
   _colPodLabel(id){ if(!this._marineCol)return null; if(!this._colPodIdx){ const m={}; Object.keys(this._marineCol).forEach(p=>this._marineCol[p].forEach(c=>{m[String(c.id||'').trim().toUpperCase()]=p;})); this._colPodIdx=m; } return this._colPodIdx[String(id||'').trim().toUpperCase()]||null; }
   _fmtDShort(iso){ const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m)return String(iso); return m[3]+" "+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+" '"+m[1].slice(2); }
