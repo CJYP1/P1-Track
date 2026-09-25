@@ -2956,14 +2956,22 @@ class Component extends DCLogic {
       const zs=this._mzZones(lv),o=this._mzOv();
       const teamOf={};(this._resourceData().teams||[]).forEach(t=>(t.zones||[]).forEach(x=>{
         if(x.lv===lv)teamOf[x.zmk]={name:t.name||'Team',color:t.color||'#3157d5'};}));
+      /* Grouped by area, and inside each area the zones a team is on come first: those are the rows
+         that get filled in.  Zones with nobody on them sit at the bottom of their area, greyed. */
+      const CATS=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']];
+      const groups=CATS.map(([c,lab])=>({c,lab,zs:zs.filter(z=>z.cat===c)
+        .sort((x,y)=>(teamOf[y.zmk]?1:0)-(teamOf[x.zmk]?1:0)
+                   ||String(x.label).localeCompare(String(y.label),undefined,{numeric:true}))}))
+        .filter(g=>g.zs.length);
       const colTot=M.map(m=>zs.reduce((n,z)=>n+(this._mzVal(lv,z.zmk,m)||0),0));
       /* The area figures this level already carries, so a mismatch is visible while typing. */
       const areaTot=M.map(m=>['NB','EB','MA'].reduce((n,c)=>{
         const v=this._mpOv()[this._mpKey(c,lv,m)];return n+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0));
       ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Zone</th><th>Area</th><th>Team</th><th>Start</th><th>Finish</th>
         ${M.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
-        ${zs.map(z=>{const ms=this._mpZoneMonths(lv,z.zmk)||[];
-          return `<tr><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td>
+        ${groups.map(g=>`<tr><td colspan="${5+M.length}" style="background:var(--panel2);font-weight:800;color:var(--accent);letter-spacing:.03em">${this.esc(g.lab)}<span style="color:var(--faint);font-weight:600;margin-left:8px">${g.zs.filter(z=>teamOf[z.zmk]).length} with a team \u00b7 ${g.zs.length} zones</span></td></tr>`
+          +g.zs.map(z=>{const ms=this._mpZoneMonths(lv,z.zmk)||[];
+          return `<tr style="${teamOf[z.zmk]?'':'opacity:.55'}"><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td>
           <td>${teamOf[z.zmk]?`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${teamOf[z.zmk].color};margin-right:5px"></span>${this.esc(teamOf[z.zmk].name)}`:'<span style="color:var(--faint)">\u2014</span>'}</td>
           ${(()=>{const d=this._mzDates(lv,z.zmk);const f=v=>v?`<span style="font-variant-numeric:tabular-nums">${this.esc(String(v))}</span>`:'<span style="color:var(--crit)">no date</span>';return `<td style="white-space:nowrap">${f(d.start)}</td><td style="white-space:nowrap;color:var(--faint)">${d.end?this.esc(String(d.end)):'\u2014'}</td>`;})()}
           ${M.map(m=>{const v=this._mzVal(lv,z.zmk,m),w=ms.indexOf(m)>=0,first=w&&ms[0]===m;
@@ -2975,7 +2983,7 @@ class Component extends DCLogic {
                    style="width:58px;padding:3px 5px;text-align:right;border-radius:5px;font-weight:${v==null?400:800};${
                      w?('background:var(--panel2);color:var(--txt);border:1px solid var(--line)'+(first?';border-left:3px solid var(--accent)':''))
                       :'border:1px dashed var(--line);background:transparent;color:var(--faint);opacity:.8'}">`
-              :`<span style="font-weight:${v==null?400:800}">${v==null?'\u2014':v}</span>`}</td>`;}).join('')}</tr>`;}).join('')}
+              :`<span style="font-weight:${v==null?400:800}">${v==null?'\u2014':v}</span>`}</td>`;}).join('')}</tr>`;}).join('')).join('')}
         </tbody><tfoot><tr><td colspan="5"><b>Typed on this level</b></td>
           ${colTot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr>
         <tr><td colspan="5" style="color:var(--faint)">Area figures for this level</td>
