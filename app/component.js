@@ -2708,6 +2708,44 @@ class Component extends DCLogic {
     out.sort((a,b)=>String(a.label).localeCompare(String(b.label),undefined,{numeric:true}));
     return out;
   }
+  /* The by-zone table exactly as it is on screen \u2014 same columns, same grouping, same figures,
+     including every number typed in \u2014 written out as CSV so it can be saved or printed. */
+  _mzCsvView(lvList,M){
+    const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',rows=[];
+    const teamOf={};
+    (this._resourceData().teams||[]).forEach(t=>{
+      (t.zones||[]).forEach(x=>{teamOf[x.lv+'||'+x.zmk]=t.name||'Team';});
+      (t.cores||[]).forEach(x=>{teamOf[x.lv+'||CW:'+this._lw8Name(x.id)]=t.name||'Team';});});
+    const zRows=[],cRows=[];
+    lvList.forEach(l=>{
+      this._mzZones(l).forEach(z=>zRows.push({lv:l,zmk:z.zmk,label:z.label,cat:z.cat,area:z.area}));
+      this._mzCores(l).forEach(z=>cRows.push({lv:l,zmk:z.zmk,label:z.label,cat:'CW',area:0}));});
+    const ord=(x,y)=>((this.DATA.order||[]).indexOf(x.lv)-(this.DATA.order||[]).indexOf(y.lv))
+                   ||((teamOf[y.lv+'||'+y.zmk]?1:0)-(teamOf[x.lv+'||'+x.zmk]?1:0))
+                   ||String(x.label).localeCompare(String(y.label),undefined,{numeric:true});
+    const groups=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']]
+      .map(([c,lab])=>({c,lab,zs:zRows.filter(z=>z.cat===c).sort(ord)})).filter(g=>g.zs.length);
+    if(cRows.length)groups.push({c:'CW',lab:'Core walls & staircases',zs:cRows.slice().sort(ord)});
+    rows.push(['Lv','Zone','Pkg','m2','Team','Start','Finish'].concat(M).map(q).join(','));
+    groups.forEach(g=>{
+      rows.push([g.lab].concat(new Array(6+M.length).fill('')).map(q).join(','));
+      g.zs.forEach(z=>{
+        const d=(g.c==='CW')?{}:this._mzDates(z.lv,z.zmk);
+        rows.push([z.lv,z.label,z.cat,z.area?Math.round(z.area):'',
+                   teamOf[z.lv+'||'+z.zmk]||'',
+                   (g.c==='CW')?'every month':(d.start||''),(g.c==='CW')?'':(d.end||'')]
+          .concat(M.map(m=>{const v=this._mzVal(z.lv,z.zmk,m);return v==null?'':v;})).map(q).join(','));});});
+    const sum=(list,m)=>list.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0);
+    const zT=M.map(m=>sum(zRows,m)),cT=M.map(m=>sum(cRows,m));
+    const aT=M.map(m=>lvList.reduce((n,l)=>n+['NB','EB','MA'].reduce((n2,c)=>{
+      const v=this._mpOv()[this._mpKey(c,l,m)];return n2+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0),0));
+    const foot=(lab,arr)=>rows.push([lab,'','','','','',''].concat(arr.map(v=>v||'')).map(q).join(','));
+    foot('Zones typed',zT);
+    foot('Core walls & staircases (separate)',cT);
+    foot('Zones + core walls',zT.map((v,i)=>v+cT[i]));
+    foot('Area figures',aT);
+    return rows.join('\r\n');
+  }
   _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
   /* How much work a team actually faces on a level in a month.  Floor space alone is the wrong
@@ -2968,6 +3006,7 @@ class Component extends DCLogic {
       <div class="delay-admin-scroll" id="__mzBody"></div>
       <div class="delay-admin-foot"><span id="__mzNote"></span>
         <div style="display:flex;gap:6px">
+          <button class="hbtn" id="__mzCsv" title="Save what is on screen \u2014 same columns, same figures">\u2b07 Download</button>
           <button class="hbtn" id="__mzFill" title="Write the calculated figures into the empty cells of this level \u2014 typed cells are left as they are">\u2935 Fill from plan</button>
           <button class="hbtn" id="__mzClear">\u21ba Clear this level</button>
           <button class="hbtn primary" id="__mzDone">Done</button></div></div></div>`;
@@ -3031,6 +3070,15 @@ class Component extends DCLogic {
         this._mzSave();this.render();draw();});};
     ov.querySelector('#__mzLv').onchange=e=>{lv=e.target.value;draw();};
     ov.querySelector('#__mzMon').onchange=e=>{mon=e.target.value||'';draw();};
+    ov.querySelector('#__mzCsv').onclick=()=>{
+      const M2=mon?[mon]:this._mpMonths();
+      const blob=new Blob(['\ufeff'+this._mzCsvView(lv?[lv]:lvs,M2)],{type:'text/csv;charset=utf-8'});
+      const a2=document.createElement('a');a2.href=URL.createObjectURL(blob);
+      a2.download='P1_manpower_by_zone_'+(lv||'all')+(mon?'_'+mon.replace(/[^a-z0-9]/gi,''):'')+'_'+new Date().toISOString().slice(0,10)+'.csv';
+      document.body.appendChild(a2);a2.click();a2.remove();
+      setTimeout(()=>URL.revokeObjectURL(a2.href),4000);};
+    ov.querySelector('#__mzClose').onclick=()=>ov.remove();
+    ov.querySelector('#__mzDone').onclick=()=>{ov.remove();this.render();};
     ov.querySelector('#__mzFill').onclick=()=>{if(!admin)return;
       if(!window.confirm('Fill the empty cells of '+(lv||'every level')+' from the calculated plan?\nCells you have already typed are left untouched.'))return;
       let n=0;(lv?[lv]:lvs).forEach(l=>this._mpMonths().forEach(m=>{n+=this._mzPrefill(l,m);}));
