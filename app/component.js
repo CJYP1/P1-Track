@@ -232,7 +232,11 @@ class Component extends DCLogic {
     }));});
     const rekey=(obj)=>{if(!obj)return false;let hit=false;Object.keys(obj).forEach(k=>{if(!RE.test(k))return;const nk=sub(k);if(obj[nk]==null)obj[nk]=obj[k];delete obj[k];hit=true;});return hit;};
     dirtyElem=rekey(this.elem)|rekey(this._elemDate);
-    if(this._elemAdd){Object.keys(this._elemAdd).forEach(k=>{const arr=this._elemAdd[k]||[];arr.forEach((id,i)=>{if(RE.test(id)){arr[i]=sub(id);dirtyAdd=true;}});});if(rekey(this._elemAdd))dirtyAdd=true;}
+    if(this._elemAdd){Object.keys(this._elemAdd).forEach(k=>{const arr=this._elemAdd[k]||[];arr.forEach((id,i)=>{if(RE.test(id)){arr[i]=sub(id);dirtyAdd=true;}});});if(rekey(this._elemAdd))dirtyAdd=true;
+      /* Renaming can leave the old and the new name side by side in the same list. */
+      Object.keys(this._elemAdd).forEach(k=>{const arr=this._elemAdd[k];if(!Array.isArray(arr))return;
+        const seen=new Set(),out=[];arr.forEach(id=>{const key=String(id).trim().toUpperCase();if(seen.has(key))return;seen.add(key);out.push(id);});
+        if(out.length!==arr.length){this._elemAdd[k]=out;dirtyAdd=true;}});}
     const plans=this._appCfg&&this._appCfg.resourcePlans;
     if(plans&&Array.isArray(plans.teams))plans.teams.forEach(t=>(t.cores||[]).forEach(c=>{if(c&&c.id&&RE.test(c.id)){c.id=sub(c.id);dirtyCfg=true;}}));
     if(dirtyCfg){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
@@ -1488,6 +1492,11 @@ class Component extends DCLogic {
       }
       this.saveElem(); this.saveUpdatesStore();
       try{localStorage.setItem('rws_zp_ov',JSON.stringify(this._zpOv));}catch(e){}
+      /* The renames run once at boot, before any of this arrives.  Records that come down from the
+         cloud still carrying an old id (CW8, LW8) have to be moved onto the new name here, or the
+         list shows the same core wall twice — once empty under its new name, once with all the
+         data under the old one. */
+      try{this._migrateLW8&&this._migrateLW8();}catch(_e){console.error('rename migrate',_e);}
       this.applyUpdates(); this.buildRail(); this.buildTimeline(); this.render(); this.refreshUpdBadge();
       if(this.selKey){const z=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z)this.selectZone(z);}
       this._refreshOpenReport();
