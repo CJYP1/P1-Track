@@ -3117,11 +3117,11 @@ class Component extends DCLogic {
       const areaTot=M.map(m=>lvList.reduce((n,l)=>n+['NB','EB','MA'].reduce((n2,c)=>{
         const v=this._mpOv()[this._mpKey(c,l,m)];return n2+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0),0));
       const NC=7;
-      ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Lv</th><th>Zone</th><th>Pkg</th><th style="text-align:right">m²</th><th>Team</th><th>Start</th><th>Finish</th>
+      ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Zone</th><th>Lv</th><th>Pkg</th><th style="text-align:right">m²</th><th>Team</th><th>Start</th><th>Finish</th>
         ${M.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
         ${groups.map(g=>`<tr><td colspan="${NC+M.length}" style="background:var(--panel2);font-weight:800;color:${g.c==='CW'?'#15803d':'var(--accent)'};letter-spacing:.03em">${this.esc(g.lab)}<span style="color:var(--faint);font-weight:600;margin-left:8px">${g.zs.filter(z=>tOf(z)).length} with a team · ${g.zs.length} rows</span></td></tr>`
           +g.zs.map(z=>{const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(z.lv,z.zmk)||[]);const tm=tOf(z);
-          return `<tr style="${tm?'':'opacity:.55'}"><td style="color:var(--dim);font-weight:700">${this.esc(z.lv)}</td><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td><td style="text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">${z.area?this.fmt(Math.round(z.area)):'—'}</td>
+          return `<tr style="${tm?'':'opacity:.55'}"><td><b>${this.esc(z.label)}</b></td><td style="color:var(--dim);font-weight:700">${this.esc(z.lv)}</td><td style="color:var(--faint)">${this.esc(z.cat)}</td><td style="text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">${z.area?this.fmt(Math.round(z.area)):'—'}</td>
           <td>${tm?`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${tm.color};margin-right:5px"></span>${this.esc(tm.name)}`:'<span style="color:var(--faint)">—</span>'}</td>
           ${(g.c==='CW')?'<td colspan="2" style="color:var(--faint)">every month</td>':(()=>{const d=this._mzDates(z.lv,z.zmk);const f=v=>v?`<span style="font-variant-numeric:tabular-nums">${this.esc(String(v))}</span>`:'<span style="color:var(--crit)">no date</span>';return `<td style="white-space:nowrap">${f(d.start)}</td><td style="white-space:nowrap;color:var(--faint)">${d.end?this.esc(String(d.end)):'—'}</td>`;})()}
           ${M.map(m=>{const v=this._mzVal(z.lv,z.zmk,m),w=ms.indexOf(m)>=0,first=(g.c!=='CW')&&w&&ms[0]===m;
@@ -3325,12 +3325,13 @@ class Component extends DCLogic {
     x.fillStyle='#fff';x.font='700 19px Arial';x.fillText('RC Manpower by zone',PAD,26);
     x.font='600 11.5px Arial';
     x.fillText('Men typed on each zone'+(only?' · '+only:' · all months')+' · core walls counted separately · '+new Date().toISOString().slice(0,10),PAD,46);
-    const c0=PAD,cLv=PAD,cZone=PAD+46,cPkg=PAD+190,cArea=PAD+250,cTeam=PAD+310,cSt=PAD+470,cFi=PAD+560;
+    /* Zone first: it is what the sheet is read by; the level is a qualifier beside it. */
+    const cZone=PAD,cLv=PAD+150,cPkg=PAD+196,cArea=PAD+256,cTeam=PAD+316,cSt=PAD+476,cFi=PAD+566;
     const cw=(W-PAD-(PAD+660))/M.length,cx=i=>PAD+660+cw*i+cw-8;
     let y=H0;
     x.fillStyle=ACC;x.fillRect(PAD,y,W-PAD*2,34);
     x.fillStyle='#fff';x.font='700 12px Arial';
-    x.fillText('Lv',cLv+6,y+22);x.fillText('Zone',cZone,y+22);x.fillText('Pkg',cPkg,y+22);
+    x.fillText('Zone',cZone,y+22);x.fillText('Lv',cLv,y+22);x.fillText('Pkg',cPkg,y+22);
     x.textAlign='right';x.fillText('m²',cArea+48,y+22);x.textAlign='left';
     x.fillText('Team',cTeam,y+22);x.fillText('Start',cSt,y+22);x.fillText('Finish',cFi,y+22);
     x.textAlign='right';M.forEach((m,i)=>x.fillText(m,cx(i),y+22));x.textAlign='left';
@@ -3339,15 +3340,15 @@ class Component extends DCLogic {
     groups.forEach(g=>{
       x.fillStyle=(g.c==='CW')?'#eaf6ee':'#eef1f6';x.fillRect(PAD,y,W-PAD*2,RH);
       x.fillStyle=(g.c==='CW')?'#15803d':ACC;x.font='700 12px Arial';
-      x.fillText(g.lab,cLv+6,y+17);
+      x.fillText(g.lab,cZone,y+17);
       x.fillStyle='#8a92a2';x.font='11px Arial';
-      x.fillText(g.zs.filter(z=>teamOf[z.lv+'||'+z.zmk]).length+' with a team · '+g.zs.length+' rows',cLv+220,y+17);
+      x.fillText(g.zs.filter(z=>teamOf[z.lv+'||'+z.zmk]).length+' with a team · '+g.zs.length+' rows',cZone+220,y+17);
       y+=RH;zebra=0;
       g.zs.forEach(z=>{
         const tm=teamOf[z.lv+'||'+z.zmk];
         x.fillStyle=(zebra++%2)?'#f7f9fb':'#ffffff';x.fillRect(PAD,y,W-PAD*2,RH);
-        x.fillStyle='#6b7486';x.font='700 11px Arial';x.fillText(z.lv,cLv+6,y+16);
         x.fillStyle='#202938';x.font='700 11.5px Arial';x.fillText(String(z.label),cZone,y+16);
+        x.fillStyle='#6b7486';x.font='700 11px Arial';x.fillText(z.lv,cLv,y+16);
         x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(String(z.cat),cPkg,y+16);
         x.textAlign='right';x.fillText(z.area?this.fmt(Math.round(z.area)):'—',cArea+48,y+16);x.textAlign='left';
         if(tm){x.fillStyle=tm.color;x.fillRect(cTeam,y+6,9,9);
@@ -3368,7 +3369,7 @@ class Component extends DCLogic {
         y+=RH;});});
     const foot=(lab,arr,col,bold)=>{
       x.fillStyle='#ffffff';x.fillRect(PAD,y,W-PAD*2,28);
-      x.fillStyle=col;x.font=(bold?'700 ':'')+'12px Arial';x.fillText(lab,cLv+6,y+19);
+      x.fillStyle=col;x.font=(bold?'700 ':'')+'12px Arial';x.fillText(lab,cZone,y+19);
       x.textAlign='right';arr.forEach((v,i)=>x.fillText(v?String(v):'—',cx(i),y+19));x.textAlign='left';
       y+=28;};
     const zT=M.map(m=>zRows.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0));
