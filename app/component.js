@@ -2639,7 +2639,13 @@ class Component extends DCLogic {
   _mzTeamMen(t,lv,m){let n=0,any=false;
     (t.zones||[]).forEach(x=>{if(x.lv!==lv)return;const v=this._mzVal(lv,x.zmk,m);
       if(v!=null){any=true;n+=v;}});
+    /* Core-wall gangs are counted on their own, never mixed into the zone figure: they do not
+       overlap with the slab work, so adding them here would count the same men twice. */
     return any?n:null;}
+  /* What the core walls of a level carry in a month, on their own. */
+  _mzCoreMen(lv,m){let n=0,any=false;
+    this._mzCores(lv).forEach(z=>{const v=this._mzVal(lv,z.zmk,m);if(v!=null){any=true;n+=v;}});
+    return any?n:0;}
   /* Every zone of a level, Marine sub-zones included, as the by-zone editor lists them. */
   _mzZones(lv){
     const out=((this.DATA.levels[lv]||{}).zones||[]).map(z=>({zmk:z.mk||z.lid,label:z.label||(z.mk||z.lid),cat:z.cat||'NB',area:Number(z.area)||0}));
@@ -2689,6 +2695,72 @@ class Component extends DCLogic {
       if(d.start&&(!s||String(d.start)<s))s=String(d.start);
       if(d.end&&(!e||String(d.end)>e))e=String(d.end);});
     return {start:s,end:e};
+  }
+  /* Core walls, lift cores and staircases on a level.  They are not zones: their gangs are on site
+     every month of the job, so they get a section of their own with every month open for a figure. */
+  _mzCores(lv){
+    const out=[],seen=new Set();
+    const add=id=>{const nm=this._lw8Name(id);if(!nm||seen.has(nm))return;seen.add(nm);
+      out.push({zmk:'CW:'+nm,label:nm,cat:'CW',area:0});};
+    ['coreWalls','lifts'].forEach(m=>{const st=(this._appCfg&&this._appCfg[m])||{};
+      (st[lv]||[]).forEach(w=>add(w&&(w.id||((w.link&&w.link.id)||''))));});
+    (this._resourceData().teams||[]).forEach(t=>(t.cores||[]).forEach(x=>{if(x&&x.lv===lv)add(x.id);}));
+    out.sort((a,b)=>String(a.label).localeCompare(String(b.label),undefined,{numeric:true}));
+    return out;
+  }
+  /* The whole by-zone grid as a CSV: every level, its zones and its core walls, one column per
+     month.  Excel opens it directly, and the Key column is what an import matches on, so a row can
+     be re-ordered or a label edited without the figures landing on the wrong zone. */
+  _mzCsv(){
+    const M=this._mpMonths(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    const lvs=(this.DATA.order||[]).filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
+    const teamOf={};(this._resourceData().teams||[]).forEach(t=>{
+      (t.zones||[]).forEach(x=>{teamOf[x.lv+'||'+x.zmk]=t.name||'Team';});
+      (t.cores||[]).forEach(x=>{teamOf[x.lv+'||CW:'+this._lw8Name(x.id)]=t.name||'Team';});});
+    const out=[['Key','Level','Area','Zone','Team','Start','Finish'].concat(M).map(q).join(',')];
+    lvs.forEach(lv=>{
+      const rows=this._mzZones(lv).concat(this._mzCores(lv));
+      rows.forEach(z=>{
+        const k=lv+'||'+z.zmk,d=(z.cat==='CW')?{}:this._mzDates(lv,z.zmk);
+        out.push([k,lv,z.cat,z.label,teamOf[k]||'',d.start||'',d.end||'']
+          .concat(M.map(m=>{const v=this._mzVal(lv,z.zmk,m);return v==null?'':v;})).map(q).join(','));});});
+    return out.join('\r\n');
+  }
+  /* Read back a filled-in sheet.  Rows are matched on Key; a blank cell clears that figure and a
+     cell left as it was changes nothing, so a half-filled sheet is safe to import. */
+  _mzImportCsv(text){
+    const rows=[];let f='',row=[],inq=false;
+    const src=String(text||'').replace(/\r\n/g,'\n');
+    for(let i=0;i<src.length;i++){const ch=src[i];
+      if(inq){if(ch==='"'){if(src[i+1]==='"'){f+='"';i++;}else inq=false;}else f+=ch;}
+      else if(ch==='"')inq=true;
+      else if(ch===','){row.push(f);f='';}
+      else if(ch==='\n'){row.push(f);f='';rows.push(row);row=[];}
+      else f+=ch;}
+    if(f!==''||row.length){row.push(f);rows.push(row);}
+    if(!rows.length)return {n:0,bad:0};
+    const head=rows[0].map(x=>String(x).trim());
+    const iKey=head.indexOf('Key'),iLv=head.indexOf('Level'),iZone=head.indexOf('Zone');
+    const M=this._mpMonths(),cols=M.map(m=>({m,i:head.indexOf(m)})).filter(x=>x.i>=0);
+    if(!cols.length)return {n:0,bad:0};
+    const o=this._mzOv();let n=0,bad=0;
+    const byLabel={};
+    (this.DATA.order||[]).forEach(lv=>this._mzZones(lv).concat(this._mzCores(lv))
+      .forEach(z=>{byLabel[lv+'||'+String(z.label).trim().toUpperCase()]=lv+'||'+z.zmk;}));
+    rows.slice(1).forEach(r=>{
+      if(!r||!r.length)return;
+      let key=(iKey>=0?String(r[iKey]||'').trim():'');
+      if(!key&&iLv>=0&&iZone>=0)key=byLabel[String(r[iLv]||'').trim()+'||'+String(r[iZone]||'').trim().toUpperCase()]||'';
+      if(!key||key.indexOf('||')<0){if(r.join('').trim())bad++;return;}
+      const p2=key.split('||'),lv=p2[0],zmk=p2.slice(1).join('||');
+      cols.forEach(({m,i})=>{
+        const raw=String(r[i]==null?'':r[i]).replace(/[, ]/g,'').trim();
+        const k=this._mzKey(lv,zmk,m);
+        if(raw===''){if(o[k]!=null){delete o[k];n++;}return;}
+        const v=Number(raw);if(!Number.isFinite(v))return;
+        const nv=Math.max(0,Math.round(v));
+        if(o[k]!==nv){o[k]=nv;n++;}});});
+    return {n,bad};
   }
   _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
@@ -2943,38 +3015,52 @@ class Component extends DCLogic {
         <label style="font-size:10px;font-weight:700;color:var(--dim);display:flex;align-items:center;gap:5px">Level
           <select id="__mzLv" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px;font-weight:700">
             ${lvs.map(l=>`<option${l===lv?' selected':''}>${this.esc(l)}</option>`).join('')}</select></label>
+        <label style="font-size:10px;font-weight:700;color:var(--dim);display:flex;align-items:center;gap:5px">Month
+          <select id="__mzMon" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px;font-weight:700">
+            <option value="">All months</option>${this._mpMonths().map(m=>`<option value="${this.esc(m)}"${m===only?' selected':''}>${this.esc(m)}</option>`).join('')}</select></label>
         <button class="hbtn" id="__mzClose">\u00d7</button></div>
       <div class="delay-admin-scroll" id="__mzBody"></div>
       <div class="delay-admin-foot"><span id="__mzNote"></span>
         <div style="display:flex;gap:6px">
+          <button class="hbtn" id="__mzCsv" title="Download every level as a CSV \u2014 Excel opens it directly">\u2b07 Excel</button>
+          <button class="hbtn" id="__mzUp" title="Load a filled-in CSV back in">\u2b06 Import</button>
+          <input type="file" id="__mzFile" accept=".csv,text/csv,text/plain" style="display:none">
           <button class="hbtn" id="__mzFill" title="Write the calculated figures into the empty cells of this level \u2014 typed cells are left as they are">\u2935 Fill from plan</button>
           <button class="hbtn" id="__mzClear">\u21ba Clear this level</button>
           <button class="hbtn primary" id="__mzDone">Done</button></div></div></div>`;
     document.body.appendChild(ov);
-    const M=this._mpMonths();
+    let mon=(this._mpMonths().indexOf(only)>=0)?only:'';
     const draw=()=>{
+      const M=mon?[mon]:this._mpMonths();
       const zs=this._mzZones(lv),o=this._mzOv();
       const teamOf={};(this._resourceData().teams||[]).forEach(t=>(t.zones||[]).forEach(x=>{
         if(x.lv===lv)teamOf[x.zmk]={name:t.name||'Team',color:t.color||'#3157d5'};}));
       /* Grouped by area, and inside each area the zones a team is on come first: those are the rows
          that get filled in.  Zones with nobody on them sit at the bottom of their area, greyed. */
       const CATS=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']];
+      const cores=this._mzCores(lv);
+      (this._resourceData().teams||[]).forEach(t=>(t.cores||[]).forEach(x=>{
+        if(x.lv===lv)teamOf['CW:'+this._lw8Name(x.id)]={name:t.name||'Team',color:t.color||'#3157d5'};}));
       const groups=CATS.map(([c,lab])=>({c,lab,zs:zs.filter(z=>z.cat===c)
         .sort((x,y)=>(teamOf[y.zmk]?1:0)-(teamOf[x.zmk]?1:0)
                    ||String(x.label).localeCompare(String(y.label),undefined,{numeric:true}))}))
         .filter(g=>g.zs.length);
+      /* Core walls last, and always open: their gangs run through the whole job. */
+      if(cores.length)groups.push({c:'CW',lab:'Core walls & staircases',zs:cores});
+      const all=zs.concat(cores);
       const colTot=M.map(m=>zs.reduce((n,z)=>n+(this._mzVal(lv,z.zmk,m)||0),0));
+      const cwTot=M.map(m=>this._mzCoreMen(lv,m));
       /* The area figures this level already carries, so a mismatch is visible while typing. */
       const areaTot=M.map(m=>['NB','EB','MA'].reduce((n,c)=>{
         const v=this._mpOv()[this._mpKey(c,lv,m)];return n+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0));
       ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Zone</th><th>Area</th><th>Team</th><th>Start</th><th>Finish</th>
         ${M.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
         ${groups.map(g=>`<tr><td colspan="${5+M.length}" style="background:var(--panel2);font-weight:800;color:var(--accent);letter-spacing:.03em">${this.esc(g.lab)}<span style="color:var(--faint);font-weight:600;margin-left:8px">${g.zs.filter(z=>teamOf[z.zmk]).length} with a team \u00b7 ${g.zs.length} zones</span></td></tr>`
-          +g.zs.map(z=>{const ms=this._mpZoneMonths(lv,z.zmk)||[];
+          +g.zs.map(z=>{const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(lv,z.zmk)||[]);
           return `<tr style="${teamOf[z.zmk]?'':'opacity:.55'}"><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td>
           <td>${teamOf[z.zmk]?`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${teamOf[z.zmk].color};margin-right:5px"></span>${this.esc(teamOf[z.zmk].name)}`:'<span style="color:var(--faint)">\u2014</span>'}</td>
-          ${(()=>{const d=this._mzDates(lv,z.zmk);const f=v=>v?`<span style="font-variant-numeric:tabular-nums">${this.esc(String(v))}</span>`:'<span style="color:var(--crit)">no date</span>';return `<td style="white-space:nowrap">${f(d.start)}</td><td style="white-space:nowrap;color:var(--faint)">${d.end?this.esc(String(d.end)):'\u2014'}</td>`;})()}
-          ${M.map(m=>{const v=this._mzVal(lv,z.zmk,m),w=ms.indexOf(m)>=0,first=w&&ms[0]===m;
+          ${(g.c==='CW')?'<td colspan="2" style="color:var(--faint)">every month</td>':(()=>{const d=this._mzDates(lv,z.zmk);const f=v=>v?`<span style="font-variant-numeric:tabular-nums">${this.esc(String(v))}</span>`:'<span style="color:var(--crit)">no date</span>';return `<td style="white-space:nowrap">${f(d.start)}</td><td style="white-space:nowrap;color:var(--faint)">${d.end?this.esc(String(d.end)):'\u2014'}</td>`;})()}
+          ${M.map(m=>{const v=this._mzVal(lv,z.zmk,m),w=ms.indexOf(m)>=0,first=(g.c!=='CW')&&w&&ms[0]===m;
             /* The whole run of the work is shaded, from the month it starts to the month it ends, and
                the starting month carries a marker \u2014 so a zone that goes on for four months reads as
                four months of work rather than as one date and three blanks. */
@@ -2984,23 +3070,43 @@ class Component extends DCLogic {
                      w?('background:var(--panel2);color:var(--txt);border:1px solid var(--line)'+(first?';border-left:3px solid var(--accent)':''))
                       :'border:1px dashed var(--line);background:transparent;color:var(--faint);opacity:.8'}">`
               :`<span style="font-weight:${v==null?400:800}">${v==null?'\u2014':v}</span>`}</td>`;}).join('')}</tr>`;}).join('')).join('')}
-        </tbody><tfoot><tr><td colspan="5"><b>Typed on this level</b></td>
+        </tbody><tfoot><tr><td colspan="5"><b>Zones typed on this level</b></td>
           ${colTot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr>
+        <tr><td colspan="5" style="color:#15803d;font-weight:800">Core walls &amp; staircases (separate)</td>
+          ${cwTot.map(v=>`<td style="text-align:right;color:#15803d;font-weight:800">${v||'\u2014'}</td>`).join('')}</tr>
         <tr><td colspan="5" style="color:var(--faint)">Area figures for this level</td>
           ${areaTot.map((v,i)=>`<td style="text-align:right;color:${(colTot[i]&&v&&colTot[i]!==v)?'var(--crit)':'var(--faint)'}">${v||'\u2014'}</td>`).join('')}</tr></tfoot></table>`;
       const _mis=M.map((m,i)=>(colTot[i]&&areaTot[i]&&colTot[i]!==areaTot[i])?m:'').filter(Boolean);
-      ov.querySelector('#__mzNote').innerHTML='Bold = typed \u00b7 shaded run = the months the work is on site, blue edge = the month it starts \u00b7 dashed box = nothing scheduled there.'
+      ov.querySelector('#__mzNote').innerHTML='Bold = typed \u00b7 shaded run = the months the work is on site, blue edge = the month it starts \u00b7 dashed box = nothing scheduled there \u00b7 core walls are counted on their own and are not part of the zone figures.'
         +(_mis.length?` <b style="color:var(--crit)">\u00b7 zone total differs from the area figure in ${this.esc(_mis.join(', '))}</b> \u2014 the zone figures are what the map will use.`:'');
       ov.querySelectorAll('.mz-in').forEach(inp=>inp.onchange=()=>{
         const o2=this._mzOv(),k=this._mzKey(lv,inp.dataset.z,inp.dataset.m),v=inp.value.trim();
         if(v==='')delete o2[k];else o2[k]=Math.max(0,Math.round(Number(v)||0));
         this._mzSave();this.render();draw();});};
     ov.querySelector('#__mzLv').onchange=e=>{lv=e.target.value;draw();};
+    ov.querySelector('#__mzMon').onchange=e=>{mon=e.target.value||'';draw();};
+    ov.querySelector('#__mzCsv').onclick=()=>{
+      const blob=new Blob(['\ufeff'+this._mzCsv()],{type:'text/csv;charset=utf-8'});
+      const a2=document.createElement('a');a2.href=URL.createObjectURL(blob);
+      a2.download='P1_manpower_by_zone_'+new Date().toISOString().slice(0,10)+'.csv';
+      document.body.appendChild(a2);a2.click();a2.remove();
+      setTimeout(()=>URL.revokeObjectURL(a2.href),4000);};
+    ov.querySelector('#__mzUp').onclick=()=>{if(!admin)return;ov.querySelector('#__mzFile').click();};
+    ov.querySelector('#__mzFile').onchange=e=>{
+      const f=e.target.files&&e.target.files[0];if(!f)return;
+      const rd=new FileReader();
+      rd.onload=()=>{let r;
+        try{r=this._mzImportCsv(String(rd.result||'').replace(/^\ufeff/,''));}
+        catch(err){this._toast&&this._toast('Could not read that file.');return;}
+        if(!r.n&&!r.bad){this._toast&&this._toast('Nothing changed \u2014 check the month columns are still named Nov\u201926 \u2026');return;}
+        this._mzSave();this.render();draw();
+        this._toast&&this._toast('Imported '+r.n+' figure'+(r.n===1?'':'s')+(r.bad?' \u00b7 '+r.bad+' row'+(r.bad===1?'':'s')+' skipped':'')+' \u2713');};
+      rd.readAsText(f);e.target.value='';};
     ov.querySelector('#__mzClose').onclick=()=>ov.remove();
     ov.querySelector('#__mzDone').onclick=()=>{ov.remove();this.render();};
     ov.querySelector('#__mzFill').onclick=()=>{if(!admin)return;
       if(!window.confirm('Fill the empty cells of '+lv+' from the calculated plan?\nCells you have already typed are left untouched.'))return;
-      let n=0;M.forEach(m=>{n+=this._mzPrefill(lv,m);});
+      let n=0;this._mpMonths().forEach(m=>{n+=this._mzPrefill(lv,m);});
       this._mzSave();this.render();draw();
       this._toast&&this._toast(n?('Filled '+n+' cell'+(n===1?'':'s')+' on '+lv+' \u2713'):'Nothing to fill on '+lv);};
     ov.querySelector('#__mzClear').onclick=()=>{if(!admin)return;
