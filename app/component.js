@@ -2708,60 +2708,6 @@ class Component extends DCLogic {
     out.sort((a,b)=>String(a.label).localeCompare(String(b.label),undefined,{numeric:true}));
     return out;
   }
-  /* The whole by-zone grid as a CSV: every level, its zones and its core walls, one column per
-     month.  Excel opens it directly, and the Key column is what an import matches on, so a row can
-     be re-ordered or a label edited without the figures landing on the wrong zone. */
-  _mzCsv(){
-    const M=this._mpMonths(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-    const lvs=(this.DATA.order||[]).filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
-    const teamOf={};(this._resourceData().teams||[]).forEach(t=>{
-      (t.zones||[]).forEach(x=>{teamOf[x.lv+'||'+x.zmk]=t.name||'Team';});
-      (t.cores||[]).forEach(x=>{teamOf[x.lv+'||CW:'+this._lw8Name(x.id)]=t.name||'Team';});});
-    const out=[['Key','Level','Area','Zone','Team','Start','Finish'].concat(M).map(q).join(',')];
-    lvs.forEach(lv=>{
-      const rows=this._mzZones(lv).concat(this._mzCores(lv));
-      rows.forEach(z=>{
-        const k=lv+'||'+z.zmk,d=(z.cat==='CW')?{}:this._mzDates(lv,z.zmk);
-        out.push([k,lv,z.cat,z.label,teamOf[k]||'',d.start||'',d.end||'']
-          .concat(M.map(m=>{const v=this._mzVal(lv,z.zmk,m);return v==null?'':v;})).map(q).join(','));});});
-    return out.join('\r\n');
-  }
-  /* Read back a filled-in sheet.  Rows are matched on Key; a blank cell clears that figure and a
-     cell left as it was changes nothing, so a half-filled sheet is safe to import. */
-  _mzImportCsv(text){
-    const rows=[];let f='',row=[],inq=false;
-    const src=String(text||'').replace(/\r\n/g,'\n');
-    for(let i=0;i<src.length;i++){const ch=src[i];
-      if(inq){if(ch==='"'){if(src[i+1]==='"'){f+='"';i++;}else inq=false;}else f+=ch;}
-      else if(ch==='"')inq=true;
-      else if(ch===','){row.push(f);f='';}
-      else if(ch==='\n'){row.push(f);f='';rows.push(row);row=[];}
-      else f+=ch;}
-    if(f!==''||row.length){row.push(f);rows.push(row);}
-    if(!rows.length)return {n:0,bad:0};
-    const head=rows[0].map(x=>String(x).trim());
-    const iKey=head.indexOf('Key'),iLv=head.indexOf('Level'),iZone=head.indexOf('Zone');
-    const M=this._mpMonths(),cols=M.map(m=>({m,i:head.indexOf(m)})).filter(x=>x.i>=0);
-    if(!cols.length)return {n:0,bad:0};
-    const o=this._mzOv();let n=0,bad=0;
-    const byLabel={};
-    (this.DATA.order||[]).forEach(lv=>this._mzZones(lv).concat(this._mzCores(lv))
-      .forEach(z=>{byLabel[lv+'||'+String(z.label).trim().toUpperCase()]=lv+'||'+z.zmk;}));
-    rows.slice(1).forEach(r=>{
-      if(!r||!r.length)return;
-      let key=(iKey>=0?String(r[iKey]||'').trim():'');
-      if(!key&&iLv>=0&&iZone>=0)key=byLabel[String(r[iLv]||'').trim()+'||'+String(r[iZone]||'').trim().toUpperCase()]||'';
-      if(!key||key.indexOf('||')<0){if(r.join('').trim())bad++;return;}
-      const p2=key.split('||'),lv=p2[0],zmk=p2.slice(1).join('||');
-      cols.forEach(({m,i})=>{
-        const raw=String(r[i]==null?'':r[i]).replace(/[, ]/g,'').trim();
-        const k=this._mzKey(lv,zmk,m);
-        if(raw===''){if(o[k]!=null){delete o[k];n++;}return;}
-        const v=Number(raw);if(!Number.isFinite(v))return;
-        const nv=Math.max(0,Math.round(v));
-        if(o[k]!==nv){o[k]=nv;n++;}});});
-    return {n,bad};
-  }
   _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
   /* How much work a team actually faces on a level in a month.  Floor space alone is the wrong
@@ -3022,9 +2968,6 @@ class Component extends DCLogic {
       <div class="delay-admin-scroll" id="__mzBody"></div>
       <div class="delay-admin-foot"><span id="__mzNote"></span>
         <div style="display:flex;gap:6px">
-          <button class="hbtn" id="__mzCsv" title="Download every level as a CSV \u2014 Excel opens it directly">\u2b07 Excel</button>
-          <button class="hbtn" id="__mzUp" title="Load a filled-in CSV back in">\u2b06 Import</button>
-          <input type="file" id="__mzFile" accept=".csv,text/csv,text/plain" style="display:none">
           <button class="hbtn" id="__mzFill" title="Write the calculated figures into the empty cells of this level \u2014 typed cells are left as they are">\u2935 Fill from plan</button>
           <button class="hbtn" id="__mzClear">\u21ba Clear this level</button>
           <button class="hbtn primary" id="__mzDone">Done</button></div></div></div>`;
@@ -3088,25 +3031,6 @@ class Component extends DCLogic {
         this._mzSave();this.render();draw();});};
     ov.querySelector('#__mzLv').onchange=e=>{lv=e.target.value;draw();};
     ov.querySelector('#__mzMon').onchange=e=>{mon=e.target.value||'';draw();};
-    ov.querySelector('#__mzCsv').onclick=()=>{
-      const blob=new Blob(['\ufeff'+this._mzCsv()],{type:'text/csv;charset=utf-8'});
-      const a2=document.createElement('a');a2.href=URL.createObjectURL(blob);
-      a2.download='P1_manpower_by_zone_'+new Date().toISOString().slice(0,10)+'.csv';
-      document.body.appendChild(a2);a2.click();a2.remove();
-      setTimeout(()=>URL.revokeObjectURL(a2.href),4000);};
-    ov.querySelector('#__mzUp').onclick=()=>{if(!admin)return;ov.querySelector('#__mzFile').click();};
-    ov.querySelector('#__mzFile').onchange=e=>{
-      const f=e.target.files&&e.target.files[0];if(!f)return;
-      const rd=new FileReader();
-      rd.onload=()=>{let r;
-        try{r=this._mzImportCsv(String(rd.result||'').replace(/^\ufeff/,''));}
-        catch(err){this._toast&&this._toast('Could not read that file.');return;}
-        if(!r.n&&!r.bad){this._toast&&this._toast('Nothing changed \u2014 check the month columns are still named Nov\u201926 \u2026');return;}
-        this._mzSave();this.render();draw();
-        this._toast&&this._toast('Imported '+r.n+' figure'+(r.n===1?'':'s')+(r.bad?' \u00b7 '+r.bad+' row'+(r.bad===1?'':'s')+' skipped':'')+' \u2713');};
-      rd.readAsText(f);e.target.value='';};
-    ov.querySelector('#__mzClose').onclick=()=>ov.remove();
-    ov.querySelector('#__mzDone').onclick=()=>{ov.remove();this.render();};
     ov.querySelector('#__mzFill').onclick=()=>{if(!admin)return;
       if(!window.confirm('Fill the empty cells of '+(lv||'every level')+' from the calculated plan?\nCells you have already typed are left untouched.'))return;
       let n=0;(lv?[lv]:lvs).forEach(l=>this._mpMonths().forEach(m=>{n+=this._mzPrefill(l,m);}));
