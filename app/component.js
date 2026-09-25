@@ -2819,7 +2819,7 @@ class Component extends DCLogic {
     const m=this._resMon();if(!m)return '';
     const v=this._mzVal(lv,'CW:'+this._lw8Name(name),m);
     if(v==null||!v)return '';
-    return `<text x="${x.toFixed(0)}" y="${(y+2450).toFixed(0)}" font-size="2600" fill="#15803d" text-anchor="middle" style="font-weight:950;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:700">${this.fmt(v)}</text>`;
+    return `<text x="${x.toFixed(0)}" y="${(y+3500).toFixed(0)}" font-size="4200" fill="#15803d" text-anchor="middle" style="font-weight:950;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:1150">${this.fmt(v)}</text>`;
   }
   _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
@@ -3254,7 +3254,9 @@ class Component extends DCLogic {
          reads instantly as "nothing here" next to the coloured working levels. */
       const _busy=rows.some(r=>r.lv===lv&&(only?r.cells.some(c=>c.m===only&&c.val>0):r.cells.some(c=>c.val>0)));
       this._resExportOnly=true;this._resExportMonth=only||'';this.showColumns=false;
-      this.showCoreWalls=false;this.showLifts=false;   /* core walls / lifts / stairs stay out of this picture */
+      /* Core walls, lifts and staircases stay in: their gangs are counted separately and their men
+         are printed on the shapes, so leaving them out would drop that headcount off the picture. */
+      this.showCoreWalls=true;this.showLifts=true;
       /* Keep the outlines that frame the picture: transfer slab, Podium CIS and the Podium /
          tower outline — outlines only, nothing filled. */
       /* The transfer slab, Podium CIS and Podium / tower outlines frame every floor, busy or not —
@@ -3715,8 +3717,11 @@ class Component extends DCLogic {
     let s='';
     L.zones.forEach((z,i)=>{
       const _monthEntry=this._resourceMode&&this._resourceEntry(this.curLevel,z.mk||z.lid);
+      /* Men typed against a zone put it on the map whether or not a team has been drawn on it —
+         a figure that only appears once you enter Edit mode is a figure nobody trusts. */
+      const _mzHere=this._resourceMode?(this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0):0;
       const _monthWorking=!this.showMonthWorkOnly||this.colorMode!=='plan'||this._zoneWorksInMonth(this.curLevel,z,this.planMonth());
-      const vis=this.zoneVisible(z)&&_monthWorking&&(!this._resourceMode||this._resourceEditing||!!_monthEntry);
+      const vis=this.zoneVisible(z)&&_monthWorking&&(!this._resourceMode||this._resourceEditing||!!_monthEntry||_mzHere>0);
       /* Manpower export: only the zones actually worked in the chosen month are coloured.  The rest
          keep a thin outline, so the floor still reads as a plan of zones instead of one empty
          silhouette — outline only, no fill, no name, no figure. */
@@ -3736,7 +3741,7 @@ class Component extends DCLogic {
       let op=vis?(_focusOnly?0.58:(this.colorMode==='area'?0.5:0.72)):(_strictHidden?0:0.05);
       /* Resource mode used to set its own opacity unconditionally, which ignored the EB/NB/Marine
          card filter — picking Marine still left the other areas painted. */
-      if(this._resourceMode)op=this.zoneVisible(z)?(_monthEntry?0.68:(this._resourceEditing?0.16:0)):0;
+      if(this._resourceMode)op=this.zoneVisible(z)?(_monthEntry?0.68:(_mzHere>0?0.30:(this._resourceEditing?0.16:0))):0;
       let planst='';
       /* Resource mode sets its own flat opacity above; the plan / cast-date shading must not
          override it, or two zones of the same Team come out in different shades. */
@@ -3791,7 +3796,7 @@ class Component extends DCLogic {
     // --- smart zone labels: font scaled to zone size, collision-avoided (never overlap) ---
     const _lbls=[];
     L.zones.forEach((z,i)=>{
-      if(!this.zoneVisible(z)||(this.colorMode==='plan'&&this.showMonthWorkOnly&&!this._zoneWorksInMonth(this.curLevel,z,this.planMonth()))||(this._resourceMode&&!this._resourceEditing&&!this._resourceEntry(this.curLevel,z.mk||z.lid)))return;
+      if(!this.zoneVisible(z)||(this.colorMode==='plan'&&this.showMonthWorkOnly&&!this._zoneWorksInMonth(this.curLevel,z,this.planMonth()))||(this._resourceMode&&!this._resourceEditing&&!this._resourceEntry(this.curLevel,z.mk||z.lid)&&!(this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())>0)))return;
       let cx,cy;if(z.lx!=null){cx=z.lx;cy=H-z.ly;}else{const c=this.centroid(z.ring,H);cx=c[0];cy=c[1];}
       let x0=1e18,x1=-1e18,y0=1e18,y1=-1e18;z.ring.forEach(p=>{if(p[0]<x0)x0=p[0];if(p[0]>x1)x1=p[0];if(p[1]<y0)y0=p[1];if(p[1]>y1)y1=p[1];});
       const bw=x1-x0,bh=y1-y0;
@@ -3830,6 +3835,10 @@ class Component extends DCLogic {
       if(this._resourceMode&&this.zoneVisible(z)&&!(this._resExportOnly&&this._resExportMonth&&
           !((this._mpZoneMonths(this.curLevel,z.mk||z.lid)||[]).indexOf(this._resExportMonth)>=0))
           &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB',z.mk||z.lid);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
+      /* A zone with men typed on it but no team drawn: print the figure in grey so the number is
+         on the map all the same, instead of only inside the table. */
+      if(this._resourceMode&&!this._resourceEntry(this.curLevel,z.mk||z.lid)&&(this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0)>0){const _gs=Math.max(this.vb.w,1)*0.018,_mzHere=this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0;
+        _topDates+=`<text x="${cx.toFixed(0)}" y="${(cy+_gs*0.36).toFixed(0)}" text-anchor="middle" font-size="${_gs.toFixed(0)}px" fill="#6b7486" style="font-weight:950;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:${(_gs*0.3).toFixed(0)}px">${this.fmt(_mzHere)}</text>`;}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
       if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
