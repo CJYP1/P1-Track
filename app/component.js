@@ -2819,7 +2819,13 @@ class Component extends DCLogic {
     const m=this._resMon();if(!m)return '';
     const v=this._mzVal(lv,'CW:'+this._lw8Name(name),m);
     if(v==null||!v)return '';
-    return `<text x="${x.toFixed(0)}" y="${(y+3500).toFixed(0)}" font-size="4200" fill="#15803d" text-anchor="middle" style="font-weight:950;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:1150">${this.fmt(v)}</text>`;
+    /* A green pill with the figure in white: a core-wall gang is a separate crew and its number
+       has to read at a glance against the team colours around it. */
+    const _t=this.fmt(v),_f=5200,_w=Math.max(_f*1.5,String(_t).length*_f*0.66+_f*0.55),_h=_f*1.3,_y=y+1900;
+    return `<g style="pointer-events:none">`
+      +`<rect x="${(x-_w/2).toFixed(0)}" y="${_y.toFixed(0)}" width="${_w.toFixed(0)}" height="${_h.toFixed(0)}" rx="${(_h*0.32).toFixed(0)}" fill="#15803d" stroke="#ffffff" stroke-width="700"/>`
+      +`<text x="${x.toFixed(0)}" y="${(_y+_h*0.76).toFixed(0)}" font-size="${_f}" fill="#ffffff" text-anchor="middle" style="font-weight:950">${_t}</text>`
+      +`</g>`;
   }
   /* The zone figures added up per area, level and month.  These are what the Manpower table shows
      wherever they exist: one set of numbers, entered once, read everywhere.  Core walls are counted
@@ -3213,9 +3219,14 @@ class Component extends DCLogic {
         const act=(t.zones||[]).filter(x=>x.lv===lv).filter(x=>{
           const ms=this._mpZoneMonths(lv,x.zmk);return ms&&(!only||ms.indexOf(only)>=0);});
         const cores=(t.cores||[]).filter(x=>x.lv===lv);
-        if(!act.length&&!cores.length)return;
-        if(only&&!act.length)return;
-        const cnt={};act.forEach(x=>{const z=zoneOf(lv,x.zmk);if(!z)return;
+        /* Men typed against this team's zones count even when none of those zones happens to be
+           dated in this month — dropping the team here is how typed men went missing from the
+           legend while the table still counted them. */
+        const _typed=only?this._mzTeamMen(t,lv,only):null;
+        if(!act.length&&!cores.length&&_typed==null)return;
+        if(only&&!act.length&&_typed==null)return;
+        const cnt={},_forCat=act.length?act:(t.zones||[]).filter(x=>x.lv===lv);
+        _forCat.forEach(x=>{const z=zoneOf(lv,x.zmk);if(!z)return;
           const c=z.cat||'NB';cnt[c]=(cnt[c]||0)+Math.max(1,Number(z.area)||0);});
         let cat='NB';Object.keys(cnt).forEach(c=>{if(!cat||cnt[c]>(cnt[cat]||0))cat=c;});
         const w=Math.max(0,Math.round((Number(this._resourceTeamValues(t,lv).workers)||0)
@@ -3224,11 +3235,22 @@ class Component extends DCLogic {
         /* For a single month the starting weight is the same workload the map splits by — same
            weights, same rounding, so the legend and the picture can never disagree. */
         here.push({lv,cat,name:t.name||'Team',color:t.color||'#3157d5',
-                   men:only?this._mpTeamLoad(t,lv,cat,only):w,_w:w,zones:act.length});});
+                   men:only?this._mpTeamLoad(t,lv,cat,only):w,_w:w,
+                   zones:act.length||(t.zones||[]).filter(x=>x.lv===lv&&this._mzVal(lv,x.zmk,only)!=null).length});});
       /* The legend says exactly what the map says: each team's men are the sum of its own zones
          for that month.  With nothing typed there is nothing to show. */
       if(only)here.forEach(r=>{const t2=this._resourceData().teams.find(q=>(q.name||'Team')===r.name);
         const v=t2?this._mzTeamMen(t2,lv,only):null;r.men=(v==null)?0:v;});
+      /* Zones carrying men that no team is on: named rather than dropped, so the teams add up to
+         the same total the table shows. */
+      if(only){const owned=new Set();
+        this._resourceData().teams.forEach(t=>(t.zones||[]).forEach(x=>{if(x.lv===lv)owned.add(x.zmk);}));
+        const spare={};
+        this._mzZones(lv).forEach(z=>{if(owned.has(z.zmk))return;
+          const v=this._mzVal(lv,z.zmk,only);if(v==null||!v)return;
+          const c=z.cat||'NB';spare[c]=spare[c]||{n:0,z:0};spare[c].n+=v;spare[c].z++;});
+        Object.keys(spare).forEach(c=>here.push({lv,cat:c,name:'No team',color:'#9aa3b2',
+          men:spare[c].n,zones:spare[c].z}));}
       here.forEach(r=>out.push(r));});
     return out.filter(r=>r.men>0);
   }
@@ -4136,8 +4158,10 @@ class Component extends DCLogic {
           if(!_rc&&!this._resourceEditing)return;                       /* view mode shows only planned core walls */
           _cc=_rc?[_rc.team.color||'#3157d5',_rc.team.color||'#3157d5']:['#d9dee7','#9aa3b0'];}   /* 未开始=亮绿底色; 做完=深绿, 在做=黄(按成员状态) */
         s+=`<polygon class="corewall${_top?' shape-top':''}" data-cwi="${wi}" data-cwlv="${swlv}" points="${pp}" fill="${_cc[0]}" fill-opacity="${_focusOnly?0.16:(this._resourceMode?(this._resourceCoreEntry(swlv,this._shapeLabel(w))?0.72:0.18):(_foreign?0.14:0.22))}" stroke="${_cc[1]}" stroke-width="520"${_foreign?' stroke-dasharray="1400,700"':''} style="${_top?'pointer-events:none':'cursor:pointer'}"/>`;
-        s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none;opacity:${_top?0.75:1}">${this.esc(this._shapeLabel(w))}${_top?' \u23f9':''}</text>`
-          +(_top?'':this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]));});
+        s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none;opacity:${_top?0.75:1}">${this.esc(this._shapeLabel(w))}${_top?' \u23f9':''}</text>`;
+        /* The figure goes on the top layer with the other numbers, so nothing drawn afterwards —
+           columns, sub-zones, overlays — can bury it in the exported picture. */
+        if(!_top)_topDates+=this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]);});
       }
       if(this._drawingCore&&this._coreBuf&&this._coreBuf.length){
         const bp=this._coreBuf.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
@@ -4151,8 +4175,8 @@ class Component extends DCLogic {
         let _lc=this._shapeLinkColor(w,'#2a6bd6','#1d4ed8',this.curLevel,'stair'); const _foreign=(swlv!==this.curLevel);
         if(_top)_lc=['#c3c8d1','#8b93a1'];   /* tops out here: grey marker only */
         s+=`<polygon class="liftwall${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" points="${pp}" fill="${_lc[0]}" fill-opacity="${_foreign?0.13:0.2}" stroke="${_lc[1]}" stroke-width="500"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
-        s+=`<text class="liftlbl${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`
-          +(_top?'':this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]));
+        s+=`<text class="liftlbl${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`;
+        if(!_top)_topDates+=this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]);
         /* Large, almost-invisible top hit layer.  The staircase line sits on top
            of zone/column shapes, and stopping mousedown prevents a small hand
            movement from turning the intended click into map-pan. */
@@ -4185,6 +4209,7 @@ class Component extends DCLogic {
       if(_ovMon)Object.keys(_resTeams).forEach(k2=>{const e2=_resTeams[k2];
         const v=this._mzTeamMen(e2.t,this.curLevel,_ovMon);
         _ovAdj[k2]=(v==null)?0:v;if(v)_ovFb[k2]=true;});
+      const _lblPos=[];
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k];let ps=e.pts||[];if(!ps.length)return;
         /* Put the figure on ground the team is working THIS month.  Anchoring it on an idle zone is
            what made the map look like it had men standing where there was no work. */
@@ -4194,7 +4219,13 @@ class Component extends DCLogic {
         /* Anchor on the Team's Zone nearest its centre, so the number always sits on coloured
            ground rather than drifting into empty space, then drop it clear of the order badge. */
         let a=ps[0],ad=Infinity;ps.forEach(q=>{const d=Math.hypot(q.x-cx0,q.y-cy0);if(d<ad){ad=d;a=q;}});
-        const x=a.x,y=a.y+(a.r||0)+_bs*1.05;
+        let x=a.x,y=a.y+(a.r||0)+_bs*1.05;
+        /* Marine's Podium zones sit almost on top of one another, so several teams would print
+           their figures in the same spot.  Nudge a label down until it clears the ones already
+           placed — a number that overlaps another number is worse than no number. */
+        {let guard=0;
+         while(guard++<12&&_lblPos.some(q=>Math.abs(q.x-x)<_bs*1.9&&Math.abs(q.y-y)<_bs*1.35))y+=_bs*1.45;
+         _lblPos.push({x,y});}
         const v=this._resourceTeamValues(e.t,this.curLevel),cv=this._resourceCoreValues(e.t,this.curLevel),
               w=(_ovAdj[k]!=null?_ovAdj[k]:((Number(v.workers)||0)+(Number(cv.workers)||0))),c=this._darken(e.t.color||'#3157d5',0.42);
         /* A team with no work in the month being looked at gets no label at all — a bare 0 on the
