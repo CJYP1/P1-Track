@@ -3053,11 +3053,11 @@ class Component extends DCLogic {
       /* The area figures this level already carries, so a mismatch is visible while typing. */
       const areaTot=M.map(m=>['NB','EB','MA'].reduce((n,c)=>{
         const v=this._mpOv()[this._mpKey(c,lv,m)];return n+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0));
-      ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Zone</th><th>Area</th><th>Team</th><th>Start</th><th>Finish</th>
+      ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Zone</th><th>Pkg</th><th style="text-align:right">m²</th><th>Team</th><th>Start</th><th>Finish</th>
         ${M.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
-        ${groups.map(g=>`<tr><td colspan="${5+M.length}" style="background:var(--panel2);font-weight:800;color:var(--accent);letter-spacing:.03em">${this.esc(g.lab)}<span style="color:var(--faint);font-weight:600;margin-left:8px">${g.zs.filter(z=>teamOf[z.zmk]).length} with a team \u00b7 ${g.zs.length} zones</span></td></tr>`
+        ${groups.map(g=>`<tr><td colspan="${6+M.length}" style="background:var(--panel2);font-weight:800;color:var(--accent);letter-spacing:.03em">${this.esc(g.lab)}<span style="color:var(--faint);font-weight:600;margin-left:8px">${g.zs.filter(z=>teamOf[z.zmk]).length} with a team \u00b7 ${g.zs.length} zones</span></td></tr>`
           +g.zs.map(z=>{const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(lv,z.zmk)||[]);
-          return `<tr style="${teamOf[z.zmk]?'':'opacity:.55'}"><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td>
+          return `<tr style="${teamOf[z.zmk]?'':'opacity:.55'}"><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td><td style="text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">${z.area?this.fmt(Math.round(z.area)):'—'}</td>
           <td>${teamOf[z.zmk]?`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${teamOf[z.zmk].color};margin-right:5px"></span>${this.esc(teamOf[z.zmk].name)}`:'<span style="color:var(--faint)">\u2014</span>'}</td>
           ${(g.c==='CW')?'<td colspan="2" style="color:var(--faint)">every month</td>':(()=>{const d=this._mzDates(lv,z.zmk);const f=v=>v?`<span style="font-variant-numeric:tabular-nums">${this.esc(String(v))}</span>`:'<span style="color:var(--crit)">no date</span>';return `<td style="white-space:nowrap">${f(d.start)}</td><td style="white-space:nowrap;color:var(--faint)">${d.end?this.esc(String(d.end)):'\u2014'}</td>`;})()}
           ${M.map(m=>{const v=this._mzVal(lv,z.zmk,m),w=ms.indexOf(m)>=0,first=(g.c!=='CW')&&w&&ms[0]===m;
@@ -3070,11 +3070,11 @@ class Component extends DCLogic {
                      w?('background:var(--panel2);color:var(--txt);border:1px solid var(--line)'+(first?';border-left:3px solid var(--accent)':''))
                       :'border:1px dashed var(--line);background:transparent;color:var(--faint);opacity:.8'}">`
               :`<span style="font-weight:${v==null?400:800}">${v==null?'\u2014':v}</span>`}</td>`;}).join('')}</tr>`;}).join('')).join('')}
-        </tbody><tfoot><tr><td colspan="5"><b>Zones typed on this level</b></td>
+        </tbody><tfoot><tr><td colspan="6"><b>Zones typed on this level</b></td>
           ${colTot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr>
-        <tr><td colspan="5" style="color:#15803d;font-weight:800">Core walls &amp; staircases (separate)</td>
+        <tr><td colspan="6" style="color:#15803d;font-weight:800">Core walls &amp; staircases (separate)</td>
           ${cwTot.map(v=>`<td style="text-align:right;color:#15803d;font-weight:800">${v||'\u2014'}</td>`).join('')}</tr>
-        <tr><td colspan="5" style="color:var(--faint)">Area figures for this level</td>
+        <tr><td colspan="6" style="color:var(--faint)">Area figures for this level</td>
           ${areaTot.map((v,i)=>`<td style="text-align:right;color:${(colTot[i]&&v&&colTot[i]!==v)?'var(--crit)':'var(--faint)'}">${v||'\u2014'}</td>`).join('')}</tr></tfoot></table>`;
       const _mis=M.map((m,i)=>(colTot[i]&&areaTot[i]&&colTot[i]!==areaTot[i])?m:'').filter(Boolean);
       ov.querySelector('#__mzNote').innerHTML='Bold = typed \u00b7 shaded run = the months the work is on site, blue edge = the month it starts \u00b7 dashed box = nothing scheduled there \u00b7 core walls are counted on their own and are not part of the zone figures.'
