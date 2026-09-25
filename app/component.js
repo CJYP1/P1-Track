@@ -2357,12 +2357,12 @@ class Component extends DCLogic {
     }).join('');
   }
   _exportDelayBandPng(rows,pick){
-    const W=800,ACC='#c8102e',HEAD='#1f3557',PAD=20,LH=19;
+    const W=880,ACC='#c8102e',HEAD='#1f3557',PAD=16,LH=22;
     const lvls=[...new Set(rows.map(r=>r.lv))];
     const cv=document.createElement('canvas'),x=cv.getContext('2d');
     const cols=[PAD+10,170,235,335];            /* band / zones / avg / list */
     const listW=W-PAD-12-cols[3]-10;
-    const wrap=(txt)=>{x.font='12.5px Arial';const words=String(txt).split(' '),out=[];let cur='';
+    const wrap=(txt)=>{x.font='15.6px Arial';const words=String(txt).split(' '),out=[];let cur='';
       words.forEach(w=>{const t=cur?cur+' '+w:w;if(x.measureText(t).width>listW&&cur){out.push(cur);cur=w;}else cur=t;});
       if(cur)out.push(cur);return out;};
     /* measure first so the canvas is exactly as tall as the content */
@@ -2377,18 +2377,18 @@ class Component extends DCLogic {
     cv.width=W;cv.height=H;
     x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
     x.fillStyle=ACC;x.fillRect(0,0,W,52);
-    x.fillStyle='#ffffff';x.font='700 18px Arial';x.fillText('P1 Waterfront \u00b7 Delay by band',PAD,24);
+    x.fillStyle='#ffffff';x.font='700 22.5px Arial';x.fillText('P1 Waterfront \u00b7 Delay by band',PAD,24);
     const _scope=(pick&&((pick.areas||[]).length||(pick.levels||[]).length))
       ?(((pick.areas||[]).join(' + ')||'All areas')+' \u00b7 '+((pick.levels||[]).join(' ')||'All levels')+' \u00b7 '):'';
-    x.font='600 11.5px Arial';
+    x.font='600 14.4px Arial';
     x.fillText(_scope+rows.length+' zone'+(rows.length===1?'':'s')+' delayed \u00b7 '+new Date().toISOString().slice(0,10),PAD,42);
     let y=66;
     blocks.forEach(B=>{
-      x.fillStyle='#202938';x.font='700 13.5px Arial';
+      x.fillStyle='#202938';x.font='700 16.9px Arial';
       x.fillText(B.lv+' zone delay by band, '+B.g.length+' zone'+(B.g.length===1?'':'s')+' delayed',PAD,y+14);
       y+=26;
       x.fillStyle=HEAD;x.fillRect(PAD,y,W-PAD*2,32);
-      x.fillStyle='#ffffff';x.font='700 11.5px Arial';
+      x.fillStyle='#ffffff';x.font='700 14.4px Arial';
       x.fillText('Delay band',cols[0],y+21);
       x.textAlign='right';x.fillText('Zones',cols[1]+48,y+21);x.fillText('Avg delay',cols[2]+80,y+21);x.textAlign='left';
       x.fillText('Zones (delay in days)',cols[3],y+21);
@@ -2396,20 +2396,20 @@ class Component extends DCLogic {
       B.bands.forEach((b,bi)=>{
         const hot=b.k==='hi';
         x.fillStyle=hot?'#f7dfe2':(bi%2?'#fafbfc':'#ffffff');x.fillRect(PAD,y,W-PAD*2,b.h);
-        x.fillStyle=hot?ACC:'#202938';x.font='700 12.5px Arial';x.fillText(b.label,cols[0],y+20);
+        x.fillStyle=hot?ACC:'#202938';x.font='700 15.6px Arial';x.fillText(b.label,cols[0],y+20);
         x.textAlign='right';x.fillText(String(b.n),cols[1]+48,y+20);
         x.fillStyle=hot?ACC:'#202938';x.fillText(b.avg+' days',cols[2]+80,y+20);x.textAlign='left';
-        x.fillStyle='#202938';x.font='12.5px Arial';
+        x.fillStyle='#202938';x.font='15.6px Arial';
         b.wrapped.forEach((l,li)=>x.fillText(l,cols[3],y+18+li*LH));
         x.strokeStyle='#e2e6ec';x.beginPath();x.moveTo(PAD,y+b.h);x.lineTo(W-PAD,y+b.h);x.stroke();
         y+=b.h;});
       x.fillStyle='#ffffff';x.fillRect(PAD,y,W-PAD*2,32);
-      x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Total',cols[0],y+21);
+      x.fillStyle='#202938';x.font='700 15.6px Arial';x.fillText('Total',cols[0],y+21);
       x.textAlign='right';x.fillText(String(B.g.length),cols[1]+48,y+21);x.fillText(B.avg+' days',cols[2]+80,y+21);x.textAlign='left';
       x.fillStyle=ACC;x.fillText('Worst: '+String(B.worst.label).replace(new RegExp('^'+B.lv+'[-_ ]','i'),'')+' at '+B.worst.days+' days',cols[3],y+21);
       x.strokeStyle='#cfd7e2';x.lineWidth=1.4;x.beginPath();x.moveTo(PAD,y+32);x.lineTo(W-PAD,y+32);x.stroke();x.lineWidth=1;
       y+=32+18;});
-    x.fillStyle='#8a92a2';x.font='10px Arial';
+    x.fillStyle='#8a92a2';x.font='12.5px Arial';
     x.fillText('Avg delay = simple mean of the zones in that band. Source: Delay Table (manual entry).',PAD,y+12);
     const _tag=(pick?((pick.areas||[]).join('-')+'_'+(pick.levels||[]).join('-')):'').replace(/^_+|_+$/g,'');
     const name=('P1_delay-by-band'+(_tag?'_'+_tag:'')+'_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
@@ -2475,39 +2475,39 @@ class Component extends DCLogic {
       rows=rows.filter(r=>(!L.size||L.has(r.lv))&&(!A.size||A.has(key[r.cat]||r.cat)));}
     if(!rows.length){this._toast&&this._toast('No Zone has a delay in that selection.');return;}
     if(pick&&pick.mode==='band'){this._exportDelayBandPng(rows,pick);return;}
-    const W=1180,rowH=40,headH=34,ACC='#c8102e';
+    const W=1280,rowH=42,headH=34,ACC='#c8102e';
     const lvls=[...new Set(rows.map(r=>r.lv))];
-    const H=150+lvls.length*(headH+6)+rows.length*rowH+70;
+    const H=132+lvls.length*(headH+4)+rows.length*rowH+56;
     const cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
     x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
-    x.fillStyle=ACC;x.fillRect(0,0,W,84);
-    x.fillStyle='#ffffff';x.font='700 27px Arial';x.fillText('P1 Waterfront · Delay by Zone',34,37);
-    x.font='600 15px Arial';
+    x.fillStyle=ACC;x.fillRect(0,0,W,74);
+    x.fillStyle='#ffffff';x.font='700 33.8px Arial';x.fillText('P1 Waterfront · Delay by Zone',34,37);
+    x.font='600 18.8px Arial';
     const worst=rows.reduce((m,r)=>Math.max(m,r.days),0);
     const _scope=(pick&&((pick.areas||[]).length||(pick.levels||[]).length))
       ?(((pick.areas||[]).join(' + ')||'All areas')+' · '+((pick.levels||[]).join(' ')||'All levels')+' · '):'';
     x.fillText(_scope+rows.length+' zone'+(rows.length===1?'':'s')+' delayed · worst '+worst+' days · '+new Date().toISOString().slice(0,10),34,66);
     const cols=[34,300,660,930];
     let y=116;
-    x.font='700 13px Arial';x.fillStyle='#475467';
+    x.font='700 16.2px Arial';x.fillStyle='#475467';
     ['Level','Zone','Area','Delay'].forEach((h,i)=>x.fillText(h,cols[i],y));
     y+=18;x.strokeStyle='#cfd7e2';x.beginPath();x.moveTo(28,y);x.lineTo(W-28,y);x.stroke();
     lvls.forEach(lv=>{
       const g=rows.filter(r=>r.lv===lv);
       x.fillStyle='#eef1f6';x.fillRect(28,y,W-56,headH);
-      x.fillStyle='#202938';x.font='700 15px Arial';
+      x.fillStyle='#202938';x.font='700 18.8px Arial';
       x.fillText(lv+' · '+((this.DATA.levels[lv]&&this.DATA.levels[lv].title)||lv)+'   ('+g.length+')',40,y+23);
       y+=headH;
       g.forEach((r,i)=>{
         x.fillStyle=(i%2)?'#fafbfc':'#ffffff';x.fillRect(28,y,W-56,rowH);
-        x.fillStyle='#667085';x.font='13px Arial';x.fillText(r.lv,cols[0],y+25);
-        x.fillStyle='#202938';x.font='700 14px Arial';x.fillText(String(r.label)+(r.group?'  ('+r.group+')':''),cols[1],y+25);
-        x.fillStyle='#667085';x.font='13px Arial';x.fillText(r.cat,cols[2],y+25);
-        x.fillStyle=ACC;x.font='700 17px Arial';x.fillText('−'+r.days+' days',cols[3],y+26);
+        x.fillStyle='#667085';x.font='16.2px Arial';x.fillText(r.lv,cols[0],y+25);
+        x.fillStyle='#202938';x.font='700 17.5px Arial';x.fillText(String(r.label)+(r.group?'  ('+r.group+')':''),cols[1],y+25);
+        x.fillStyle='#667085';x.font='16.2px Arial';x.fillText(r.cat,cols[2],y+25);
+        x.fillStyle=ACC;x.font='700 21.2px Arial';x.fillText('−'+r.days+' days',cols[3],y+26);
         x.strokeStyle='#e8ebf0';x.beginPath();x.moveTo(28,y+rowH);x.lineTo(W-28,y+rowH);x.stroke();
         y+=rowH;});
       y+=6;});
-    y+=14;x.fillStyle='#8a92a2';x.font='12px Arial';
+    y+=14;x.fillStyle='#8a92a2';x.font='15px Arial';
     x.fillText('Delay days are entered by hand in the Delay Table. Zones with no entry are not shown.',34,y);
     const _tag=(pick?((pick.areas||[]).join('-')+'_'+(pick.levels||[]).join('-')):'').replace(/^_+|_+$/g,'');
     const name=('P1_delay-by-zone'+(_tag?'_'+_tag:'')+'_'+new Date().toISOString().slice(0,10)+'.png').replace(/[^a-z0-9_.-]+/gi,'_');
@@ -2825,7 +2825,7 @@ class Component extends DCLogic {
     if(v==null||!v)return '';
     /* A green pill with the figure in white: a core-wall gang is a separate crew and its number
        has to read at a glance against the team colours around it. */
-    const _t=this.fmt(v),_f=5200,_w=Math.max(_f*1.5,String(_t).length*_f*0.66+_f*0.55),_h=_f*1.3,_y=y+1900;
+    const _t=this.fmt(v),_f=this._resExportOnly?7200:5200,_w=Math.max(_f*1.5,String(_t).length*_f*0.66+_f*0.55),_h=_f*1.3,_y=y+1900;
     return `<g style="pointer-events:none">`
       +`<rect x="${(x-_w/2).toFixed(0)}" y="${_y.toFixed(0)}" width="${_w.toFixed(0)}" height="${_h.toFixed(0)}" rx="${(_h*0.32).toFixed(0)}" fill="#15803d" stroke="#ffffff" stroke-width="700"/>`
       +`<text x="${x.toFixed(0)}" y="${(_y+_h*0.76).toFixed(0)}" font-size="${_f}" fill="#ffffff" text-anchor="middle" style="font-weight:950">${_t}</text>`
@@ -3333,7 +3333,7 @@ class Component extends DCLogic {
     const groups=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']]
       .map(([c,lab])=>({c,lab,zs:zRows.filter(z=>z.cat===c).sort(ord)})).filter(g=>g.zs.length);
     if(cRows.length)groups.push({c:'CW',lab:'Core walls & staircases',zs:cRows.slice().sort(ord)});
-    const W=Math.max(1680,760+M.length*104),PAD=26,H0=86,RH=24,ACC='#1f3557';
+    const W=Math.max(1820,700+M.length*120),PAD=22,H0=84,RH=29,ACC='#1f3557';
     const {rows}=this._mpRows(only||'');
     /* A sheet without the floor plans is half a sheet, so the maps are always drawn — with no
        month picked they show the month the Resource view is on. */
@@ -3341,8 +3341,8 @@ class Component extends DCLogic {
     const {shots,mapW,COLS,GAP}=await this._mpMapShots(rows,mapMon,W,PAD);
     shots.forEach(sh=>{sh.h=Math.round(sh.cv.height*mapW/sh.cv.width);});
     const rowH=[];shots.forEach((sh,i)=>{const r=Math.floor(i/COLS);rowH[r]=Math.max(rowH[r]||0,sh.h);});
-    const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+34;});
-    const mapH=shots.length?(_acc+16):0;
+    const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+24;});
+    const mapH=shots.length?(_acc+8):0;
     const team=this._mpTeamRows(only||'');
     const TCATS=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']];
     const teamBy=TCATS.map(([c,lab])=>({c,lab,rows:team.filter(r=>r.cat===c)})).filter(g=>g.rows.length);
@@ -3354,15 +3354,15 @@ class Component extends DCLogic {
     cv.width=W;cv.height=H;
     x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
     x.fillStyle='#c8102e';x.fillRect(0,0,W,58);
-    x.fillStyle='#fff';x.font='700 19px Arial';x.fillText('RC Manpower by zone',PAD,26);
-    x.font='600 11.5px Arial';
+    x.fillStyle='#fff';x.font='700 24.3px Arial';x.fillText('RC Manpower by zone',PAD,26);
+    x.font='600 14.7px Arial';
     x.fillText('Men typed on each zone'+(only?' · '+only:' · all months')+' · plans below show '+mapMon+' · core walls counted separately · '+new Date().toISOString().slice(0,10),PAD,46);
     /* Zone first: it is what the sheet is read by; the level is a qualifier beside it. */
-    const cZone=PAD,cLv=PAD+150,cPkg=PAD+196,cArea=PAD+256,cTeam=PAD+316,cSt=PAD+476,cFi=PAD+566;
-    const cw=(W-PAD-(PAD+660))/M.length,cx=i=>PAD+660+cw*i+cw-8;
+    const cZone=PAD,cLv=PAD+132,cPkg=PAD+178,cArea=PAD+232,cTeam=PAD+292,cSt=PAD+430,cFi=PAD+518;
+    const cw=(W-PAD-(PAD+604))/M.length,cx=i=>PAD+604+cw*i+cw-8;
     let y=H0;
     x.fillStyle=ACC;x.fillRect(PAD,y,W-PAD*2,34);
-    x.fillStyle='#fff';x.font='700 12px Arial';
+    x.fillStyle='#fff';x.font='700 15.4px Arial';
     x.fillText('Zone',cZone,y+22);x.fillText('Lv',cLv,y+22);x.fillText('Pkg',cPkg,y+22);
     x.textAlign='right';x.fillText('m²',cArea+48,y+22);x.textAlign='left';
     x.fillText('Team',cTeam,y+22);x.fillText('Start',cSt,y+22);x.fillText('Finish',cFi,y+22);
@@ -3371,24 +3371,24 @@ class Component extends DCLogic {
     let zebra=0;
     groups.forEach(g=>{
       x.fillStyle=(g.c==='CW')?'#eaf6ee':'#eef1f6';x.fillRect(PAD,y,W-PAD*2,RH);
-      x.fillStyle=(g.c==='CW')?'#15803d':ACC;x.font='700 12px Arial';
+      x.fillStyle=(g.c==='CW')?'#15803d':ACC;x.font='700 15.4px Arial';
       x.fillText(g.lab,cZone,y+17);
-      x.fillStyle='#8a92a2';x.font='11px Arial';
+      x.fillStyle='#8a92a2';x.font='14.1px Arial';
       x.fillText(g.zs.filter(z=>teamOf[z.lv+'||'+z.zmk]).length+' with a team · '+g.zs.length+' rows',cZone+220,y+17);
       y+=RH;zebra=0;
       g.zs.forEach(z=>{
         const tm=teamOf[z.lv+'||'+z.zmk];
         x.fillStyle=(zebra++%2)?'#f7f9fb':'#ffffff';x.fillRect(PAD,y,W-PAD*2,RH);
-        x.fillStyle='#202938';x.font='700 11.5px Arial';x.fillText(String(z.label),cZone,y+16);
-        x.fillStyle='#6b7486';x.font='700 11px Arial';x.fillText(z.lv,cLv,y+16);
-        x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(String(z.cat),cPkg,y+16);
+        x.fillStyle='#202938';x.font='700 14.7px Arial';x.fillText(String(z.label),cZone,y+16);
+        x.fillStyle='#6b7486';x.font='700 14.1px Arial';x.fillText(z.lv,cLv,y+16);
+        x.fillStyle='#8a92a2';x.font='14.1px Arial';x.fillText(String(z.cat),cPkg,y+16);
         x.textAlign='right';x.fillText(z.area?this.fmt(Math.round(z.area)):'—',cArea+48,y+16);x.textAlign='left';
         if(tm){x.fillStyle=tm.color;x.fillRect(cTeam,y+6,9,9);
-          x.fillStyle='#202938';x.font='700 11px Arial';x.fillText(tm.name,cTeam+14,y+16);}
-        else{x.fillStyle='#b6bdc9';x.font='11px Arial';x.fillText('—',cTeam,y+16);}
+          x.fillStyle='#202938';x.font='700 14.1px Arial';x.fillText(tm.name,cTeam+14,y+16);}
+        else{x.fillStyle='#b6bdc9';x.font='14.1px Arial';x.fillText('—',cTeam,y+16);}
         const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(z.lv,z.zmk)||[]);
         const d=(g.c==='CW')?{}:this._mzDates(z.lv,z.zmk);
-        x.font='10.5px Arial';x.fillStyle=d.start?'#6b7486':'#c8102e';
+        x.font='13.4px Arial';x.fillStyle=d.start?'#6b7486':'#c8102e';
         x.fillText((g.c==='CW')?'every month':(d.start||'no date'),cSt,y+16);
         x.fillStyle='#8a92a2';x.fillText((g.c==='CW')?'':(d.end||'—'),cFi,y+16);
         M.forEach((m,i)=>{
@@ -3396,12 +3396,12 @@ class Component extends DCLogic {
           if(on){x.fillStyle='rgba(49,87,213,.07)';x.fillRect(cx(i)-cw+10,y+2,cw-12,RH-4);}
           x.textAlign='right';
           x.fillStyle=(v!=null)?'#202938':(on?'#b6bdc9':'#d4d9e2');
-          x.font=(v!=null?'700 ':'')+'11.5px Arial';
+          x.font=(v!=null?'700 ':'')+'14.7px Arial';
           x.fillText(v!=null?String(v):(on?'':'-'),cx(i),y+16);x.textAlign='left';});
         y+=RH;});});
     const foot=(lab,arr,col,bold)=>{
       x.fillStyle='#ffffff';x.fillRect(PAD,y,W-PAD*2,28);
-      x.fillStyle=col;x.font=(bold?'700 ':'')+'12px Arial';x.fillText(lab,cZone,y+19);
+      x.fillStyle=col;x.font=(bold?'700 ':'')+'15.4px Arial';x.fillText(lab,cZone,y+19);
       x.textAlign='right';arr.forEach((v,i)=>x.fillText(v?String(v):'—',cx(i),y+19));x.textAlign='left';
       y+=28;};
     const zT=M.map(m=>zRows.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0));
@@ -3413,36 +3413,36 @@ class Component extends DCLogic {
     foot('Core walls & staircases (separate)',cT,'#15803d',true);
     foot('Zones + core walls',zT.map((v,i)=>v+cT[i]),'#202938',true);
     foot('Area figures',aT,'#8a92a2',false);
-    y+=8;
-    if(teamBy.length){y+=24;
-      x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Teams'+(only?' · '+only:''),PAD,y);
+    y+=2;
+    if(teamBy.length){y+=16;
+      x.fillStyle='#202938';x.font='700 16px Arial';x.fillText('Teams'+(only?' · '+only:''),PAD,y);
       {const _nT=l2=>new Set(l2.map(r=>r.name)).size,_all=team.reduce((n,r)=>n+r.men,0),_allT=_nT(team);
-       x.textAlign='right';x.fillStyle='#c8102e';x.font='700 13px Arial';
+       x.textAlign='right';x.fillStyle='#c8102e';x.font='700 16.6px Arial';
        x.fillText('Total '+_allT+' team'+(_allT===1?'':'s')+' · '+_all+' men',W-PAD,y);x.textAlign='left';}
       y+=10;
       const CW2=Math.floor((W-PAD*2)/3),y0=y;
       teamBy.forEach((g,gi)=>{
         const gx=PAD+gi*CW2;let gy=y0;
         const sum=g.rows.reduce((n,r)=>n+r.men,0),nt=new Set(g.rows.map(r=>r.name)).size;
-        x.fillStyle='#1f3557';x.font='700 11.5px Arial';x.fillText(g.lab,gx,gy+12);
+        x.fillStyle='#1f3557';x.font='700 14.7px Arial';x.fillText(g.lab,gx,gy+12);
         x.textAlign='right';x.fillText(nt+' team'+(nt===1?'':'s')+' · '+sum+' men',gx+CW2-40,gy+12);x.textAlign='left';
         x.strokeStyle='#dfe4ec';x.beginPath();x.moveTo(gx,gy+18.5);x.lineTo(gx+CW2-28,gy+18.5);x.stroke();
         gy+=22;
         g.rows.forEach(r=>{
           x.fillStyle=r.color;x.fillRect(gx,gy+3,10,10);
-          x.fillStyle='#202938';x.font='700 11.5px Arial';x.fillText(r.name,gx+17,gy+12);
-          x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(r.lv+' · '+r.zones+' zone'+(r.zones===1?'':'s'),gx+150,gy+12);
-          x.fillStyle='#202938';x.font='700 11.5px Arial';x.textAlign='right';
+          x.fillStyle='#202938';x.font='700 14.7px Arial';x.fillText(r.name,gx+17,gy+12);
+          x.fillStyle='#8a92a2';x.font='14.1px Arial';x.fillText(r.lv+' · '+r.zones+' zone'+(r.zones===1?'':'s'),gx+150,gy+12);
+          x.fillStyle='#202938';x.font='700 14.7px Arial';x.textAlign='right';
           x.fillText(r.men+' men',gx+CW2-40,gy+12);x.textAlign='left';gy+=20;});});
       y=y0+22+teamRowsMax*20+6;}
-    if(shots.length){y+=26;
+    if(shots.length){y+=16;
       shots.forEach((sh,i)=>{const col=i%COLS,row=Math.floor(i/COLS);
         const sx=PAD+col*(mapW+GAP),sy=y+rowY[row];
         const cap=sh.lv+' · '+((this.DATA.levels[sh.lv]||{}).title||'');
-        x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText(cap,sx,sy+12);
+        x.fillStyle='#202938';x.font='700 16px Arial';x.fillText(cap,sx,sy+12);
         const _tw=x.measureText(cap).width+14;
-        if(sh.men){x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(sh.men,sx+_tw,sy+12);}
-        else{x.fillStyle='#c8102e';x.font='700 11px Arial';x.fillText('— no work in '+mapMon,sx+_tw,sy+12);}
+        if(sh.men){x.fillStyle='#8a92a2';x.font='14.1px Arial';x.fillText(sh.men,sx+_tw,sy+12);}
+        else{x.fillStyle='#c8102e';x.font='700 14.1px Arial';x.fillText('— no work in '+mapMon,sx+_tw,sy+12);}
         x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);});}
     const name='P1_manpower_by_zone_'+(lvList.length===1?lvList[0]:'all')+(only?'_'+only.replace(/[^a-z0-9]/gi,''):'')+'_'+new Date().toISOString().slice(0,10)+'.png';
     this._showPngPreview(cv.toDataURL('image/png'),name,bodyRows);
@@ -3457,14 +3457,14 @@ class Component extends DCLogic {
     if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
     /* Landscape sheet: the maps run four across, so a seven-month table and every floor of the
        project fit on one page that is wider than it is tall. */
-    const W=Math.max(1680,300+months.length*96),PAD=26,H0=86,RH=30,ACC='#1f3557';
+    const W=Math.max(1820,320+months.length*116),PAD=22,H0=84,RH=35,ACC='#1f3557';
     /* One map per level that has men in this month, top floor first, each drawn in Resource mode
        so every team's headcount is on it.  The whole view is put back exactly as it was. */
     const {shots,mapW,COLS,GAP}=await this._mpMapShots(rows,only,W,PAD);
     shots.forEach(sh=>{sh.h=Math.round(sh.cv.height*mapW/sh.cv.width);});
     const rowH=[];shots.forEach((sh,i)=>{const r=Math.floor(i/COLS);rowH[r]=Math.max(rowH[r]||0,sh.h);});
-    const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+34;});
-    const mapH=shots.length?(_acc+16):0;
+    const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+24;});
+    const mapH=shots.length?(_acc+8):0;
     const cv=document.createElement('canvas'),x=cv.getContext('2d');
     const team=this._mpTeamRows(only);
     /* The legend reads area by area — New Basement, Existing Basement, Marine side by side — because
@@ -3477,8 +3477,8 @@ class Component extends DCLogic {
     cv.width=W;cv.height=H;
     x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
     x.fillStyle='#c8102e';x.fillRect(0,0,W,58);
-    x.fillStyle='#fff';x.font='700 19px Arial';x.fillText('RC Manpower by month',PAD,26);
-    x.font='600 11.5px Arial';
+    x.fillStyle='#fff';x.font='700 24.3px Arial';x.fillText('RC Manpower by month',PAD,26);
+    x.font='600 14.7px Arial';
     x.fillText('From the Resource plan and each zone\u2019s slab dates \u00b7 '+new Date().toISOString().slice(0,10),PAD,46);
     /* The table keeps its own width: stretching one month's column across a landscape sheet
        leaves the figure marooned at the far edge. */
@@ -3486,27 +3486,27 @@ class Component extends DCLogic {
     const c0=PAD,c1=PAD+150,cw=(TW-210)/months.length,cx=i=>PAD+210+cw*i+cw-6;
     let y=H0;
     x.fillStyle=ACC;x.fillRect(PAD,y,TW,34);
-    x.fillStyle='#fff';x.font='700 12px Arial';x.fillText('Area',c0+8,y+22);x.fillText('Level',c1+8,y+22);
+    x.fillStyle='#fff';x.font='700 15.4px Arial';x.fillText('Area',c0+8,y+22);x.fillText('Level',c1+8,y+22);
     x.textAlign='right';months.forEach((m,i)=>x.fillText(m,cx(i),y+22));x.textAlign='left';
     y+=34;
     rows.forEach((r,i)=>{
       x.fillStyle=(i%2)?'#f7f9fb':'#ffffff';x.fillRect(PAD,y,TW,RH);
-      x.fillStyle='#202938';x.font='12px Arial';x.fillText(r.label,c0+8,y+20);
-      x.font='700 12px Arial';x.fillText(r.lv,c1+8,y+20);
+      x.fillStyle='#202938';x.font='15.4px Arial';x.fillText(r.label,c0+8,y+20);
+      x.font='700 15.4px Arial';x.fillText(r.lv,c1+8,y+20);
       x.textAlign='right';
       r.cells.forEach((c,j)=>{x.fillStyle=c.manual?'#c8102e':'#202938';
-        x.font=(c.manual?'700 ':'')+'12px Arial';x.fillText(c.val?String(c.val):'\u2014',cx(j),y+20);});
+        x.font=(c.manual?'700 ':'')+'15.4px Arial';x.fillText(c.val?String(c.val):'\u2014',cx(j),y+20);});
       x.textAlign='left';y+=RH;});
     x.fillStyle='#eef1f6';x.fillRect(PAD,y,TW,34);
-    x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('All zones combined',c0+8,y+22);
+    x.fillStyle='#202938';x.font='700 16px Arial';x.fillText('All zones combined',c0+8,y+22);
     x.textAlign='right';
     months.forEach((m,i)=>{const v=rows.reduce((n,r)=>n+(r.cells.find(c=>c.m===m).val||0),0);
       x.fillText(String(v||0),cx(i),y+22);});
     x.textAlign='left';y+=34;
-    x.fillStyle='#8a92a2';x.font='10px Arial';
+    x.fillStyle='#8a92a2';x.font='12.8px Arial';
     x.fillText('Red = typed by hand, overriding the calculated figure.',PAD,y+18);
-    if(teamBy.length){y+=32;
-      x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Teams'+(only?' \u00b7 '+only:''),PAD,y);
+    if(teamBy.length){y+=20;
+      x.fillStyle='#202938';x.font='700 16px Arial';x.fillText('Teams'+(only?' \u00b7 '+only:''),PAD,y);
       /* One grand total for the whole month, so the legend can be checked against the table's own
          "All zones combined" without adding the three areas up by hand. */
       /* A team working on two levels is listed twice, so the count is of distinct teams — the
@@ -3519,8 +3519,8 @@ class Component extends DCLogic {
          .filter(Boolean).join('  \u00b7  ');
        x.textAlign='right';
        const _lab='Total '+_allT+' team'+(_allT===1?'':'s')+' \u00b7 '+_all+' men';
-       x.fillStyle='#c8102e';x.font='700 13px Arial';x.fillText(_lab,W-PAD,y);
-       if(_byc){x.fillStyle='#6b7486';x.font='700 11.5px Arial';
+       x.fillStyle='#c8102e';x.font='700 16.6px Arial';x.fillText(_lab,W-PAD,y);
+       if(_byc){x.fillStyle='#6b7486';x.font='700 14.7px Arial';
          x.fillText(_byc,W-PAD-x.measureText(_lab).width-18,y);}
        x.textAlign='left';}
       y+=10;
@@ -3528,30 +3528,30 @@ class Component extends DCLogic {
       teamBy.forEach((g,gi)=>{
         const gx=PAD+gi*CW2;let gy=y0;
         const sum=g.rows.reduce((n2,r)=>n2+r.men,0),nt=new Set(g.rows.map(r=>r.name)).size;
-        x.fillStyle='#1f3557';x.font='700 11.5px Arial';
+        x.fillStyle='#1f3557';x.font='700 14.7px Arial';
         x.fillText(g.lab,gx,gy+12);
-        x.fillStyle='#1f3557';x.font='700 11.5px Arial';x.textAlign='right';
+        x.fillStyle='#1f3557';x.font='700 14.7px Arial';x.textAlign='right';
         x.fillText(nt+' team'+(nt===1?'':'s')+' \u00b7 '+sum+' men',gx+CW2-40,gy+12);x.textAlign='left';
         x.strokeStyle='#dfe4ec';x.lineWidth=1;
         x.beginPath();x.moveTo(gx,gy+18.5);x.lineTo(gx+CW2-28,gy+18.5);x.stroke();
         gy+=22;
         g.rows.forEach(r=>{
           x.fillStyle=r.color;x.fillRect(gx,gy+3,10,10);
-          x.fillStyle='#202938';x.font='700 11.5px Arial';x.fillText(r.name,gx+17,gy+12);
-          x.fillStyle='#8a92a2';x.font='11px Arial';
+          x.fillStyle='#202938';x.font='700 14.7px Arial';x.fillText(r.name,gx+17,gy+12);
+          x.fillStyle='#8a92a2';x.font='14.1px Arial';
           x.fillText(r.lv+' \u00b7 '+r.zones+' zone'+(r.zones===1?'':'s'),gx+150,gy+12);
-          x.fillStyle='#202938';x.font='700 11.5px Arial';x.textAlign='right';
+          x.fillStyle='#202938';x.font='700 14.7px Arial';x.textAlign='right';
           x.fillText(r.men+' men',gx+CW2-40,gy+12);x.textAlign='left';
           gy+=20;});});
       y=y0+22+teamRowsMax*20+6;}
-    if(shots.length){y+=26;
+    if(shots.length){y+=16;
       shots.forEach((sh,i)=>{const col=i%COLS,row=Math.floor(i/COLS);
         const sx=PAD+col*(mapW+GAP),sy=y+rowY[row];
-        x.fillStyle='#202938';x.font='700 12.5px Arial';
+        x.fillStyle='#202938';x.font='700 16px Arial';
         x.fillText(sh.lv+' \u00b7 '+((this.DATA.levels[sh.lv]||{}).title||''),sx,sy+12);
         {const _tw=x.measureText(sh.lv+' \u00b7 '+((this.DATA.levels[sh.lv]||{}).title||'')).width+14;
-          if(sh.men){x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(sh.men,sx+_tw,sy+12);}
-          else{x.fillStyle='#c8102e';x.font='700 11px Arial';
+          if(sh.men){x.fillStyle='#8a92a2';x.font='14.1px Arial';x.fillText(sh.men,sx+_tw,sy+12);}
+          else{x.fillStyle='#c8102e';x.font='700 14.1px Arial';
             x.fillText('\u2014 no work'+(only?' in '+only:''),sx+_tw,sy+12);}}
         x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);});}
     const name=('P1_manpower'+(only?'_'+only.replace(/[^a-z0-9]/gi,''):'-by-month')+'_'+new Date().toISOString().slice(0,10)+'.png');
@@ -3770,7 +3770,7 @@ class Component extends DCLogic {
     });});
     return rows.sort((a,b)=>(b.complete-a.complete)||String(a.zone).localeCompare(String(b.zone))||String(a.name).localeCompare(String(b.name)));
   }
-  _exportCombinedLevelPng(cat,lv,mon){const rows=this._combinedScheduleLevelRows(cat,lv,mon);if(!rows.length){this._toast('No activity data to export for '+cat+' '+lv+' '+mon+'.');return;}const meta={EB:{name:'EB · Existing Basement',color:'#d94d86'},NB:{name:'NB · New Basement',color:'#e58b2f'},MA:{name:'MR · Marine',color:'#367bc8'}}[cat]||{name:cat,color:'#5265d5'},order=['earth','exc','piling','demo_wall','demo','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','slab','slab_top','rc','pcbeam','temp_stair','act_cyclical','mep_acmv','mep_fps','mep_elec','mep_bms'],by={};rows.forEach(r=>(by[r.aid]||(by[r.aid]={name:r.name,rows:[]})).rows.push(r));const acts=Object.keys(by).sort((a,b)=>{const ai=order.indexOf(a),bi=order.indexOf(b);return (ai<0?999:ai)-(bi<0?999:bi)||by[a].name.localeCompare(by[b].name);}),W=1600,rowH=36,headH=38,H=Math.min(30000,150+acts.length*(headH+8)+rows.length*rowH),cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d'),fmt=n=>Math.round(Number(n)||0).toLocaleString(),text=(raw,max)=>{const orig=String(raw),suffix='…';let s=orig;while(s.length&&x.measureText(s+suffix).width>max)s=s.slice(0,-1);return s===orig?s:s+suffix;};x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle=meta.color;x.fillRect(0,0,W,76);x.fillStyle='#fff';x.font='700 26px Arial';x.fillText('P1 Waterfront · '+meta.name+' · '+lv,34,34);x.font='700 16px Arial';x.fillText(mon+' · Construction Schedule activity summary',34,60);let y=98;const cols=[34,410,610,810,1030,1240];x.font='700 13px Arial';x.fillStyle='#475467';['Zone','Month Plan','Month Actual','Cumulative Actual','Progress','Status'].forEach((h,i)=>x.fillText(h,cols[i],y));y+=20;x.strokeStyle='#cfd7e2';x.beginPath();x.moveTo(28,y);x.lineTo(W-28,y);x.stroke();acts.forEach(aid=>{if(y+headH>H)return;const g=by[aid];x.fillStyle='#e8edf3';x.fillRect(28,y,W-56,headH);x.fillStyle='#202938';x.font='700 16px Arial';x.fillText(g.name,40,y+25);y+=headH;g.rows.sort((a,b)=>(b.done>0)-(a.done>0)||String(a.zone).localeCompare(String(b.zone))).forEach(r=>{if(y+rowH>H)return;x.fillStyle=r.done>0?'#edf8f1':'#fff';x.fillRect(28,y,W-56,rowH);x.fillStyle='#202938';x.font='700 13px Arial';x.fillText(text(r.zone,330)+(r.critical?'  CRITICAL':''),cols[0],y+23);x.font='13px Arial';x.fillText(fmt(r.plan)+(r.unit?' '+r.unit:''),cols[1],y+23);x.fillStyle=r.done>0?'#167846':'#202938';x.fillText(fmt(r.done)+(r.unit?' '+r.unit:''),cols[2],y+23);x.fillStyle='#202938';x.fillText(fmt(r.cumDone)+(r.unit?' '+r.unit:''),cols[3],y+23);x.fillStyle=r.behind>0?'#b54708':'#167846';x.fillText(r.pct+'% ('+fmt(r.cumDone)+'/'+fmt(r.cumPlan)+')',cols[4],y+23);x.fillStyle=r.behind>0?'#c8102e':'#167846';x.fillText(r.behind>0?'Behind '+fmt(r.behind)+(r.unit?' '+r.unit:''):(r.done>0?'Actual entered':'On track'),cols[5],y+23);x.strokeStyle='#e4e8ee';x.beginPath();x.moveTo(28,y+rowH);x.lineTo(W-28,y+rowH);x.stroke();y+=rowH;});y+=8;});const dl=url=>{const a=document.createElement('a');a.href=url;a.download=('P1_'+cat+'_'+lv+'_'+mon+'_activity-report.png').replace(/[^a-z0-9_.-]+/gi,'_');document.body.appendChild(a);a.click();a.remove();};if(cv.toBlob)cv.toBlob(b=>{if(!b)return;const u=URL.createObjectURL(b);dl(u);setTimeout(()=>URL.revokeObjectURL(u),1000);},'image/png');else dl(cv.toDataURL('image/png'));}
+  _exportCombinedLevelPng(cat,lv,mon){const rows=this._combinedScheduleLevelRows(cat,lv,mon);if(!rows.length){this._toast('No activity data to export for '+cat+' '+lv+' '+mon+'.');return;}const meta={EB:{name:'EB · Existing Basement',color:'#d94d86'},NB:{name:'NB · New Basement',color:'#e58b2f'},MA:{name:'MR · Marine',color:'#367bc8'}}[cat]||{name:cat,color:'#5265d5'},order=['earth','exc','piling','demo_wall','demo','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','slab','slab_top','rc','pcbeam','temp_stair','act_cyclical','mep_acmv','mep_fps','mep_elec','mep_bms'],by={};rows.forEach(r=>(by[r.aid]||(by[r.aid]={name:r.name,rows:[]})).rows.push(r));const acts=Object.keys(by).sort((a,b)=>{const ai=order.indexOf(a),bi=order.indexOf(b);return (ai<0?999:ai)-(bi<0?999:bi)||by[a].name.localeCompare(by[b].name);}),W=1600,rowH=38,headH=38,H=Math.min(30000,150+acts.length*(headH+4)+rows.length*rowH),cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d'),fmt=n=>Math.round(Number(n)||0).toLocaleString(),text=(raw,max)=>{const orig=String(raw),suffix='…';let s=orig;while(s.length&&x.measureText(s+suffix).width>max)s=s.slice(0,-1);return s===orig?s:s+suffix;};x.fillStyle='#fff';x.fillRect(0,0,W,H);x.fillStyle=meta.color;x.fillRect(0,0,W,68);x.fillStyle='#fff';x.font='700 33.8px Arial';x.fillText('P1 Waterfront · '+meta.name+' · '+lv,22,32);x.font='700 20.8px Arial';x.fillText(mon+' · Construction Schedule activity summary',22,58);let y=88;const cols=[22,400,610,820,1040,1270];x.font='700 16.9px Arial';x.fillStyle='#475467';['Zone','Month Plan','Month Actual','Cumulative Actual','Progress','Status'].forEach((h,i)=>x.fillText(h,cols[i],y));y+=18;x.strokeStyle='#cfd7e2';x.beginPath();x.moveTo(18,y);x.lineTo(W-18,y);x.stroke();acts.forEach(aid=>{if(y+headH>H)return;const g=by[aid];x.fillStyle='#e8edf3';x.fillRect(18,y,W-36,headH);x.fillStyle='#202938';x.font='700 20.8px Arial';x.fillText(g.name,28,y+26);y+=headH;g.rows.sort((a,b)=>(b.done>0)-(a.done>0)||String(a.zone).localeCompare(String(b.zone))).forEach(r=>{if(y+rowH>H)return;x.fillStyle=r.done>0?'#edf8f1':'#fff';x.fillRect(18,y,W-36,rowH);x.fillStyle='#202938';x.font='700 16.9px Arial';x.fillText(text(r.zone,350)+(r.critical?'  CRITICAL':''),cols[0],y+23);x.font='16.9px Arial';x.fillText(fmt(r.plan)+(r.unit?' '+r.unit:''),cols[1],y+23);x.fillStyle=r.done>0?'#167846':'#202938';x.fillText(fmt(r.done)+(r.unit?' '+r.unit:''),cols[2],y+23);x.fillStyle='#202938';x.fillText(fmt(r.cumDone)+(r.unit?' '+r.unit:''),cols[3],y+23);x.fillStyle=r.behind>0?'#b54708':'#167846';x.fillText(r.pct+'% ('+fmt(r.cumDone)+'/'+fmt(r.cumPlan)+')',cols[4],y+23);x.fillStyle=r.behind>0?'#c8102e':'#167846';x.fillText(r.behind>0?'Behind '+fmt(r.behind)+(r.unit?' '+r.unit:''):(r.done>0?'Actual entered':'On track'),cols[5],y+23);x.strokeStyle='#e4e8ee';x.beginPath();x.moveTo(18,y+rowH);x.lineTo(W-18,y+rowH);x.stroke();y+=rowH;});y+=4;});const dl=url=>{const a=document.createElement('a');a.href=url;a.download=('P1_'+cat+'_'+lv+'_'+mon+'_activity-report.png').replace(/[^a-z0-9_.-]+/gi,'_');document.body.appendChild(a);a.click();a.remove();};if(cv.toBlob)cv.toBlob(b=>{if(!b)return;const u=URL.createObjectURL(b);dl(u);setTimeout(()=>URL.revokeObjectURL(u),1000);},'image/png');else dl(cv.toDataURL('image/png'));}
   _exportCombinedMonthlyPng(cat,lv,mon){
     const rows=this._combinedScheduleLevelRows(cat,lv,mon);if(!rows.length){this._toast('No monthly activity data to export for '+cat+' '+lv+' '+mon+'.');return;}
     const meta={EB:{name:'EB · Existing Basement',color:'#d94d86'},NB:{name:'NB · New Basement',color:'#e58b2f'},MA:{name:'MR · Marine',color:'#367bc8'}}[cat]||{name:cat,color:'#5265d5'},order=['earth','exc','piling','demo_wall','demo','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','slab','slab_top','rc','pcbeam','temp_stair','act_cyclical','mep_acmv','mep_fps','mep_elec','mep_bms'],by={};
@@ -4018,7 +4018,7 @@ class Component extends DCLogic {
           &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB',z.mk||z.lid);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       /* A zone with men typed on it but no team drawn: print the figure in grey so the number is
          on the map all the same, instead of only inside the table. */
-      if(this._resourceMode&&!this._resourceEntry(this.curLevel,z.mk||z.lid)&&(this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0)>0){const _gs=Math.max(this.vb.w,1)*0.018,_mzHere=this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0;
+      if(this._resourceMode&&!this._resourceEntry(this.curLevel,z.mk||z.lid)&&(this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0)>0){const _gs=Math.max(this.vb.w,1)*(this._resExportOnly?0.026:0.018),_mzHere=this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0;
         _topDates+=`<text x="${cx.toFixed(0)}" y="${(cy+_gs*0.36).toFixed(0)}" text-anchor="middle" font-size="${_gs.toFixed(0)}px" fill="#6b7486" style="font-weight:950;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:${(_gs*0.3).toFixed(0)}px">${this.fmt(_mzHere)}</text>`;}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
@@ -4204,7 +4204,8 @@ class Component extends DCLogic {
     }
     s+=_colHtml;   /* 柱子放到最后 → 浮在 Marine 子区图层之上, 柱名可见、可点选 */
     if(this._resourceMode){   /* one headline number per Team, anchored on one of its own Zones */
-      const _bs=Math.max(this.vb.w,1)*0.024;   /* scales with the zoom so it reads the same at any level */
+      /* Bigger in an export: a sheet is looked at as a whole page, not zoomed into. */
+      const _bs=Math.max(this.vb.w,1)*(this._resExportOnly?0.034:0.024);
       /* A figure typed into the Manpower table is the truth for that area and level, so the map
          prints it too: each team is scaled to its share, and the last one absorbs the rounding so
          the numbers on the picture add up to exactly what the table says. */
