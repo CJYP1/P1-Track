@@ -3014,7 +3014,7 @@ class Component extends DCLogic {
       <div class="delay-admin-head"><div><b>Manpower by zone</b><span>Men on each zone, month by month \u00b7 what you type here beats every calculated figure</span></div>
         <label style="font-size:10px;font-weight:700;color:var(--dim);display:flex;align-items:center;gap:5px">Level
           <select id="__mzLv" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px;font-weight:700">
-            ${lvs.map(l=>`<option${l===lv?' selected':''}>${this.esc(l)}</option>`).join('')}</select></label>
+            <option value="">All levels</option>${lvs.map(l=>`<option${l===lv?' selected':''}>${this.esc(l)}</option>`).join('')}</select></label>
         <label style="font-size:10px;font-weight:700;color:var(--dim);display:flex;align-items:center;gap:5px">Month
           <select id="__mzMon" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);font-size:11px;font-weight:700">
             <option value="">All months</option>${this._mpMonths().map(m=>`<option value="${this.esc(m)}"${m===only?' selected':''}>${this.esc(m)}</option>`).join('')}</select></label>
@@ -3032,55 +3032,58 @@ class Component extends DCLogic {
     let mon=(this._mpMonths().indexOf(only)>=0)?only:'';
     const draw=()=>{
       const M=mon?[mon]:this._mpMonths();
-      const zs=this._mzZones(lv),o=this._mzOv();
-      const teamOf={};(this._resourceData().teams||[]).forEach(t=>(t.zones||[]).forEach(x=>{
-        if(x.lv===lv)teamOf[x.zmk]={name:t.name||'Team',color:t.color||'#3157d5'};}));
+      const lvList=lv?[lv]:lvs;                    /* an empty Level means the whole project */
+      const teamOf={},teams=this._resourceData().teams||[];
+      teams.forEach(t=>{
+        (t.zones||[]).forEach(x=>{teamOf[x.lv+'||'+x.zmk]={name:t.name||'Team',color:t.color||'#3157d5'};});
+        (t.cores||[]).forEach(x=>{teamOf[x.lv+'||CW:'+this._lw8Name(x.id)]={name:t.name||'Team',color:t.color||'#3157d5'};});});
+      const tOf=r=>teamOf[r.lv+'||'+r.zmk];
+      const zRows=[],cRows=[];
+      lvList.forEach(l=>{
+        this._mzZones(l).forEach(z=>zRows.push({lv:l,zmk:z.zmk,label:z.label,cat:z.cat,area:z.area}));
+        this._mzCores(l).forEach(z=>cRows.push({lv:l,zmk:z.zmk,label:z.label,cat:'CW',area:0}));});
       /* Grouped by area, and inside each area the zones a team is on come first: those are the rows
-         that get filled in.  Zones with nobody on them sit at the bottom of their area, greyed. */
+         that get filled in.  Zones with nobody on them sit at the bottom of their area, greyed.
+         Core walls are a section of their own — their men never mix with the slab figures. */
       const CATS=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']];
-      const cores=this._mzCores(lv);
-      (this._resourceData().teams||[]).forEach(t=>(t.cores||[]).forEach(x=>{
-        if(x.lv===lv)teamOf['CW:'+this._lw8Name(x.id)]={name:t.name||'Team',color:t.color||'#3157d5'};}));
-      const groups=CATS.map(([c,lab])=>({c,lab,zs:zs.filter(z=>z.cat===c)
-        .sort((x,y)=>(teamOf[y.zmk]?1:0)-(teamOf[x.zmk]?1:0)
-                   ||String(x.label).localeCompare(String(y.label),undefined,{numeric:true}))}))
-        .filter(g=>g.zs.length);
-      /* Core walls last, and always open: their gangs run through the whole job. */
-      if(cores.length)groups.push({c:'CW',lab:'Core walls & staircases',zs:cores});
-      const all=zs.concat(cores);
-      const colTot=M.map(m=>zs.reduce((n,z)=>n+(this._mzVal(lv,z.zmk,m)||0),0));
-      const cwTot=M.map(m=>this._mzCoreMen(lv,m));
-      /* The area figures this level already carries, so a mismatch is visible while typing. */
-      const areaTot=M.map(m=>['NB','EB','MA'].reduce((n,c)=>{
-        const v=this._mpOv()[this._mpKey(c,lv,m)];return n+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0));
-      ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Zone</th><th>Pkg</th><th style="text-align:right">m²</th><th>Team</th><th>Start</th><th>Finish</th>
+      const ord=(x,y)=>(lvs.indexOf(x.lv)-lvs.indexOf(y.lv))
+                     ||(tOf(y)?1:0)-(tOf(x)?1:0)
+                     ||String(x.label).localeCompare(String(y.label),undefined,{numeric:true});
+      const groups=CATS.map(([c,lab])=>({c,lab,zs:zRows.filter(z=>z.cat===c).sort(ord)})).filter(g=>g.zs.length);
+      if(cRows.length)groups.push({c:'CW',lab:'Core walls & staircases',zs:cRows.slice().sort(ord)});
+      const colTot=M.map(m=>zRows.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0));
+      const cwTot=M.map(m=>cRows.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0));
+      /* The area figures these levels already carry, so a mismatch is visible while typing. */
+      const areaTot=M.map(m=>lvList.reduce((n,l)=>n+['NB','EB','MA'].reduce((n2,c)=>{
+        const v=this._mpOv()[this._mpKey(c,l,m)];return n2+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0),0));
+      const NC=7;
+      ov.querySelector('#__mzBody').innerHTML=`<table><thead><tr><th>Lv</th><th>Zone</th><th>Pkg</th><th style="text-align:right">m²</th><th>Team</th><th>Start</th><th>Finish</th>
         ${M.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
-        ${groups.map(g=>`<tr><td colspan="${6+M.length}" style="background:var(--panel2);font-weight:800;color:var(--accent);letter-spacing:.03em">${this.esc(g.lab)}<span style="color:var(--faint);font-weight:600;margin-left:8px">${g.zs.filter(z=>teamOf[z.zmk]).length} with a team \u00b7 ${g.zs.length} zones</span></td></tr>`
-          +g.zs.map(z=>{const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(lv,z.zmk)||[]);
-          return `<tr style="${teamOf[z.zmk]?'':'opacity:.55'}"><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td><td style="text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">${z.area?this.fmt(Math.round(z.area)):'—'}</td>
-          <td>${teamOf[z.zmk]?`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${teamOf[z.zmk].color};margin-right:5px"></span>${this.esc(teamOf[z.zmk].name)}`:'<span style="color:var(--faint)">\u2014</span>'}</td>
-          ${(g.c==='CW')?'<td colspan="2" style="color:var(--faint)">every month</td>':(()=>{const d=this._mzDates(lv,z.zmk);const f=v=>v?`<span style="font-variant-numeric:tabular-nums">${this.esc(String(v))}</span>`:'<span style="color:var(--crit)">no date</span>';return `<td style="white-space:nowrap">${f(d.start)}</td><td style="white-space:nowrap;color:var(--faint)">${d.end?this.esc(String(d.end)):'\u2014'}</td>`;})()}
-          ${M.map(m=>{const v=this._mzVal(lv,z.zmk,m),w=ms.indexOf(m)>=0,first=(g.c!=='CW')&&w&&ms[0]===m;
-            /* The whole run of the work is shaded, from the month it starts to the month it ends, and
-               the starting month carries a marker \u2014 so a zone that goes on for four months reads as
-               four months of work rather than as one date and three blanks. */
+        ${groups.map(g=>`<tr><td colspan="${NC+M.length}" style="background:var(--panel2);font-weight:800;color:${g.c==='CW'?'#15803d':'var(--accent)'};letter-spacing:.03em">${this.esc(g.lab)}<span style="color:var(--faint);font-weight:600;margin-left:8px">${g.zs.filter(z=>tOf(z)).length} with a team · ${g.zs.length} rows</span></td></tr>`
+          +g.zs.map(z=>{const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(z.lv,z.zmk)||[]);const tm=tOf(z);
+          return `<tr style="${tm?'':'opacity:.55'}"><td style="color:var(--dim);font-weight:700">${this.esc(z.lv)}</td><td><b>${this.esc(z.label)}</b></td><td style="color:var(--faint)">${this.esc(z.cat)}</td><td style="text-align:right;color:var(--dim);font-variant-numeric:tabular-nums">${z.area?this.fmt(Math.round(z.area)):'—'}</td>
+          <td>${tm?`<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${tm.color};margin-right:5px"></span>${this.esc(tm.name)}`:'<span style="color:var(--faint)">—</span>'}</td>
+          ${(g.c==='CW')?'<td colspan="2" style="color:var(--faint)">every month</td>':(()=>{const d=this._mzDates(z.lv,z.zmk);const f=v=>v?`<span style="font-variant-numeric:tabular-nums">${this.esc(String(v))}</span>`:'<span style="color:var(--crit)">no date</span>';return `<td style="white-space:nowrap">${f(d.start)}</td><td style="white-space:nowrap;color:var(--faint)">${d.end?this.esc(String(d.end)):'—'}</td>`;})()}
+          ${M.map(m=>{const v=this._mzVal(z.lv,z.zmk,m),w=ms.indexOf(m)>=0,first=(g.c!=='CW')&&w&&ms[0]===m;
             return `<td style="text-align:right;${w?'background:rgba(49,87,213,.06)':''}" title="${w?(first?'Work starts this month':'Work continues this month'):'Nothing scheduled here this month'}">${admin
-              ?`<input class="mz-in" data-z="${this.esc(z.zmk)}" data-m="${this.esc(m)}" type="number" min="0" step="1" value="${v==null?'':v}" placeholder="${w?'0':'\u00b7'}"
+              ?`<input class="mz-in" data-l="${this.esc(z.lv)}" data-z="${this.esc(z.zmk)}" data-m="${this.esc(m)}" type="number" min="0" step="1" value="${v==null?'':v}" placeholder="${w?'0':'·'}"
                    style="width:58px;padding:3px 5px;text-align:right;border-radius:5px;font-weight:${v==null?400:800};${
                      w?('background:var(--panel2);color:var(--txt);border:1px solid var(--line)'+(first?';border-left:3px solid var(--accent)':''))
                       :'border:1px dashed var(--line);background:transparent;color:var(--faint);opacity:.8'}">`
-              :`<span style="font-weight:${v==null?400:800}">${v==null?'\u2014':v}</span>`}</td>`;}).join('')}</tr>`;}).join('')).join('')}
-        </tbody><tfoot><tr><td colspan="6"><b>Zones typed on this level</b></td>
-          ${colTot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr>
-        <tr><td colspan="6" style="color:#15803d;font-weight:800">Core walls &amp; staircases (separate)</td>
-          ${cwTot.map(v=>`<td style="text-align:right;color:#15803d;font-weight:800">${v||'\u2014'}</td>`).join('')}</tr>
-        <tr><td colspan="6" style="color:var(--faint)">Area figures for this level</td>
-          ${areaTot.map((v,i)=>`<td style="text-align:right;color:${(colTot[i]&&v&&colTot[i]!==v)?'var(--crit)':'var(--faint)'}">${v||'\u2014'}</td>`).join('')}</tr></tfoot></table>`;
+              :`<span style="font-weight:${v==null?400:800}">${v==null?'—':v}</span>`}</td>`;}).join('')}</tr>`;}).join('')).join('')}
+        </tbody><tfoot><tr><td colspan="${NC}"><b>Zones typed${lv?' on '+this.esc(lv):' · whole project'}</b></td>
+          ${colTot.map(v=>`<td style="text-align:right"><b>${v||'—'}</b></td>`).join('')}</tr>
+        <tr><td colspan="${NC}" style="color:#15803d;font-weight:800">Core walls &amp; staircases (separate)</td>
+          ${cwTot.map(v=>`<td style="text-align:right;color:#15803d;font-weight:800">${v||'—'}</td>`).join('')}</tr>
+        <tr><td colspan="${NC}" style="font-weight:800">Zones + core walls</td>
+          ${colTot.map((v,i)=>`<td style="text-align:right;font-weight:800">${(v+cwTot[i])||'—'}</td>`).join('')}</tr>
+        <tr><td colspan="${NC}" style="color:var(--faint)">Area figures${lv?' for this level':' · whole project'}</td>
+          ${areaTot.map((v,i)=>`<td style="text-align:right;color:${(colTot[i]&&v&&colTot[i]!==v)?'var(--crit)':'var(--faint)'}">${v||'—'}</td>`).join('')}</tr></tfoot></table>`;
       const _mis=M.map((m,i)=>(colTot[i]&&areaTot[i]&&colTot[i]!==areaTot[i])?m:'').filter(Boolean);
-      ov.querySelector('#__mzNote').innerHTML='Bold = typed \u00b7 shaded run = the months the work is on site, blue edge = the month it starts \u00b7 dashed box = nothing scheduled there \u00b7 core walls are counted on their own and are not part of the zone figures.'
-        +(_mis.length?` <b style="color:var(--crit)">\u00b7 zone total differs from the area figure in ${this.esc(_mis.join(', '))}</b> \u2014 the zone figures are what the map will use.`:'');
+      ov.querySelector('#__mzNote').innerHTML='Bold = typed · shaded run = the months the work is on site, blue edge = the month it starts · dashed box = nothing scheduled there · core walls are counted on their own and are not part of the zone figures.'
+        +(_mis.length?` <b style="color:var(--crit)">· zone total differs from the area figure in ${this.esc(_mis.join(', '))}</b> — the zone figures are what the map will use.`:'');
       ov.querySelectorAll('.mz-in').forEach(inp=>inp.onchange=()=>{
-        const o2=this._mzOv(),k=this._mzKey(lv,inp.dataset.z,inp.dataset.m),v=inp.value.trim();
+        const o2=this._mzOv(),k=this._mzKey(inp.dataset.l,inp.dataset.z,inp.dataset.m),v=inp.value.trim();
         if(v==='')delete o2[k];else o2[k]=Math.max(0,Math.round(Number(v)||0));
         this._mzSave();this.render();draw();});};
     ov.querySelector('#__mzLv').onchange=e=>{lv=e.target.value;draw();};
@@ -3105,13 +3108,13 @@ class Component extends DCLogic {
     ov.querySelector('#__mzClose').onclick=()=>ov.remove();
     ov.querySelector('#__mzDone').onclick=()=>{ov.remove();this.render();};
     ov.querySelector('#__mzFill').onclick=()=>{if(!admin)return;
-      if(!window.confirm('Fill the empty cells of '+lv+' from the calculated plan?\nCells you have already typed are left untouched.'))return;
-      let n=0;this._mpMonths().forEach(m=>{n+=this._mzPrefill(lv,m);});
+      if(!window.confirm('Fill the empty cells of '+(lv||'every level')+' from the calculated plan?\nCells you have already typed are left untouched.'))return;
+      let n=0;(lv?[lv]:lvs).forEach(l=>this._mpMonths().forEach(m=>{n+=this._mzPrefill(l,m);}));
       this._mzSave();this.render();draw();
       this._toast&&this._toast(n?('Filled '+n+' cell'+(n===1?'':'s')+' on '+lv+' \u2713'):'Nothing to fill on '+lv);};
     ov.querySelector('#__mzClear').onclick=()=>{if(!admin)return;
-      if(!window.confirm('Drop every zone figure on '+lv+'?'))return;
-      const o2=this._mzOv();Object.keys(o2).forEach(k=>{if(k.indexOf(lv+'||')===0)delete o2[k];});
+      if(!window.confirm('Drop every zone figure on '+(lv||'every level')+'?'))return;
+      const o2=this._mzOv();Object.keys(o2).forEach(k=>{if(!lv||k.indexOf(lv+'||')===0)delete o2[k];});
       this._mzSave();this.render();draw();};
     draw();
   }
