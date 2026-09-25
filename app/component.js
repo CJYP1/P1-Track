@@ -210,7 +210,9 @@ class Component extends DCLogic {
   _mergeB2SlabPile(){
     if(this._appCfg&&this._appCfg.slabPileMerged)return;
     const move=(obj,save)=>{if(!obj)return false;let hit=false;
-      Object.keys(obj).forEach(k=>{const p=k.split('||');if(p[2]!=='slab_pile')return;
+      /* B2 only.  Above B2 there is no 'Slab + Pilecap' — merging its old records into 'Slab'
+         there hands those levels a completed slab they never poured. */
+      Object.keys(obj).forEach(k=>{const p=k.split('||');if(p[2]!=='slab_pile'||p[0]!=='B2')return;
         p[2]='slab';const nk=p.join('||');
         if(obj[nk]==null)obj[nk]=obj[k];
         delete obj[k];hit=true;});
@@ -1128,6 +1130,22 @@ class Component extends DCLogic {
   customCats(){return this._catAdd||(this._catAdd=[]);}
   _podiumColumnOutsideMarine(lv,zmk,id){return lv==='L1'&&this.zoneCat(lv,zmk)!=='MA'&&!!this._colPodLabel(id);}
   customItemsFor(lv,zmk,type){const arr=(this._elemAdd&&this._elemAdd[lv+'||'+zmk+'||'+type])||[];return this._catAct({code:type})==='col'?arr.filter(id=>!this._podiumColumnOutsideMarine(lv,zmk,id)):arr;}
+  /* Custom items the server does not know about only ever existed in one
+     browser (an add whose RPC failed). Keep them and push them up, instead of
+     letting the next pull wipe them. Admin only — the server rejects others. */
+  _healCustomItems(prev){
+    if(!prev||!this.rwsIsAdmin||!this.rwsIsAdmin())return;
+    Object.keys(prev).forEach(k=>{
+      const p=String(k).split('||');if(p.length<3)return;
+      (prev[k]||[]).forEach(id=>{
+        const cur=this._elemAdd[k]||(this._elemAdd[k]=[]);
+        if(cur.indexOf(id)>=0)return;
+        cur.push(id);
+        try{rwsAddItem(k+'||'+id,p[0],p[1],p[2],id);}catch(e){}
+      });
+    });
+    this.saveCustom();
+  }
   saveCustom(){try{localStorage.setItem('rws_cat_add',JSON.stringify(this._catAdd||[]));localStorage.setItem('rws_elem_add',JSON.stringify(this._elemAdd||{}));}catch(e){}}
   _catAct(ct){if(!ct)return null;if(ct.act)return ct.act;const c=ct.code||'';return c.indexOf('cst~')===0?c.split('~')[1]||null:null;}
   _actItemsCode(aid){return 'cst~'+aid+'~items';}
@@ -1139,7 +1157,17 @@ class Component extends DCLogic {
     const rows=ids.map(id=>{const key=lv+'||'+zmk+'||'+code+'||'+id;return `<div class="idrow">${this._idSpanMaybeCol(id,null,z,lv)}<span class="meta"></span>${this.elChip(key)}${this.elDateCtl(key)}${admin?`<span class="allbtn cdel" data-del="${this.esc(code+'||'+id)}" style="color:var(--crit);cursor:pointer;margin-left:6px" title="Delete item">\u2715</span>`:''}</div>`;}).join('');
     return `<div style="margin:4px 0 2px;border-left:2px solid color-mix(in srgb,var(--accent) 32%,transparent);padding-left:10px;border-radius:0 8px 8px 0">${rows}</div>`;}
   delCustomCat(code){if(!this.rwsIsAdmin())return;this._confirmModal('Delete this category and its items everywhere?',()=>{this._catAdd=this.customCats().filter(c=>c.code!==code);Object.keys(this._elemAdd||{}).forEach(k=>{if(k.split('||')[2]===code)delete this._elemAdd[k];});this.saveCustom();rwsDelCat(code);this._actRerender(this._selZone());});}
-  addCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin()){this.rwsDeny('Not allowed.');return;}id=(id||'').trim();if(!id||id.indexOf('||')>=0)return;const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();rwsAddItem(lv+'||'+zmk+'||'+type+'||'+id,lv,zmk,type,id);this._actRerender(this._selZone());}
+  addCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin()){this.rwsDeny('Not allowed.');return;}id=(id||'').trim();if(!id||id.indexOf('||')>=0)return;const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();
+    /* The add must reach the server, otherwise it lives in this browser only
+       and no other account ever sees it. Roll back on a hard rejection. */
+    Promise.resolve(rwsAddItem(lv+'||'+zmk+'||'+type+'||'+id,lv,zmk,type,id)).then(r=>{
+      if(r&&r.ok)return; if(r&&r.offline)return; /* queued, will flush */
+      const a2=this._elemAdd[k]||[];const i2=a2.indexOf(id);if(i2>=0)a2.splice(i2,1);
+      if(!a2.length)delete this._elemAdd[k];
+      this.saveCustom();this._actRerender(this._selZone());
+      this._toast('Could not save "'+id+'" to the cloud — not added. Check your login and try again.');
+    }).catch(()=>{});
+    this._actRerender(this._selZone());}
   delCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin())return;const k=lv+'||'+zmk+'||'+type;this._elemAdd[k]=(this._elemAdd[k]||[]).filter(x=>x!==id);if(!this._elemAdd[k].length)delete this._elemAdd[k];const ek=lv+'||'+zmk+'||'+type+'||'+id;delete this.elem[ek];this.saveElem();this.saveCustom();rwsDelItem(ek);this._actRerender(this._selZone());}
   _custCatSec(lv,z,ct,admin,nested){const zmk=z.mk||z.lid;const code=ct.code;const hidden=this.actHidden(lv,zmk,code);if(!admin&&hidden)return '';const ids=this.customItemsFor(lv,zmk,code);const nd=ids.filter(id=>this.elemStatus(lv+'||'+zmk+'||'+code+'||'+id)==='done').length;const rows=ids.length?ids.map(id=>{const key=lv+'||'+zmk+'||'+code+'||'+id;return `<div class="idrow">${this._idSpanMaybeCol(id,null,z,lv)}<span class="meta"></span>${this.elChip(key)}${this.elDateCtl(key)}${admin?`<span class="allbtn cdel" data-del="${this.esc(code+'||'+id)}" style="color:var(--crit);cursor:pointer;margin-left:6px" title="Delete item">✕</span>`:''}</div>`;}).join(''):'<div class="empty">no items yet</div>';const vis=admin?`<input type="checkbox" class="catvis" data-a="${code}" ${hidden?'':'checked'} title="Show this category to site users" style="margin-right:6px">`:'';const add=admin?` · <span class="allbtn cadd" data-cat="${code}" style="color:var(--accent);cursor:pointer">+ add</span>`:'';const del=admin?` · <span class="allbtn cdelcat" data-cat="${code}" style="color:var(--crit);cursor:pointer">delete</span>`:'';return `<details class="sec ${(admin&&hidden)?'act-off':''}${nested?' elemnest':''}" data-sec="${code}"${nested?' style="margin:6px 0 2px;border-left:2px solid color-mix(in srgb,var(--accent) 32%,transparent);padding-left:10px;border-radius:0 8px 8px 0"':''}><summary class="t">${vis}${this.esc(ct.label)}${(admin&&hidden)?' <span class="hiddentag">hidden from users</span>':''} <span>${nd}/${ids.length} done${add}${del}</span></summary>${rows}</details>`;}
   _custSecHtml(lv,z,admin){let out=(this.customCats()||[]).filter(ct=>!this._catAct(ct)).map(ct=>this._custCatSec(lv,z,ct,admin,false)).join('');return out;}
@@ -1478,7 +1506,7 @@ class Component extends DCLogic {
       this._reconcileZoneCores();
       if(own('manpower')){this._manpower={...(state.manpower||{})};try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}}
       if(Array.isArray(state.custom_cats)){const seen={};this._catAdd=[];state.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;this._catAdd.push({code:c.code,label:c.label});}});}
-      if(Array.isArray(state.custom_items)){this._elemAdd={};state.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(this._elemAdd[k]=this._elemAdd[k]||[]).push(it.elem_id);});}
+      if(Array.isArray(state.custom_items)){const _prevAdd=this._elemAdd||{};this._elemAdd={};state.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(this._elemAdd[k]=this._elemAdd[k]||[]).push(it.elem_id);});this._healCustomItems(_prevAdd);}
       if(state.custom_cats||state.custom_items)this.saveCustom();
       if(state.act_total||state.act_plan||state.act_done_m||state.act_hidden||state.act_def) this.saveAct();
       if(own('zone_updates')){this.updates={};
@@ -1532,7 +1560,7 @@ class Component extends DCLogic {
         take('_actCmt','act_cmt');take('_actUpd','act_upd');take('_editedKeys','edited');take('_zpOv','slab_qty');take('_qtyOv','qty_ov');take('_zpPlanOv','plan_qty_ov');take('_appCfg','settings');take('_manpower','manpower');
         if(own('act_def')){const defs=Object.keys(st.act_def||{}).map(id=>{const v=st.act_def[id]||{},o={id,label:v.label||id,unit:v.unit||''};if(v.phase)o.phase=v.phase;return o;});if(cmp(this._actDefs,defs)){this._actDefs=defs;changed=true;}}
         if(Array.isArray(st.custom_cats)){const seen={},cats=[];st.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;cats.push({code:c.code,label:c.label});}});if(cmp(this._catAdd,cats)){this._catAdd=cats;changed=true;}}
-        if(Array.isArray(st.custom_items)){const items={};st.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(items[k]=items[k]||[]).push(it.elem_id);});if(cmp(this._elemAdd,items)){this._elemAdd=items;changed=true;}}
+        if(Array.isArray(st.custom_items)){const items={};st.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(items[k]=items[k]||[]).push(it.elem_id);});if(cmp(this._elemAdd,items)){const _prevAdd=this._elemAdd;this._elemAdd=items;this._healCustomItems(_prevAdd);this.saveCustom();changed=true;}}
         if(own('crit')&&cmp(this._critOv,st.crit||{})){this._critOv={...(st.crit||{})};try{localStorage.setItem('rws_crit_ov',JSON.stringify(this._critOv));}catch(e){}this.applyCritOv&&this.applyCritOv();this._critPlanSet=null;changed=true;}
         if(st.zone_updates && st.zone_updates.length){   // 进度更新记录(Save update): 追加日志, 合并去重(按 ts+pct)
           let addedU=false;
@@ -3833,7 +3861,7 @@ class Component extends DCLogic {
       return `<tr${rowEditing?` data-rkey="${this.esc(ev.key)}"`:''}>`
         +`<td style="background:#6d1327;color:#fff;font-weight:800;padding:11px 9px;font-size:11.5px;vertical-align:middle;width:27%">${this.esc(r.a)}${this._reportCmtBtn(rc)}${rowEditing?`<button type="button" class="rpt-live" style="display:block;margin-top:8px;padding:3px 7px;border:1px solid rgba(255,255,255,.65);border-radius:5px;background:${ev.has?'#fff':'transparent'};color:${ev.has?'#6d1327':'#fff'};font-size:8.5px;cursor:pointer">↺ Use live</button>`:''}</td>`
         +`<td style="background:#f4dbdf;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:37%"><div style="font-size:13px">${tgt}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px;line-height:1.35">${planSub}<br>Complete by ${this.esc(by)}</div>${planEdit}</td>`
-        +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:36%"><div style="font-size:13px">${A.pct}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px">${actSub}</div>${ev.has?`<div style="font-size:8.5px;color:#a33; margin-top:4px;font-weight:800" title="This row shows a figure typed in Report Edit. Open Edit and press \u21ba Use live to go back to the live numbers.">\u270e manual \u00b7 live ${fmtN(liveA.done)}/${fmtN(liveTotal)}</div>`:''}${actEdit}</td>`
+        +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:36%"><div style="font-size:13px">${A.pct}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px">${actSub}</div>${actEdit}</td>`
         +`</tr>`+(this._cmtOpen===rc.key?`<tr class="rpt-cmt-wrap" ${rmeta}><td colspan="3" style="background:#fff;padding:8px 10px">${this._cmtPanel(rc.lv,rc.zmk,rc.aid,cat)}</td></tr>`:''); }).join('');
     const makeTable=(lv)=>{const rows=makeRows(this._liveReportRows(cat,[lv]))||`<tr><td colspan="3" style="background:#f4dbdf;color:#6d1327;text-align:center;padding:18px 8px;font-size:11px">当前 HTML 数据源里还没有 ${this.esc(cat+' '+lv)} Structure Activity 数据。</td></tr>`;return `<section style="min-width:0"><div style="font-size:14px;font-weight:900;color:#6d1327;margin:0 0 5px 5px">${this.esc(lv)} Structure</div><div style="background:#efe9df;padding:4px;border-radius:5px;width:100%"><table style="width:100%;border-collapse:separate;border-spacing:4px;font-family:'Segoe UI',Arial,sans-serif"><thead><tr>`
       +`<th style="background:#6d1327;color:#fff;padding:11px 8px;font-size:11px;font-weight:800;text-align:center">Activity</th>`
