@@ -4050,9 +4050,13 @@ class Component extends DCLogic {
         const sy=H-c.y;
         const _podL=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
         const zz=_podL?{mk:this.curLevel+'|'+_podL,label:_podL,cat:'MA',_pod:true}:zoneByLabel[c.zone];   /* Marine 柱子归到它的 Podium 区: 状态/浇筑时间都从 P 区读 */
-        if(this.filterCat!=='all'&&(!zz||(zz.cat||'NB')!==this.filterCat))return;   /* 上方 EB/NB/Marine 卡片同时过滤柱子，不能残留其他区域 */
+        /* A column whose stored zone name matches nothing on this level used to vanish the moment any
+           area filter was on: admin looking at All saw it, an NB account did not.  Fall back to the
+           zone it physically stands in before deciding it belongs to another area. */
+        const _zz2=zz||(()=>{const lab=this._colZoneAt(this.curLevel,c,6000);return lab?zoneByLabel[lab]:null;})();
+        if(this.filterCat!=='all'&&_zz2&&(_zz2.cat||'NB')!==this.filterCat)return;   /* 上方 EB/NB/Marine 卡片同时过滤柱子，不能残留其他区域 */
         _colSeen.add(_nid);
-        const _ckey=zz?this.ekey(this.curLevel,zz,'col',c.id):'', st=_ckey?this.elemStatus(_ckey):'todo', _cdate=_ckey?this.elemDate(_ckey):'';
+        const _ckey=(zz||_zz2)?this.ekey(this.curLevel,(zz||_zz2),'col',c.id):'', st=_ckey?this.elemStatus(_ckey):'todo', _cdate=_ckey?this.elemDate(_ckey):'';
         const fill=this.colorMode==='castdate'?(st==='done'?'#111111':(zz?this._colCastColor(this.curLevel,zz):'#8a93a3')):(st==='done'?'#111111':st==='wip'?this.cssvar('--wip'):'#8a93a3');   /* Dashboard Columns: 完成=黑；未完成按 zone 的计划完成月份上色 */
         const _uT=this._colUnderT(c);
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
