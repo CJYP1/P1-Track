@@ -3082,6 +3082,7 @@ class Component extends DCLogic {
       <div class="delay-admin-foot"><span id="__mzNote"></span>
         <div style="display:flex;gap:6px">
           <button class="hbtn" id="__mzCsv" title="Save what is on screen \u2014 same columns, same figures">\u2b07 Download</button>
+          <button class="hbtn" id="__mzPng" title="Save this table as a picture \u2014 same sheet as the monthly export">\u2b07 PNG</button>
           <button class="hbtn" id="__mzUp" title="Load back a sheet you downloaded and filled in">\u2b06 Import</button>
           <input type="file" id="__mzFile" accept=".csv,text/csv,text/plain" style="display:none">
           <button class="hbtn" id="__mzFill" title="Write the calculated figures into the empty cells of this level \u2014 typed cells are left as they are">\u2935 Fill from plan</button>
@@ -3154,6 +3155,8 @@ class Component extends DCLogic {
       a2.download='P1_manpower_by_zone_'+(lv||'all')+(mon?'_'+mon.replace(/[^a-z0-9]/gi,''):'')+'_'+new Date().toISOString().slice(0,10)+'.csv';
       document.body.appendChild(a2);a2.click();a2.remove();
       setTimeout(()=>URL.revokeObjectURL(a2.href),4000);};
+    ov.querySelector('#__mzPng').onclick=()=>{
+      this.exportZoneManpowerPng(lv?[lv]:lvs,mon?[mon]:this._mpMonths(),mon||'');};
     ov.querySelector('#__mzUp').onclick=()=>{if(!admin)return;ov.querySelector('#__mzFile').click();};
     ov.querySelector('#__mzFile').onchange=e=>{
       const f=e.target.files&&e.target.files[0];if(!f)return;
@@ -3178,7 +3181,9 @@ class Component extends DCLogic {
       if(!window.confirm('Fill the empty cells of '+(lv||'every level')+' from the calculated plan?\nCells you have already typed are left untouched.'))return;
       let n=0;(lv?[lv]:lvs).forEach(l=>this._mpMonths().forEach(m=>{n+=this._mzPrefill(l,m);}));
       this._mzSave();this.render();draw();
-      this._toast&&this._toast(n?('Filled '+n+' cell'+(n===1?'':'s')+' on '+lv+' \u2713'):'Nothing to fill on '+lv);};
+      this._toast&&this._toast(n?('Filled '+n+' cell'+(n===1?'':'s')+' on '+(lv||'every level')+' \u2713')
+        :'Every cell with work already carries a figure \u2014 nothing left to fill'
+         +(lv?' on '+lv:'')+'. The blank ones are months with no work.');};
     ov.querySelector('#__mzClear').onclick=()=>{if(!admin)return;
       if(!window.confirm('Drop every zone figure on '+(lv||'every level')+'?'))return;
       const o2=this._mzOv();Object.keys(o2).forEach(k=>{if(!lv||k.indexOf(lv+'||')===0)delete o2[k];});
@@ -3224,19 +3229,9 @@ class Component extends DCLogic {
       here.forEach(r=>out.push(r));});
     return out.filter(r=>r.men>0);
   }
-  async exportManpowerMonthPng(only){
-    /* The picture is always of ONE month: a map cannot show seven columns at once, and without a
-       month the figures on it could never line up with the table.  With none picked, the month
-       the app is currently on is used. */
-    if(!only){const M=this._mpMonths(),cur=this.actCurLabel&&this.actCurLabel();
-      only=(M.indexOf(cur)>=0?cur:M[0]);}
-    const {rows,months}=this._mpRows(only);
-    if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
-    /* Landscape sheet: the maps run four across, so a seven-month table and every floor of the
-       project fit on one page that is wider than it is tall. */
-    const W=Math.max(1680,300+months.length*96),PAD=26,H0=86,RH=30,ACC='#1f3557';
-    /* One map per level that has men in this month, top floor first, each drawn in Resource mode
-       so every team's headcount is on it.  The whole view is put back exactly as it was. */
+  /* One map per level, drawn in Resource mode for the month being exported, greyed where
+     nobody works.  Shared by both manpower exports so the pictures always match. */
+  async _mpMapShots(rows,only,W,PAD){
     const lvOrder=(this.DATA.order||[]).slice().reverse();
     /* Every level that exists gets a map, including the ones with nobody on them — an empty floor
        is marked as such, so it is obvious where men still have to be placed. */
@@ -3287,6 +3282,152 @@ class Component extends DCLogic {
     this._resExportOnly=false;this._resExportMonth='';
     this.render();try{this._renderResourcePanel&&this._resourceMode&&this._renderResourcePanel();}catch(e){}
     /* Trimming leaves every level a different shape, so each row is as tall as its tallest map. */
+    return {shots,mapW,COLS,GAP};
+  }
+  /* The by-zone table as a picture, in the same sheet format as the monthly one: red title bar,
+     the grid grouped by area with the core walls last, then one map per level for the chosen
+     month, then the teams. */
+  async exportZoneManpowerPng(lvList,M,only){
+    if(!lvList||!lvList.length||!M||!M.length){this._toast&&this._toast('Nothing to export yet.');return;}
+    const teamOf={};
+    (this._resourceData().teams||[]).forEach(t=>{
+      (t.zones||[]).forEach(x=>{teamOf[x.lv+'||'+x.zmk]={name:t.name||'Team',color:t.color||'#3157d5'};});
+      (t.cores||[]).forEach(x=>{teamOf[x.lv+'||CW:'+this._lw8Name(x.id)]={name:t.name||'Team',color:t.color||'#3157d5'};});});
+    const zRows=[],cRows=[];
+    lvList.forEach(l=>{
+      this._mzZones(l).forEach(z=>zRows.push({lv:l,zmk:z.zmk,label:z.label,cat:z.cat,area:z.area}));
+      this._mzCores(l).forEach(z=>cRows.push({lv:l,zmk:z.zmk,label:z.label,cat:'CW',area:0}));});
+    const O=this.DATA.order||[];
+    const ord=(x,y)=>(O.indexOf(x.lv)-O.indexOf(y.lv))
+      ||((teamOf[y.lv+'||'+y.zmk]?1:0)-(teamOf[x.lv+'||'+x.zmk]?1:0))
+      ||String(x.label).localeCompare(String(y.label),undefined,{numeric:true});
+    const groups=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']]
+      .map(([c,lab])=>({c,lab,zs:zRows.filter(z=>z.cat===c).sort(ord)})).filter(g=>g.zs.length);
+    if(cRows.length)groups.push({c:'CW',lab:'Core walls & staircases',zs:cRows.slice().sort(ord)});
+    const W=Math.max(1680,760+M.length*104),PAD=26,H0=86,RH=24,ACC='#1f3557';
+    const {rows}=this._mpRows(only||'');
+    const {shots,mapW,COLS,GAP}=only?await this._mpMapShots(rows,only,W,PAD):{shots:[],mapW:0,COLS:1,GAP:0};
+    shots.forEach(sh=>{sh.h=Math.round(sh.cv.height*mapW/sh.cv.width);});
+    const rowH=[];shots.forEach((sh,i)=>{const r=Math.floor(i/COLS);rowH[r]=Math.max(rowH[r]||0,sh.h);});
+    const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+34;});
+    const mapH=shots.length?(_acc+16):0;
+    const team=this._mpTeamRows(only||'');
+    const TCATS=[['NB','New Basement'],['EB','Existing Basement'],['MA','Marine']];
+    const teamBy=TCATS.map(([c,lab])=>({c,lab,rows:team.filter(r=>r.cat===c)})).filter(g=>g.rows.length);
+    const teamRowsMax=teamBy.reduce((n,g)=>Math.max(n,g.rows.length),0);
+    const teamH=teamBy.length?(26+22+teamRowsMax*20+14):0;
+    const bodyRows=groups.reduce((n,g)=>n+1+g.zs.length,0);
+    const H=H0+34+bodyRows*RH+4*28+46+teamH+mapH;
+    const cv=document.createElement('canvas'),x=cv.getContext('2d');
+    cv.width=W;cv.height=H;
+    x.fillStyle='#ffffff';x.fillRect(0,0,W,H);
+    x.fillStyle='#c8102e';x.fillRect(0,0,W,58);
+    x.fillStyle='#fff';x.font='700 19px Arial';x.fillText('RC Manpower by zone',PAD,26);
+    x.font='600 11.5px Arial';
+    x.fillText('Men typed on each zone'+(only?' · '+only:' · all months')+' · core walls counted separately · '+new Date().toISOString().slice(0,10),PAD,46);
+    const c0=PAD,cLv=PAD,cZone=PAD+46,cPkg=PAD+190,cArea=PAD+250,cTeam=PAD+310,cSt=PAD+470,cFi=PAD+560;
+    const cw=(W-PAD-(PAD+660))/M.length,cx=i=>PAD+660+cw*i+cw-8;
+    let y=H0;
+    x.fillStyle=ACC;x.fillRect(PAD,y,W-PAD*2,34);
+    x.fillStyle='#fff';x.font='700 12px Arial';
+    x.fillText('Lv',cLv+6,y+22);x.fillText('Zone',cZone,y+22);x.fillText('Pkg',cPkg,y+22);
+    x.textAlign='right';x.fillText('m²',cArea+48,y+22);x.textAlign='left';
+    x.fillText('Team',cTeam,y+22);x.fillText('Start',cSt,y+22);x.fillText('Finish',cFi,y+22);
+    x.textAlign='right';M.forEach((m,i)=>x.fillText(m,cx(i),y+22));x.textAlign='left';
+    y+=34;
+    let zebra=0;
+    groups.forEach(g=>{
+      x.fillStyle=(g.c==='CW')?'#eaf6ee':'#eef1f6';x.fillRect(PAD,y,W-PAD*2,RH);
+      x.fillStyle=(g.c==='CW')?'#15803d':ACC;x.font='700 12px Arial';
+      x.fillText(g.lab,cLv+6,y+17);
+      x.fillStyle='#8a92a2';x.font='11px Arial';
+      x.fillText(g.zs.filter(z=>teamOf[z.lv+'||'+z.zmk]).length+' with a team · '+g.zs.length+' rows',cLv+220,y+17);
+      y+=RH;zebra=0;
+      g.zs.forEach(z=>{
+        const tm=teamOf[z.lv+'||'+z.zmk];
+        x.fillStyle=(zebra++%2)?'#f7f9fb':'#ffffff';x.fillRect(PAD,y,W-PAD*2,RH);
+        x.fillStyle='#6b7486';x.font='700 11px Arial';x.fillText(z.lv,cLv+6,y+16);
+        x.fillStyle='#202938';x.font='700 11.5px Arial';x.fillText(String(z.label),cZone,y+16);
+        x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(String(z.cat),cPkg,y+16);
+        x.textAlign='right';x.fillText(z.area?this.fmt(Math.round(z.area)):'—',cArea+48,y+16);x.textAlign='left';
+        if(tm){x.fillStyle=tm.color;x.fillRect(cTeam,y+6,9,9);
+          x.fillStyle='#202938';x.font='700 11px Arial';x.fillText(tm.name,cTeam+14,y+16);}
+        else{x.fillStyle='#b6bdc9';x.font='11px Arial';x.fillText('—',cTeam,y+16);}
+        const ms=(g.c==='CW')?M.slice():(this._mpZoneMonths(z.lv,z.zmk)||[]);
+        const d=(g.c==='CW')?{}:this._mzDates(z.lv,z.zmk);
+        x.font='10.5px Arial';x.fillStyle=d.start?'#6b7486':'#c8102e';
+        x.fillText((g.c==='CW')?'every month':(d.start||'no date'),cSt,y+16);
+        x.fillStyle='#8a92a2';x.fillText((g.c==='CW')?'':(d.end||'—'),cFi,y+16);
+        M.forEach((m,i)=>{
+          const v=this._mzVal(z.lv,z.zmk,m),on=ms.indexOf(m)>=0;
+          if(on){x.fillStyle='rgba(49,87,213,.07)';x.fillRect(cx(i)-cw+10,y+2,cw-12,RH-4);}
+          x.textAlign='right';
+          x.fillStyle=(v!=null)?'#202938':(on?'#b6bdc9':'#d4d9e2');
+          x.font=(v!=null?'700 ':'')+'11.5px Arial';
+          x.fillText(v!=null?String(v):(on?'':'-'),cx(i),y+16);x.textAlign='left';});
+        y+=RH;});});
+    const foot=(lab,arr,col,bold)=>{
+      x.fillStyle='#ffffff';x.fillRect(PAD,y,W-PAD*2,28);
+      x.fillStyle=col;x.font=(bold?'700 ':'')+'12px Arial';x.fillText(lab,cLv+6,y+19);
+      x.textAlign='right';arr.forEach((v,i)=>x.fillText(v?String(v):'—',cx(i),y+19));x.textAlign='left';
+      y+=28;};
+    const zT=M.map(m=>zRows.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0));
+    const cT=M.map(m=>cRows.reduce((n,z)=>n+(this._mzVal(z.lv,z.zmk,m)||0),0));
+    const aT=M.map(m=>lvList.reduce((n,l)=>n+['NB','EB','MA'].reduce((n2,c)=>{
+      const v=this._mpOv()[this._mpKey(c,l,m)];return n2+(v==null?0:Math.max(0,Math.round(Number(v)||0)));},0),0));
+    x.strokeStyle='#dfe4ec';x.lineWidth=1;x.beginPath();x.moveTo(PAD,y+.5);x.lineTo(W-PAD,y+.5);x.stroke();
+    foot('Zones typed',zT,'#202938',true);
+    foot('Core walls & staircases (separate)',cT,'#15803d',true);
+    foot('Zones + core walls',zT.map((v,i)=>v+cT[i]),'#202938',true);
+    foot('Area figures',aT,'#8a92a2',false);
+    y+=8;
+    if(teamBy.length){y+=24;
+      x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText('Teams'+(only?' · '+only:''),PAD,y);
+      {const _nT=l2=>new Set(l2.map(r=>r.name)).size,_all=team.reduce((n,r)=>n+r.men,0),_allT=_nT(team);
+       x.textAlign='right';x.fillStyle='#c8102e';x.font='700 13px Arial';
+       x.fillText('Total '+_allT+' team'+(_allT===1?'':'s')+' · '+_all+' men',W-PAD,y);x.textAlign='left';}
+      y+=10;
+      const CW2=Math.floor((W-PAD*2)/3),y0=y;
+      teamBy.forEach((g,gi)=>{
+        const gx=PAD+gi*CW2;let gy=y0;
+        const sum=g.rows.reduce((n,r)=>n+r.men,0),nt=new Set(g.rows.map(r=>r.name)).size;
+        x.fillStyle='#1f3557';x.font='700 11.5px Arial';x.fillText(g.lab,gx,gy+12);
+        x.textAlign='right';x.fillText(nt+' team'+(nt===1?'':'s')+' · '+sum+' men',gx+CW2-40,gy+12);x.textAlign='left';
+        x.strokeStyle='#dfe4ec';x.beginPath();x.moveTo(gx,gy+18.5);x.lineTo(gx+CW2-28,gy+18.5);x.stroke();
+        gy+=22;
+        g.rows.forEach(r=>{
+          x.fillStyle=r.color;x.fillRect(gx,gy+3,10,10);
+          x.fillStyle='#202938';x.font='700 11.5px Arial';x.fillText(r.name,gx+17,gy+12);
+          x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(r.lv+' · '+r.zones+' zone'+(r.zones===1?'':'s'),gx+150,gy+12);
+          x.fillStyle='#202938';x.font='700 11.5px Arial';x.textAlign='right';
+          x.fillText(r.men+' men',gx+CW2-40,gy+12);x.textAlign='left';gy+=20;});});
+      y=y0+22+teamRowsMax*20+6;}
+    if(shots.length){y+=26;
+      shots.forEach((sh,i)=>{const col=i%COLS,row=Math.floor(i/COLS);
+        const sx=PAD+col*(mapW+GAP),sy=y+rowY[row];
+        const cap=sh.lv+' · '+((this.DATA.levels[sh.lv]||{}).title||'');
+        x.fillStyle='#202938';x.font='700 12.5px Arial';x.fillText(cap,sx,sy+12);
+        const _tw=x.measureText(cap).width+14;
+        if(sh.men){x.fillStyle='#8a92a2';x.font='11px Arial';x.fillText(sh.men,sx+_tw,sy+12);}
+        else{x.fillStyle='#c8102e';x.font='700 11px Arial';x.fillText('— no work'+(only?' in '+only:''),sx+_tw,sy+12);}
+        x.drawImage(sh.cv,sx,sy+20,mapW,sh.h);});}
+    const name='P1_manpower_by_zone_'+(lvList.length===1?lvList[0]:'all')+(only?'_'+only.replace(/[^a-z0-9]/gi,''):'')+'_'+new Date().toISOString().slice(0,10)+'.png';
+    this._showPngPreview(cv.toDataURL('image/png'),name,bodyRows);
+  }
+  async exportManpowerMonthPng(only){
+    /* The picture is always of ONE month: a map cannot show seven columns at once, and without a
+       month the figures on it could never line up with the table.  With none picked, the month
+       the app is currently on is used. */
+    if(!only){const M=this._mpMonths(),cur=this.actCurLabel&&this.actCurLabel();
+      only=(M.indexOf(cur)>=0?cur:M[0]);}
+    const {rows,months}=this._mpRows(only);
+    if(!rows.length){this._toast&&this._toast('Nothing to export yet.');return;}
+    /* Landscape sheet: the maps run four across, so a seven-month table and every floor of the
+       project fit on one page that is wider than it is tall. */
+    const W=Math.max(1680,300+months.length*96),PAD=26,H0=86,RH=30,ACC='#1f3557';
+    /* One map per level that has men in this month, top floor first, each drawn in Resource mode
+       so every team's headcount is on it.  The whole view is put back exactly as it was. */
+    const {shots,mapW,COLS,GAP}=await this._mpMapShots(rows,only,W,PAD);
     shots.forEach(sh=>{sh.h=Math.round(sh.cv.height*mapW/sh.cv.width);});
     const rowH=[];shots.forEach((sh,i)=>{const r=Math.floor(i/COLS);rowH[r]=Math.max(rowH[r]||0,sh.h);});
     const rowY=[];let _acc=0;rowH.forEach((hh,i)=>{rowY[i]=_acc;_acc+=hh+34;});
