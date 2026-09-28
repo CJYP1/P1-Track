@@ -91,6 +91,7 @@ class Component extends DCLogic {
     this.loadUpdates();
     this.loadElem();
     this._migrateLW8();
+    try{this._migrateDotIds();}catch(_e){}
     try{this._mergeB2SlabPile();}catch(e){console.error('B2 slab merge',e);}
     /* 先把地图柱子与实际 Zone 边界对齐，再计算进度；否则旧的柱子归属会让
        Column List、区域完成量和地图点击分别使用不同的 Zone。 */
@@ -222,6 +223,32 @@ class Component extends DCLogic {
     if(move(this._actDate,null)&&this.saveDates)this.saveDates();
     this._appCfg=this._appCfg||{};this._appCfg.slabPileMerged=true;this._appCfg.b2SlabMerged=true;
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+  }
+  /* A hand-typed id that ends in a dot cannot be told apart from the same id
+     without one — not in the list, and certainly not on the map. Rename it to
+     a suffix that reads: WF-B2C41. becomes WF-B2C41a. */
+  _dotFixId(id){return String(id==null?'':id).replace(/[.\u3002]+$/,'a');}
+  _migrateDotIds(){
+    if(!this._elemAdd)return;
+    let dirty=false;
+    const admin=this.rwsIsAdmin&&this.rwsIsAdmin();
+    Object.keys(this._elemAdd).forEach(k=>{
+      const arr=this._elemAdd[k];if(!Array.isArray(arr))return;
+      const p=k.split('||');if(p.length<3)return;
+      const out=[];
+      arr.forEach(id=>{
+        if(!/[.\u3002]+$/.test(String(id))){if(out.indexOf(id)<0)out.push(id);return;}
+        const nid=this._dotFixId(id);
+        dirty=true;
+        const ok=k+'||'+id,nk=k+'||'+nid;
+        if(this.elem&&this.elem[ok]!=null){if(this.elem[nk]==null)this.elem[nk]=this.elem[ok];delete this.elem[ok];}
+        if(this._elemDate&&this._elemDate[ok]!=null){if(this._elemDate[nk]==null)this._elemDate[nk]=this._elemDate[ok];delete this._elemDate[ok];}
+        if(admin){try{rwsAddItem(nk,p[0],p[1],p[2],nid);rwsDelItem(ok);}catch(e){}}
+        if(out.indexOf(nid)<0)out.push(nid);
+      });
+      if(dirty)this._elemAdd[k]=out;
+    });
+    if(dirty){this.saveCustom();this.saveElem&&this.saveElem();}
   }
   _migrateLW8(){
     const _REN=[[/\bLW8\b/g,'ST3'],[/\bCW8\b/g,'Lift 1/2']];
@@ -1154,10 +1181,14 @@ class Component extends DCLogic {
     if(!(this.customCats()||[]).some(c=>c.code===code))return '';
     const hidden=this.actHidden(lv,zmk,code);if(!admin&&hidden)return '';
     const ids=this.customItemsFor(lv,zmk,code);if(!ids.length)return '';
+    /* Hidden here means every non-admin account sees this activity's list one
+       item shorter than you do, with nothing on screen to say why. */
+    const warn=(admin&&hidden)?`<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--crit);padding:2px 0 4px"><input type="checkbox" class="catvis" data-a="${code}" title="Show these items to site users" style="margin:0"><span>hidden from site users \u2014 only you can see the ${ids.length} item${ids.length===1?'':'s'} below</span></div>`:'';
     const rows=ids.map(id=>{const key=lv+'||'+zmk+'||'+code+'||'+id;return `<div class="idrow">${this._idSpanMaybeCol(id,null,z,lv)}<span class="meta"></span>${this.elChip(key)}${this.elDateCtl(key)}${admin?`<span class="allbtn cdel" data-del="${this.esc(code+'||'+id)}" style="color:var(--crit);cursor:pointer;margin-left:6px" title="Delete item">\u2715</span>`:''}</div>`;}).join('');
-    return `<div style="margin:4px 0 2px;border-left:2px solid color-mix(in srgb,var(--accent) 32%,transparent);padding-left:10px;border-radius:0 8px 8px 0">${rows}</div>`;}
+    return `<div style="margin:4px 0 2px;border-left:2px solid color-mix(in srgb,var(--accent) 32%,transparent);padding-left:10px;border-radius:0 8px 8px 0">${warn}${rows}</div>`;}
   delCustomCat(code){if(!this.rwsIsAdmin())return;this._confirmModal('Delete this category and its items everywhere?',()=>{this._catAdd=this.customCats().filter(c=>c.code!==code);Object.keys(this._elemAdd||{}).forEach(k=>{if(k.split('||')[2]===code)delete this._elemAdd[k];});this.saveCustom();rwsDelCat(code);this._actRerender(this._selZone());});}
-  addCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin()){this.rwsDeny('Not allowed.');return;}id=(id||'').trim();if(!id||id.indexOf('||')>=0)return;const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();
+  addCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin()){this.rwsDeny('Not allowed.');return;}id=(id||'').trim();if(!id||id.indexOf('||')>=0)return;
+    if(/[.\u3002]+$/.test(id)){const fixed=this._dotFixId(id);this._toast('A trailing dot is invisible next to the same number without one — saved as "'+fixed+'".');id=fixed;}const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();
     /* The add must reach the server, otherwise it lives in this browser only
        and no other account ever sees it. Roll back on a hard rejection. */
     Promise.resolve(rwsAddItem(lv+'||'+zmk+'||'+type+'||'+id,lv,zmk,type,id)).then(r=>{
@@ -1525,6 +1556,7 @@ class Component extends DCLogic {
          list shows the same core wall twice — once empty under its new name, once with all the
          data under the old one. */
       try{this._migrateLW8&&this._migrateLW8();}catch(_e){console.error('rename migrate',_e);}
+      try{this._migrateDotIds&&this._migrateDotIds();}catch(_e){console.error('dot migrate',_e);}
       this.applyUpdates(); this.buildRail(); this.buildTimeline(); this.render(); this.refreshUpdBadge();
       /* The Construction Schedule is its own page: without this it kept showing whatever was on it
          when it was opened, while everything else had already moved on. */
