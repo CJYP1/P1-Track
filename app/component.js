@@ -1405,7 +1405,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
@@ -3687,6 +3687,411 @@ class Component extends DCLogic {
       this._toast&&this._toast('Imported '+nz+' zone'+(nz===1?'':'s')+' on '+lv+' \u2713');};
     parse();
   }
+  /* ===================== Zone Programme (admin) =====================
+     One zone, read straight from the live data: every activity that has a
+     start and a finish becomes a bar. The chain is whatever act_date says —
+     activities are ordered by start date and each hangs off the previous one
+     with the gap those dates already imply, so the page never invents a
+     sequence the programme does not have.
+       baseline  = act_date as entered
+       forecast  = the work still outstanding at baseline output, restarted
+                   from the date chosen below, with no extra crew
+       recovery  = the forecast sped up by the crew sliders, with a floor on
+                   how short each activity can get (curing, formwork, handover) */
+  _zpD(s){return s?new Date(String(s).slice(0,10)+'T00:00:00'):null;}
+  _zpAdd(d,n){return new Date(d.getTime()+n*864e5);}
+  _zpDiff(a,b){return Math.round((a-b)/864e5);}
+  _zpFmt(d){return d?d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'}):'—';}
+  _zpFmtISO(d){const p=n=>(n<10?'0':'')+n;return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+  _zpCss(v){try{return getComputedStyle(document.documentElement).getPropertyValue(v).trim()||'';}catch(e){return '';}}
+  _zpColor(id){
+    const m={earth:'#8C6A4A',exc:'#8C6A4A',demo:'#9a7b5a',demo_wall:'#9a7b5a',piling:'#7a6aa8',pile:'#3E8E5E',
+      slab:'#2F6F7E',slab_pile:'#2F6F7E',slab_top:'#2F6F7E',col:'#5B5FA8',ls:'#3E8E5E',act_corewall:'#3E8E5E',
+      mbeam:'#B7791F',cbeam:'#c08a2a',act_wall:'#A0527A',rc:'#5a7d8c',pcbeam:'#6b8f7a',temp_stair:'#A0527A',
+      act_cyclical:'#7a8aa0'};
+    return m[id]||'#6b7a86';
+  }
+  /* A per-activity floor on duration. Pouring concrete in half the time is not
+     a crew question, so nothing compresses below this however many men go in. */
+  _zpMinDur(id,bd){
+    const hard={slab:0.62,slab_pile:0.62,slab_top:0.62,col:0.55,ls:0.62,act_corewall:0.62,pile:0.6,rc:0.6,
+                exc:0.45,earth:0.45,demo:0.5,demo_wall:0.5,piling:0.6,mbeam:0.5,cbeam:0.5,act_wall:0.6};
+    const f=hard[id]!=null?hard[id]:0.55;
+    return Math.max(3,Math.ceil(bd*f));
+  }
+  /* Baseline crew. The zone figures you type are per zone per month, not per
+     activity, so an activity takes the zone's figure for the month it starts
+     in; where nothing is typed it falls back to a rough trade size. */
+  _zpCrew0(lv,zmk,a){
+    const fb={exc:8,earth:8,demo:10,demo_wall:10,piling:8,pile:14,slab:18,slab_pile:18,slab_top:16,col:10,
+              ls:14,act_corewall:14,mbeam:8,cbeam:8,act_wall:10,rc:12,pcbeam:8,temp_stair:6,act_cyclical:8};
+    let n=null;
+    try{const m=this.dateToActMonth(this._zpFmtISO(a.bs));if(m)n=this._mzVal(lv,zmk,m);}catch(e){}
+    if(n==null||!(n>0))n=fb[a.id]||10;
+    return Math.max(2,Math.round(n));
+  }
+  _zpActs(lv,zmk){
+    const L=this.DATA.levels[lv];if(!L)return [];
+    const z=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk);
+    const base=z?this._actList(lv,z):[];
+    const D=this._actDate||{},out=[];
+    base.forEach(a=>{
+      const d=D[lv+'||'+zmk+'||'+a.id]||{};
+      if(!d.start||!d.end)return;                 /* no dates → nothing to schedule */
+      const bs=this._zpD(d.start),be=this._zpD(d.end);
+      if(!bs||!be||be<bs)return;
+      const total=Number(this.actTotal(lv,zmk,a.id,a.total)||0);
+      const done=Number(this._actCumDone(lv,zmk,a.id)||0);
+      out.push({id:a.id,label:a.label,unit:a.unit||this._actUnit(a.id),qty:total,
+                done:total>0?Math.min(done,total):done,bs,be,bd:this._zpDiff(be,bs)+1,c:this._zpColor(a.id)});
+    });
+    out.sort((x,y)=>x.bs-y.bs||x.be-y.be);
+    out.forEach((a,i)=>{
+      a.lag=i===0?0:Math.max(1,this._zpDiff(a.bs,out[i-1].be));
+      a.n0=this._zpCrew0(lv,zmk,a);
+      a.nMax=Math.max(a.n0+2,Math.round(a.n0*2));
+      a.rec=Math.round(a.n0*1.4);
+      a.minD=this._zpMinDur(a.id,a.bd);
+      a.pct=a.qty>0?Math.min(1,a.done/a.qty):0;});
+    return out;
+  }
+  _zpRemDur(a){return Math.max(1,Math.ceil(a.bd*Math.max(0,1-a.pct)));}
+  _zpSched(A,useCrew,startD,alpha){
+    const out=[];let prev=null;
+    A.forEach((a,i)=>{
+      const s=i===0?(startD>a.bs?startD:a.bs):this._zpAdd(prev,a.lag);
+      let d=this._zpRemDur(a);
+      if(useCrew&&a.n>a.n0)d=Math.max(a.minD,Math.min(d,Math.ceil(d/Math.pow(a.n/a.n0,alpha))));
+      const e=this._zpAdd(s,d-1);
+      out.push({s,e,d});prev=e;});
+    return out;
+  }
+  /* Zones on other levels that sit over or under this one, by outline overlap. */
+  _zpStack(lv,zmk){
+    const L=this.DATA.levels[lv];if(!L)return [];
+    const me=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk);
+    if(!me||!me.ring||me.ring.length<3)return [];
+    const xs=me.ring.map(p=>p[0]),ys=me.ring.map(p=>p[1]);
+    const x0=Math.min.apply(null,xs),x1=Math.max.apply(null,xs),y0=Math.min.apply(null,ys),y1=Math.max.apply(null,ys);
+    const N=26,pts=[];
+    for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+      const px=x0+(x1-x0)*(i+0.5)/N,py=y0+(y1-y0)*(j+0.5)/N;
+      if(this.ptIn(me.ring,px,py))pts.push([px,py]);}
+    if(!pts.length)return [];
+    const rows=[];
+    (this.DATA.order||[]).forEach(lv2=>{
+      if(lv2===lv)return;
+      const L2=this.DATA.levels[lv2];if(!L2)return;
+      let best=null;
+      (L2.zones||[]).forEach(z2=>{
+        if(!z2.ring||z2.ring.length<3)return;
+        let hit=0;pts.forEach(p=>{if(this.ptIn(z2.ring,p[0],p[1]))hit++;});
+        if(!hit)return;
+        const ov=hit/pts.length;
+        if(!best||ov>best.ov)best={z:z2,ov};});
+      if(!best||best.ov<0.12)return;
+      const zmk2=best.z.mk||best.z.lid;
+      rows.push({lv:lv2,label:best.z.label||zmk2,zmk:zmk2,ov:Math.round(best.ov*100),
+                 area:Number(best.z.area)||0,acts:this._zpActs(lv2,zmk2)});});
+    rows.sort((a,b)=>(this._floorOrd(b.lv)||0)-(this._floorOrd(a.lv)||0));
+    return rows;
+  }
+  openZoneProgramme(lv,zmk){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can open Zone Programme.');return;}
+    const old=document.getElementById('__zoneProg');if(old)old.remove();
+    const st=this._zp=this._zp||{};
+    st.lv=lv||st.lv||this.curLevel;
+    if(zmk)st.zmk=zmk;
+    const zs=((this.DATA.levels[st.lv]||{}).zones||[]).filter(z=>z.ring&&z.ring.length>2);
+    if(!zs.length){this._toast('No zones with an outline on '+st.lv);return;}
+    if(!zs.some(z=>(z.mk||z.lid)===st.zmk))st.zmk=(zs[0].mk||zs[0].lid);
+    if(st.alpha==null)st.alpha=0.7;
+    if(!st.start)st.start=this._zpFmtISO(this._zpAdd(this._zpD(this.todayISOStr()),1));
+    const ov=document.createElement('div');
+    ov.id='__zoneProg';
+    ov.style.cssText='position:fixed;inset:0;z-index:99997;background:var(--bg,#f5f6f7);color:var(--ink,#141413);overflow:auto';
+    ov.innerHTML='<div id="zpRoot" style="max-width:1300px;margin:0 auto;padding:18px 16px 60px"></div>';
+    document.body.appendChild(ov);
+    this._zpRender();
+  }
+  _zpClose(){const o=document.getElementById('__zoneProg');if(o)o.remove();}
+  _zpRender(){
+    const root=document.getElementById('zpRoot');if(!root)return;
+    const st=this._zp,lv=st.lv,zmk=st.zmk,esc=s=>this.esc(s);
+    const zs=((this.DATA.levels[lv]||{}).zones||[]).filter(z=>z.ring&&z.ring.length>2);
+    const me=zs.find(z=>(z.mk||z.lid)===zmk)||{};
+    const A=this._zpActs(lv,zmk);
+    const ck=lv+'||'+zmk;
+    st.crew=st.crew||{};
+    if(st.crewFor!==ck){st.crew={};st.crewFor=ck;}
+    A.forEach(a=>{let n=(st.crew[a.id]!=null)?st.crew[a.id]:a.rec;
+      a.n=Math.max(a.n0,Math.min(a.nMax,n));});
+    const TODAY=this._zpD(this.todayISOStr());
+    const startD=this._zpD(st.start)||this._zpAdd(TODAY,1);
+    const S0=this._zpSched(A,false,startD,st.alpha),S1=this._zpSched(A,true,startD,st.alpha);
+    const LAST=A.length-1,baseFin=A.length?A[LAST].be:null;
+    const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t||v)+'</option>';
+    const CARD='background:var(--panel,#fff);border:1px solid var(--line,#dde);border-radius:8px;padding:14px;margin-bottom:14px';
+    const TH=(t,r)=>'<th style="text-align:'+(r?'right':'left')+';font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim,#667);padding:6px 8px;border-bottom:1px solid var(--line,#dde);white-space:nowrap">'+t+'</th>';
+    const TD=(v,al)=>'<td style="padding:6px 8px;border-bottom:1px solid var(--line,#dde);text-align:'+(al||'right')+';font-variant-numeric:tabular-nums">'+v+'</td>';
+    let h='';
+    h+='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink,#222);padding-bottom:10px;margin-bottom:14px">'
+      +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim,#667)">RWS P1 · Zone Programme · '+esc(lv)+' · '+esc(me.cat||'NB')+'</div>'
+      +'<div style="font-size:28px;font-weight:800;line-height:1.15">'+esc(me.label||zmk)+(me.area?'<span style="font-size:14px;font-weight:600;color:var(--dim,#667);margin-left:10px">'+Number(me.area).toLocaleString()+' m²</span>':'')+'</div></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      +'<select id="zpLv" class="hbtn">'+(this.DATA.order||[]).map(x=>opt(x,lv)).join('')+'</select>'
+      +'<select id="zpZone" class="hbtn">'+zs.map(z=>opt(z.mk||z.lid,zmk,(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
+      +'<button class="hbtn" id="zpClose">✕ Close</button></div></div>';
+    if(!A.length){
+      h+='<div style="'+CARD+';text-align:center;color:var(--dim,#667);padding:34px">No activity on this zone has both a start and a finish date, so there is nothing to schedule yet. Fill the dates in on the zone panel and come back.</div>';
+      root.innerHTML=h;
+      root.querySelector('#zpClose').onclick=()=>this._zpClose();
+      this._zpBindPickers();return;}
+    const f0=S0[LAST].e,f1=S1[LAST].e,d0=this._zpDiff(f0,baseFin),d1=this._zpDiff(f1,baseFin);
+    let md0=0,md1=0;A.forEach((a,i)=>{md0+=a.n0*this._zpRemDur(a);md1+=a.n*S1[i].d;});
+    const RED='color:#c2412d',GRN='color:#2e7d4f';
+    const kpi=(l,v,s,cls)=>'<div style="padding:10px 14px;border-left:1px solid var(--line,#dde);flex:1 1 160px">'
+      +'<div style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim,#667)">'+l+'</div>'
+      +'<div style="font-size:19px;font-weight:700;'+(cls||'')+'">'+v+'</div>'
+      +'<div style="font-size:11.5px;color:var(--dim,#667)">'+s+'</div></div>';
+    h+='<div style="display:flex;flex-wrap:wrap;background:var(--panel,#fff);border:1px solid var(--line,#dde);border-radius:8px;margin-bottom:14px">'
+      +kpi('Baseline finish',this._zpFmt(baseFin),esc(A[LAST].label)+' — last item here')
+      +kpi('Forecast, no extra crew',this._zpFmt(f0),d0>0?('late by '+d0+' d'):(d0===0?'on baseline':(-d0)+' d early'),d0>0?RED:GRN)
+      +kpi('With catch-up crew',this._zpFmt(f1),d1>0?('still '+d1+' d late'):(d1===0?'back on baseline':(-d1)+' d early'),d1>0?RED:GRN)
+      +kpi('Days recovered',(d0-d1)+' d',d0>0?Math.round((d0-d1)/d0*100)+'% of the forecast slip':'—',GRN)
+      +kpi('Extra input',(md1-md0>=0?'+':'')+(md1-md0).toLocaleString()+' man-days',md0.toLocaleString()+' → '+md1.toLocaleString())
+      +'</div>';
+    h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">Sequence</div>'
+      +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:10px">Read off the dates already entered for this zone: activities in start-date order, each following the previous one with the gap those dates imply.</div>'
+      +'<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">'
+      +A.map((a,i)=>(i?'<span style="color:var(--dim,#667);font:11px ui-monospace,monospace">FS+'+(a.lag-1)+' →</span>':'')
+        +'<div style="border:1px solid var(--line,#dde);border-left:4px solid '+a.c+';border-radius:5px;padding:5px 10px;background:var(--bg,#f7f8f9)">'
+        +'<b style="font-size:12.5px">'+esc(a.label)+'</b><div style="font-size:11px;color:var(--dim,#667)">'
+        +(a.qty?a.qty.toLocaleString()+' '+esc(a.unit)+' · ':'')+a.bd+' d'
+        +(a.pct>0?' · <b style="color:#2e7d4f">'+Math.round(a.pct*100)+'% done</b>':'')+'</div></div>').join('')
+      +'</div></div>';
+    h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">Baseline · forecast · catch-up</div>'
+      +'<div style="font-size:12.5px;margin:8px 0 10px">Restart the first activity on '
+      +'<input type="date" id="zpStart" value="'+esc(st.start)+'" style="font:inherit;padding:3px 6px;border:1px solid var(--line,#dde);border-radius:4px;background:var(--panel,#fff);color:inherit"></div>'
+      +'<div style="overflow-x:auto"><svg id="zpGantt"></svg></div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim,#667);margin-top:8px">'
+      +'<span><svg width="24" height="8" style="vertical-align:middle"><rect width="24" height="6" y="1" rx="1" fill="#8E9BA1"/></svg> baseline</span>'
+      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect x="1" y="1" width="22" height="10" rx="2" fill="none" stroke="#c2412d" stroke-dasharray="3 2"/></svg> forecast</span>'
+      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect width="24" height="12" rx="2" fill="#2F6F7E"/></svg> with catch-up crew</span>'
+      +'<span><svg width="6" height="12" style="vertical-align:middle"><rect width="2" height="12" fill="#c2412d"/></svg> today, '+this._zpFmt(TODAY)+'</span></div></div>';
+    h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">Catch-up: crew, output, days recovered</div>'
+      +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:10px">Baseline crew comes from the zone manpower typed against the month each activity starts in; where none is typed a trade-size default stands in. Output grows with (crew ratio)<sup>α</sup> — the working face is finite, so output per man falls as the crew grows — and each activity has a floor it will not go below.</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:12.5px;margin-bottom:10px">'
+      +'<span>Preset</span><button class="hbtn" data-zppre="base">No extra crew</button>'
+      +'<button class="hbtn" data-zppre="rec">Recommended</button><button class="hbtn" data-zppre="max">Maximum</button>'
+      +'<label>Congestion α <select id="zpAlpha" class="hbtn">'
+      +opt('0.85',st.alpha,'0.85 open')+opt('0.7',st.alpha,'0.70 normal')+opt('0.55',st.alpha,'0.55 congested')
+      +'</select></label></div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+      +TH('Activity')+TH('Crew')+TH('Added',1)+TH('Output / day',1)+TH('Per man',1)+TH('Duration',1)+TH('Recovered',1)+TH('Man-days',1)
+      +'</tr></thead><tbody>';
+    let savTot=0,addTot=0;
+    A.forEach((a,i)=>{
+      const rem=this._zpRemDur(a),d=S1[i].d,left=Math.max(0,a.qty-a.done);
+      const r0=rem?left/rem:0,r1=d?left/d:0,dn=a.n-a.n0;
+      savTot+=rem-d;addTot+=dn;
+      const fm=n=>a.unit==='nos'?n.toFixed(2):n.toFixed(1);
+      h+='<tr>'
+        +TD('<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+a.c+';margin-right:7px"></span><b>'+esc(a.label)+'</b>'
+           +'<div style="font-size:11px;color:var(--dim,#667);margin-left:16px">'+(a.qty?left.toLocaleString()+' '+esc(a.unit)+' left of '+a.qty.toLocaleString():'no quantity')+'</div>','left')
+        +TD('<input type="range" data-zpcrew="'+esc(a.id)+'" min="'+a.n0+'" max="'+a.nMax+'" step="1" value="'+a.n+'" style="width:118px;vertical-align:middle"> <b>'+a.n+'</b>'
+           +'<div style="font-size:11px;color:var(--dim,#667)">base '+a.n0+' · cap '+a.nMax+'</div>','left')
+        +TD(dn>0?'<b style="color:#2e7d4f">+'+dn+'</b>':'<span style="color:var(--dim,#667)">0</span>')
+        +TD(left>0?(fm(r0)+' → <b>'+fm(r1)+'</b><div style="font-size:11px;color:var(--dim,#667)">'+esc(a.unit)+'/day</div>'):'—')
+        +TD(left>0?(fm(r0/a.n0)+' → '+fm(r1/a.n)+'<div style="font-size:11px;color:var(--dim,#667)">'+esc(a.unit)+'/man·day</div>'):'—')
+        +TD(rem+' → <b>'+d+'</b> d'+(d===a.minD&&a.n>a.n0?'<div style="font-size:11px;color:#b7791f">at the floor</div>':'<div style="font-size:11px;color:var(--dim,#667)">floor '+a.minD+' d</div>'))
+        +TD(rem-d>0?'<b style="color:#2e7d4f">−'+(rem-d)+' d</b>':'<span style="color:var(--dim,#667)">0</span>')
+        +TD((a.n0*rem).toLocaleString()+' → '+(a.n*d).toLocaleString())
+        +'</tr>';});
+    h+='</tbody><tfoot><tr style="font-weight:700"><td colspan="2" style="padding:7px 8px">Total</td>'
+      +'<td style="padding:7px 8px;text-align:right;color:#2e7d4f">+'+addTot+'</td><td colspan="3"></td>'
+      +'<td style="padding:7px 8px;text-align:right;color:#2e7d4f">−'+savTot+' d</td>'
+      +'<td style="padding:7px 8px;text-align:right">'+md0.toLocaleString()+' → '+md1.toLocaleString()+'</td>'
+      +'</tr></tfoot></table></div></div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;margin-bottom:14px">'
+      +'<div style="'+CARD+';margin-bottom:0"><div style="font-weight:700;margin-bottom:4px">Where the delay is recovered</div>'
+      +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:8px">Starting from the forecast slip, the days each activity gives back once its crew goes up.</div>'
+      +'<svg id="zpWf" style="width:100%;height:auto"></svg></div>'
+      +'<div style="'+CARD+';margin-bottom:0"><div style="font-weight:700;margin-bottom:4px">Men on this zone, week by week</div>'
+      +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:8px">Average men inside this zone, baseline against the catch-up plan.</div>'
+      +'<svg id="zpHist" style="width:100%;height:auto"></svg>'
+      +'<div style="display:flex;gap:16px;font-size:12px;color:var(--dim,#667);margin-top:6px">'
+      +'<span><svg width="12" height="10" style="vertical-align:middle"><rect width="12" height="10" rx="2" fill="#8E9BA1"/></svg> baseline</span>'
+      +'<span><svg width="12" height="10" style="vertical-align:middle"><rect width="12" height="10" rx="2" fill="#2F6F7E"/></svg> catch-up</span></div></div></div>';
+    const stack=this._zpStack(lv,zmk);
+    h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">What sits above and below</div>'
+      +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:10px">Zones on the other levels whose outline overlaps this one, found from the drawing coordinates. Higher levels first.</div>';
+    if(!stack.length)h+='<div style="color:var(--dim,#667);font-size:13px">No zone on another level overlaps this outline.</div>';
+    else{
+      h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+        +TH('Level')+TH('Zone')+TH('Overlap',1)+TH('Area',1)+TH('Programme')+TH('Progress')+'</tr></thead><tbody>';
+      stack.forEach(r=>{
+        const sA=r.acts;
+        const span=sA.length?(this._zpFmt(sA[0].bs)+' → '+this._zpFmt(sA[sA.length-1].be)):'<span style="color:var(--dim,#667)">no dates</span>';
+        let q=0,dq=0;sA.forEach(a=>{if(a.qty>0){q+=a.qty;dq+=a.done;}});
+        const pct=q>0?Math.round(dq/q*100):0;
+        const chips=sA.slice(0,6).map(a=>'<span style="display:inline-block;margin:1px 6px 1px 0;font-size:11px;color:var(--dim,#667);white-space:nowrap">'
+          +'<span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+a.c+';margin-right:4px"></span>'+esc(a.label)+'</span>').join('');
+        h+='<tr>'
+          +TD('<b style="font-family:ui-monospace,monospace">'+esc(r.lv)+'</b>','left')
+          +TD('<b>'+esc(r.label)+'</b><div>'+chips+'</div>','left')
+          +TD(r.ov+'%')+TD(r.area?r.area.toLocaleString()+' m²':'—')
+          +TD('<span style="font-size:12px">'+span+'</span>','left')
+          +TD('<span style="display:inline-block;width:56px;height:6px;border-radius:3px;background:var(--line,#dde);vertical-align:middle;overflow:hidden"><span style="display:block;height:6px;width:'+pct+'%;background:'+(pct>=100?'#2e7d4f':pct>0?'#d08a1e':'#b9c4c6')+'"></span></span> '+pct+'%','left')
+          +'</tr>';});
+      h+='</tbody></table></div>';}
+    h+='</div>';
+    const here=this._floorOrd(lv),above=stack.filter(r=>this._floorOrd(r.lv)>here);
+    const notes=[];
+    notes.push('<b>Forecast slip '+d0+' d.</b> '+esc(A[0].label)+' is '+Math.round(A[0].pct*100)+'% done against a baseline of '
+      +this._zpFmt(A[0].bs)+' → '+this._zpFmt(A[0].be)+'. Restarting it on '+this._zpFmt(startD)
+      +' and running everything after it at baseline output puts '+esc(A[LAST].label)+' at '+this._zpFmt(f0)+'.');
+    notes.push('<b>Current catch-up plan.</b> '+A.map(a=>esc(a.label)+' '+a.n+(a.n>a.n0?' (+'+(a.n-a.n0)+')':'')).join(' · ')
+      +' — finish '+this._zpFmt(f1)+', '+(d1>0?'still '+d1+' d late':'back on baseline')
+      +', '+(md1-md0>=0?'+':'')+(md1-md0).toLocaleString()+' man-days.');
+    const floored=A.filter((a,i)=>S1[i].d===a.minD&&a.n>a.n0);
+    if(floored.length)notes.push('<b>Crew stops buying time on '+floored.map(a=>esc(a.label)).join(', ')
+      +'.</b> These are already at their shortest sensible duration, so more men there recover nothing — the rest of the slip has to come from the activities ahead of them, or from the sequence itself.');
+    if(above.length){
+      const a1=above[above.length-1];
+      notes.push('<b>Directly above: '+esc(a1.lv)+' '+esc(a1.label)+', '+a1.ov+'% overlap.</b> '
+        +(a1.acts.length?('Its programme runs '+this._zpFmt(a1.acts[0].bs)+' → '+this._zpFmt(a1.acts[a1.acts.length-1].be)+'. '):'It has no dates yet. ')
+        +'Anything handed over late here pushes into that window — check the columns and core walls that run through both.');}
+    notes.push('<b>Treat this as a model, not a commitment.</b> Baseline dates, quantities and done-to-date are live from the site data; crew sizes, α and the duration floors are assumptions, and every one of them moves with the controls above.');
+    h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:8px">Points to take away</div>'
+      +'<ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13px">'
+      +notes.map(n=>'<li>'+n+'</li>').join('')+'</ul></div>';
+    h+='<div style="font-size:11.5px;color:var(--dim,#667)">Live from this site: activity dates, quantities, done-to-date, zone manpower and zone outlines, read '+this._zpFmt(TODAY)+'.</div>';
+    root.innerHTML=h;
+    this._zpDrawGantt(A,S0,S1,TODAY,baseFin);
+    this._zpDrawWf(A,S0,S1,d0);
+    this._zpDrawHist(A,S1,TODAY);
+    this._zpBindPickers();
+    root.querySelector('#zpClose').onclick=()=>this._zpClose();
+    const sd=root.querySelector('#zpStart');if(sd)sd.onchange=e=>{st.start=e.target.value;this._zpRender();};
+    const al=root.querySelector('#zpAlpha');if(al)al.onchange=e=>{st.alpha=Number(e.target.value)||0.7;this._zpRender();};
+    root.querySelectorAll('[data-zppre]').forEach(b=>b.onclick=()=>{
+      const p=b.dataset.zppre;st.crew={};
+      A.forEach(a=>{st.crew[a.id]=p==='base'?a.n0:(p==='max'?a.nMax:a.rec);});
+      this._zpRender();});
+    root.querySelectorAll('[data-zpcrew]').forEach(r=>r.onchange=e=>{
+      st.crew[e.target.dataset.zpcrew]=Number(e.target.value)||0;this._zpRender();});
+  }
+  _zpBindPickers(){
+    const root=document.getElementById('zpRoot');if(!root)return;
+    const st=this._zp;
+    const lvs=root.querySelector('#zpLv');
+    if(lvs)lvs.onchange=e=>{this.openZoneProgramme(e.target.value,null);};
+    const zn=root.querySelector('#zpZone');
+    if(zn)zn.onchange=e=>{st.zmk=e.target.value;this._zpRender();};
+  }
+  _zpDrawGantt(A,S0,S1,TODAY,baseFin){
+    const svg=document.getElementById('zpGantt');if(!svg)return;
+    const all=[TODAY];A.forEach((a,i)=>{all.push(a.bs,a.be,S0[i].s,S0[i].e,S1[i].s,S1[i].e);});
+    let t0=new Date(Math.min.apply(null,all.map(d=>d.getTime())));
+    let t1=new Date(Math.max.apply(null,all.map(d=>d.getTime())));
+    t0=new Date(t0.getFullYear(),t0.getMonth(),1);
+    t1=new Date(t1.getFullYear(),t1.getMonth()+2,1);
+    const L=200,W=Math.max(880,((svg.parentElement||{}).clientWidth||880)-4),R=100,top=44,rowH=50;
+    const H=top+(A.length+1)*rowH+10;
+    const x=d=>L+(d-t0)/(t1-t0)*(W-L-R);
+    const C=this._zpCss('--dim')||'#667',LN=this._zpCss('--line')||'#dde',INK=this._zpCss('--ink')||'#222';
+    let g='';
+    for(let d=new Date(t0);d<t1;d=new Date(d.getFullYear(),d.getMonth()+1,1)){
+      const n=new Date(d.getFullYear(),d.getMonth()+1,1);
+      if(d.getMonth()%2)g+='<rect x="'+x(d)+'" y="'+(top-6)+'" width="'+(x(n)-x(d))+'" height="'+(H-top)+'" fill="'+LN+'" opacity=".3"/>';
+      g+='<line x1="'+x(d)+'" x2="'+x(d)+'" y1="16" y2="'+(H-6)+'" stroke="'+LN+'"/>';
+      g+='<text x="'+((x(d)+x(n))/2)+'" y="30" text-anchor="middle" font-size="11" fill="'+C+'">'
+        +d.toLocaleDateString('en-GB',{month:'short'})+' '+String(d.getFullYear()).slice(2)+'</text>';}
+    const bar=(s,e,y,hh,fill,extra)=>'<rect x="'+x(s)+'" y="'+y+'" width="'+Math.max(2,x(this._zpAdd(e,1))-x(s))+'" height="'+hh+'" rx="2" fill="'+fill+'" '+(extra||'')+'/>';
+    const LASTi=A.length-1;
+    let y=top;
+    g+='<line x1="0" x2="'+W+'" y1="'+(y+rowH-3)+'" y2="'+(y+rowH-3)+'" stroke="'+LN+'"/>';
+    g+='<text x="4" y="'+(y+18)+'" font-size="13" font-weight="700" fill="'+INK+'">Zone total</text>';
+    g+='<text x="4" y="'+(y+33)+'" font-size="11" fill="'+C+'">'+A.length+' activities</text>';
+    g+=bar(A[0].bs,baseFin,y+36,6,'#8E9BA1');
+    g+=bar(S0[0].s,S0[LASTi].e,y+21,11,'none','stroke="#c2412d" stroke-dasharray="3 2"');
+    g+=bar(S1[0].s,S1[LASTi].e,y+4,14,INK||'#18232A');
+    const dd0=this._zpDiff(S0[LASTi].e,baseFin),dd1=this._zpDiff(S1[LASTi].e,baseFin);
+    g+='<text x="'+(x(this._zpAdd(S0[LASTi].e,1))+5)+'" y="'+(y+30)+'" font-size="11" font-weight="700" fill="#c2412d" font-family="ui-monospace,monospace">'+(dd0>=0?'+':'')+dd0+'d</text>';
+    g+='<text x="'+(x(this._zpAdd(S1[LASTi].e,1))+5)+'" y="'+(y+14)+'" font-size="11" font-weight="700" fill="'+(dd1>0?'#c2412d':'#2e7d4f')+'" font-family="ui-monospace,monospace">'+(dd1>=0?'+':'')+dd1+'d</text>';
+    A.forEach((a,i)=>{
+      y=top+(i+1)*rowH;
+      g+='<line x1="0" x2="'+W+'" y1="'+(y+rowH-3)+'" y2="'+(y+rowH-3)+'" stroke="'+LN+'"/>';
+      g+='<text x="4" y="'+(y+17)+'" font-size="12.5" font-weight="600" fill="'+INK+'">'+(i+1)+'. '+this.esc(a.label)+'</text>';
+      g+='<text x="4" y="'+(y+32)+'" font-size="11" fill="'+C+'">'+(a.qty?a.qty.toLocaleString()+' '+this.esc(a.unit):'')
+        +(a.pct>0?' · '+Math.round(a.pct*100)+'% done':'')+'</text>';
+      g+=bar(a.bs,a.be,y+37,6,'#8E9BA1');
+      g+=bar(S0[i].s,S0[i].e,y+22,11,'none','stroke="#c2412d" stroke-dasharray="3 2"');
+      g+=bar(S1[i].s,S1[i].e,y+4,15,a.c);
+      const w1=x(this._zpAdd(S1[i].e,1))-x(S1[i].s),rem=this._zpRemDur(a);
+      const lbl=S1[i].d+'d'+(S1[i].d<rem?' (−'+(rem-S1[i].d)+')':'');
+      g+='<text x="'+(w1>70?x(S1[i].s)+6:x(this._zpAdd(S1[i].e,1))+5)+'" y="'+(y+16)+'" font-size="11" font-family="ui-monospace,monospace" fill="'+(w1>70?'#fff':C)+'">'+lbl+'</text>';
+      const sl=this._zpDiff(S0[i].e,a.be);
+      g+='<text x="'+(x(this._zpAdd(S0[i].e,1))+5)+'" y="'+(y+32)+'" font-size="10" font-family="ui-monospace,monospace" fill="#c2412d">'+(sl>=0?'+':'')+sl+'d</text>';});
+    const tx=x(TODAY);
+    g+='<line x1="'+tx+'" x2="'+tx+'" y1="'+(top-10)+'" y2="'+(H-6)+'" stroke="#c2412d" stroke-width="2"/>';
+    g+='<text x="'+(tx+4)+'" y="'+(top-12)+'" font-size="10" fill="#c2412d" font-weight="700">TODAY</text>';
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('width',W);svg.setAttribute('height',H);
+    svg.innerHTML=g;
+  }
+  _zpDrawWf(A,S0,S1,d0){
+    const svg=document.getElementById('zpWf');if(!svg)return;
+    const W=540,H=250,L=66,B=46,T=22,R=12;
+    const steps=A.map((a,i)=>({name:a.label,v:S0[i].d-S1[i].d,c:a.c}));
+    const end=d0-steps.reduce((s,x)=>s+x.v,0);
+    const vals=[d0,end,0];let run=d0;steps.forEach(s=>{run-=s.v;vals.push(run);});
+    const hi=Math.max(1,Math.max.apply(null,vals))*1.18+1,lo=Math.min(0,Math.min.apply(null,vals));
+    const y=v=>T+(hi-v)/(hi-lo)*(H-B-T);
+    const cols=2+steps.length,bw=(W-L-R)/cols;
+    const C=this._zpCss('--dim')||'#667',LN=this._zpCss('--line')||'#dde';
+    let g='';
+    [0,Math.round(hi/2),Math.round(hi)].filter((v,i,ar)=>ar.indexOf(v)===i).forEach(v=>{
+      g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="'+LN+'"/>'
+       +'<text x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end" font-size="10" fill="'+C+'">'+v+' d</text>';});
+    if(lo<0)g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(0)+'" y2="'+y(0)+'" stroke="'+C+'"/>';
+    const col=(i,a,b,fill,label,val,vc)=>{const cx=L+i*bw+bw*0.15,w=bw*0.7,ya=y(Math.max(a,b)),yb=y(Math.min(a,b));
+      g+='<rect x="'+cx+'" y="'+ya+'" width="'+w+'" height="'+Math.max(1,yb-ya)+'" rx="2" fill="'+fill+'"/>'
+       +'<text x="'+(cx+w/2)+'" y="'+(ya-5)+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+vc+'" font-family="ui-monospace,monospace">'+val+'</text>'
+       +'<text x="'+(cx+w/2)+'" y="'+(H-B+14)+'" text-anchor="middle" font-size="9.5" fill="'+C+'">'+this.esc(String(label).slice(0,12))+'</text>';};
+    col(0,0,d0,'#c2412d','Forecast',(d0>=0?'+':'')+d0,'#c2412d');
+    run=d0;steps.forEach((s,i)=>{const nb=run-s.v;col(i+1,run,nb,s.c,s.name,s.v?'−'+s.v:'0','#2e7d4f');run=nb;});
+    col(cols-1,0,end,end>0?'#c2412d':'#2e7d4f','Remaining',(end>0?'+':'')+end,end>0?'#c2412d':'#2e7d4f');
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.innerHTML=g;
+  }
+  _zpDrawHist(A,S1,TODAY){
+    const svg=document.getElementById('zpHist');if(!svg)return;
+    const W=540,H=250,L=36,B=30,T=16,R=8;
+    const all=[];A.forEach((a,i)=>{all.push(a.bs,a.be,S1[i].s,S1[i].e);});
+    let t0=new Date(Math.min.apply(null,all.map(d=>d.getTime()))),t1=new Date(Math.max.apply(null,all.map(d=>d.getTime())));
+    t0=this._zpAdd(t0,-((t0.getDay()||7)-1));
+    const weeks=[];for(let d=new Date(t0);d<=t1;d=this._zpAdd(d,7))weeks.push(new Date(d));
+    if(weeks.length<2)return;
+    const at=(rows,crew)=>weeks.map(ws=>{let t=0;
+      for(let k=0;k<7;k++){const d=this._zpAdd(ws,k);A.forEach((a,i)=>{const r=rows[i];if(d>=r.s&&d<=r.e)t+=crew(a);});}
+      return t/7;});
+    const base=at(A.map(a=>({s:a.bs,e:a.be})),a=>a.n0),sc=at(S1,a=>a.n);
+    const max=Math.max(10,Math.max.apply(null,base),Math.max.apply(null,sc))*1.15;
+    const x=i=>L+i*(W-L-R)/weeks.length,bw=(W-L-R)/weeks.length,y=v=>T+(1-v/max)*(H-B-T);
+    const C=this._zpCss('--dim')||'#667',LN=this._zpCss('--line')||'#dde';
+    let g='';const step=max>60?20:(max>25?10:5);
+    for(let v=0;v<=max;v+=step)g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="'+LN+'"/>'
+      +'<text x="'+(L-5)+'" y="'+(y(v)+4)+'" text-anchor="end" font-size="10" fill="'+C+'">'+v+'</text>';
+    weeks.forEach((ws,i)=>{
+      if(base[i]>0)g+='<rect x="'+(x(i)+bw*0.08)+'" y="'+y(base[i])+'" width="'+(bw*0.4)+'" height="'+(y(0)-y(base[i]))+'" fill="#8E9BA1"/>';
+      if(sc[i]>0)g+='<rect x="'+(x(i)+bw*0.5)+'" y="'+y(sc[i])+'" width="'+(bw*0.4)+'" height="'+(y(0)-y(sc[i]))+'" fill="#2F6F7E"/>';
+      if(ws.getDate()<=7)g+='<text x="'+x(i)+'" y="'+(H-B+14)+'" font-size="10" fill="'+C+'">'+ws.toLocaleDateString('en-GB',{month:'short'})+'</text>';});
+    const tx=L+this._zpDiff(TODAY,weeks[0])/7*bw;
+    if(tx>=L&&tx<=W-R)g+='<line x1="'+tx+'" x2="'+tx+'" y1="'+T+'" y2="'+(H-B)+'" stroke="#c2412d" stroke-width="1.5"/>';
+    g+='<text x="'+(W-R)+'" y="'+(T+4)+'" text-anchor="end" font-size="11" fill="'+C+'">peak: base '
+      +Math.round(Math.max.apply(null,base))+' · plan '+Math.round(Math.max.apply(null,sc))+'</text>';
+    svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.innerHTML=g;
+  }
   openDelayAdmin(){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit Delay days.');return;}const old=document.getElementById('__delayAdmin');if(old)old.remove();
     /* Delay days are a purely manual figure: whatever is typed here is what the map shows.
        Nothing is derived from the programme baseline or from live progress any more. */
@@ -5951,6 +6356,7 @@ class Component extends DCLogic {
     {const _la=this.root.querySelector('#openLookAhead');if(_la)_la.addEventListener('click',()=>this._openCombinedReport(this._reportCat));}
     {const _d=this.root.querySelector('#toggleDelayTop');if(_d)_d.addEventListener('click',()=>this._toggleFocus('delay'));}
     {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
+    {const _zpb=this.root.querySelector('#openZoneProg');if(_zpb)_zpb.addEventListener('click',()=>this.openZoneProgramme());}
     {const _si=this.root.querySelector('#openSchedImport');if(_si)_si.addEventListener('click',()=>this.openScheduleImport());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
     {const _hm=this.root.querySelector('#headerMore');if(_hm){_hm.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>setTimeout(()=>_hm.removeAttribute('open'),0)));document.addEventListener('click',e=>{if(_hm.open&&!e.target.closest('#headerMore'))_hm.removeAttribute('open');});}}
