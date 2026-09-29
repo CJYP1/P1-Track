@@ -3564,8 +3564,11 @@ class Component extends DCLogic {
       this.render();
     }
     if(!shots.length){this._toast('Nothing rendered.');return;}
-    const PAD=Math.round(36*SCALE),HEAD=Math.round(64*SCALE);
     const cw=W*SCALE;
+    /* The heading is sized from the sheet, not from the export multiplier: at 2400px x2 a 34px
+       title was two thousandths of the picture and unreadable at any sensible zoom. */
+    const TFS=Math.max(34*SCALE,Math.round(cw*0.030)),MFS=Math.round(TFS*0.66);
+    const PAD=Math.round(36*SCALE),HEAD=Math.round(TFS*1.75);
     const stamp=this.todayISOStr?this.todayISOStr():'';
     const tag=(mon||'').replace(/\W+/g,'');
     /* One picture per level, each on its own sheet.  A single tall strip cannot be
@@ -3575,11 +3578,11 @@ class Component extends DCLogic {
       const c2=document.createElement('canvas');c2.width=cw+PAD*2;c2.height=HEAD+h+PAD;
       const g=c2.getContext('2d');
       g.fillStyle='#ffffff';g.fillRect(0,0,c2.width,c2.height);
-      g.fillStyle='#18232a';g.font='800 '+Math.round(34*SCALE)+'px "Segoe UI",Arial,sans-serif';
-      g.textBaseline='top';g.fillText(s.lv,PAD,Math.round(10*SCALE));
+      g.fillStyle='#18232a';g.font='800 '+TFS+'px "Segoe UI",Arial,sans-serif';
+      g.textBaseline='top';g.fillText(s.lv,PAD,Math.round(TFS*0.28));
       const _lw=g.measureText(s.lv).width;
-      if(mon){g.fillStyle='#6b7a86';g.font='600 '+Math.round(22*SCALE)+'px "Segoe UI",Arial,sans-serif';
-        g.fillText(mon,PAD+_lw+Math.round(24*SCALE),Math.round(18*SCALE));}
+      if(mon){g.fillStyle='#55626e';g.font='700 '+MFS+'px "Segoe UI",Arial,sans-serif';
+        g.fillText(mon,PAD+_lw+Math.round(TFS*0.55),Math.round(TFS*0.28+(TFS-MFS)*0.72));}
       g.drawImage(s.cv,PAD,HEAD,cw,h);
       return {lv:s.lv,url:c2.toDataURL('image/png'),
               name:'RWS_P1_'+String(s.lv).replace(/\W+/g,'')+(tag?'_'+tag:'')+(stamp?'_'+stamp:'')+'.png'};
