@@ -307,6 +307,7 @@ class Component extends DCLogic {
           z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit,placed:true});});
       zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
     });
+    try{this._applyElemNew();}catch(e){console.error('elem new',e);}
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
   }
   _stairTarget(lv,w){
@@ -4544,6 +4545,185 @@ class Component extends DCLogic {
     this.commitElem&&this.commitElem();
     return {kept,dropped,unknown,bad,stCh,dtCh,moved,zones:Object.keys(drop).length};
   }
+  /* ===================== Register grid (admin) =====================
+     The same register as the CSV, but edited in place: rename a mark, move it
+     to another zone, take it out of the counts, tick it off, add one the
+     drawing take-off missed. Every change goes straight into the stores the
+     rest of the app already reads, and syncs. Nothing edits the drawing data. */
+  _elemNew(){const c=this._appCfg=this._appCfg||{};return c.elemNew=c.elemNew||{};}
+  _saveElemNew(){
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemNew',this._elemNew(),null,null);
+  }
+  /* Elements added by hand join their zone's list exactly like drawn ones. */
+  _applyElemNew(){
+    const N=this._elemNew();if(!Object.keys(N).length)return;
+    const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
+    Object.keys(N).forEach(k=>{
+      const p=k.split('||'),lv=p[0],zmk=p[1],type=p[2],arr=arrOf[type];
+      if(!arr)return;
+      const L=this.DATA.levels[lv];if(!L)return;
+      const z=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return;
+      z[arr]=z[arr]||[];
+      (N[k]||[]).forEach(id=>{
+        if(z[arr].some(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(id)))return;
+        z[arr].push(type==='col'?{id,sz:'',c:false,added:true}:{id,added:true});});
+      if(z.counts&&type==='col')z.counts.columns=(z.cols||[]).length;
+    });
+  }
+  _regAdd(lv,zmk,type,id){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can add elements.');return false;}
+    id=String(id||'').trim();if(!id)return false;
+    if(/[.。]+$/.test(id))id=this._dotFixId(id);
+    const k=lv+'||'+zmk+'||'+type,N=this._elemNew();
+    const dup=this._regRows().some(r=>r.lv===lv&&r.type===type&&this._colKey(r.id)===this._colKey(id));
+    if(dup){this._toast('"'+id+'" already exists on '+lv+'.');return false;}
+    (N[k]=N[k]||[]).push(id);
+    this._saveElemNew();
+    this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+    return true;
+  }
+  _regRename(lv,zmk,type,oldId,newId){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can rename elements.');return false;}
+    newId=String(newId||'').trim();if(!newId||newId===oldId)return false;
+    if(/[.。]+$/.test(newId))newId=this._dotFixId(newId);
+    const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return false;
+    const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
+    const arr=z[arrOf[type]]||[];
+    const i=arr.findIndex(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(oldId));
+    if(i<0)return false;
+    const oldKey=this.ekey(lv,z,type,oldId);
+    if(typeof arr[i]==='string')arr[i]=newId;else arr[i]={...arr[i],id:newId};
+    /* A rename that only exists in a store has to be recorded there too, or the
+       next rebuild puts the old mark back. */
+    const N=this._elemNew(),nk=lv+'||'+zmk+'||'+type;
+    if(N[nk]){const j=N[nk].findIndex(x=>this._colKey(x)===this._colKey(oldId));if(j>=0){N[nk][j]=newId;this._saveElemNew();}}
+    this._migrateElemKey(oldKey,this.ekey(lv,z,type,newId));
+    this.saveElem&&this.saveElem();
+    this.render();
+    return true;
+  }
+  _regSetKeep(lv,zmk,type,id,keep){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
+    const D=this._elemDrop(),k=lv+'||'+zmk+'||'+type,a=D[k]=D[k]||[];
+    const i=a.findIndex(x=>this._colKey(x)===this._colKey(id));
+    if(keep){if(i>=0)a.splice(i,1);if(!a.length)delete D[k];}
+    else if(i<0)a.push(id);
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',D,null,null);
+    this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+  }
+  _regSetStatus(lv,zmk,type,id,st){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change status here.');return;}
+    const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return;
+    const key=this.ekey(lv,z,type,id);
+    if(st==='todo')delete this.elem[key];else this.elem[key]=st;
+    if(typeof rwsSyncElementStatus==='function')rwsSyncElementStatus(key,st);
+    this._syncElemDate(key,st);
+    this.saveElem&&this.saveElem();this.commitElem&&this.commitElem();
+  }
+  _regSetDate(lv,zmk,type,id,iso){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change dates here.');return;}
+    const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return;
+    this.setElemDate(this.ekey(lv,z,type,id),iso||'');
+  }
+  _regMove(lv,type,id,zoneLabel){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can move elements.');return;}
+    this._setElemMove(lv,type,id,zoneLabel);
+    this._saveElemMoves();
+    this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+  }
+  openRegisterGrid(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit the register.');return;}
+    const old=document.getElementById('__regGrid');if(old)old.remove();
+    const st=this._rg=this._rg||{};
+    if(!st.lv)st.lv=this.curLevel;
+    if(!st.type)st.type='col';
+    if(!st.cat)st.cat='all';
+    if(st.q==null)st.q='';
+    const ov=document.createElement('div');
+    ov.id='__regGrid';
+    ov.style.cssText='position:fixed;inset:0;z-index:99996;background:var(--bg);color:var(--ink);overflow:auto;padding:16px';
+    ov.innerHTML='<div id="rgRoot" style="max-width:1180px;margin:0 auto"></div>';
+    document.body.appendChild(ov);
+    this._rgRender();
+  }
+  _rgRender(){
+    const root=document.getElementById('rgRoot');if(!root)return;
+    const st=this._rg,esc=s=>this.esc(s);
+    const TYPES=this._regTypes();
+    const zones=((this.DATA.levels[st.lv]||{}).zones||[]);
+    const all=this._regRows().filter(r=>r.lv===st.lv&&r.type===st.type);
+    const q=String(st.q||'').trim().toUpperCase();
+    const rows=all.filter(r=>(st.cat==='all'||r.cat===st.cat)&&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0));
+    const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
+    const TH=t=>'<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>';
+    const IN='font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:inherit';
+    const kept=all.filter(r=>r.keep==='Y').length,done=all.filter(r=>r.keep==='Y'&&r.st==='done').length;
+    let h='';
+    h+='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px">'
+      +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1 · admin</div>'
+      +'<div style="font-size:24px;font-weight:800;line-height:1.15">Register — edit on the page</div></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      +'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
+      +'<select id="rgLv" class="hbtn">'+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
+      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+'</select>'
+      +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'All areas')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
+      +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="筛选 mark / zone" style="'+IN+';width:170px">'
+      +'<span style="color:var(--dim)">'+rows.length+' shown · '+kept+' counted · '+done+' done</span>'
+      +'<span style="flex:1"></span>'
+      +'<select id="rgNewZone" class="hbtn">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
+      +'<input id="rgNewId" placeholder="新编号" style="'+IN+';width:130px">'
+      +'<button class="hbtn primary" id="rgAdd">+ Add</button></div>';
+    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Edits apply as you make them and sync to everyone. <b>Keep</b> off takes an element out of every count without touching the drawing. Changing <b>Zone</b> moves it and carries its tick and cast date across.</div>';
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+      +TH('Mark')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="7" style="padding:26px;text-align:center;color:var(--dim)">Nothing here. Add one with the box above.</td></tr>';
+    rows.forEach(r=>{
+      const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
+      h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:150px;font-weight:700"></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgZone" '+d+' style="'+IN+'">'
+          +zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'
+          +['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit)">✕</button></td>'
+        +'</tr>';});
+    h+='</tbody></table></div>';
+    root.innerHTML=h;
+    const re=()=>this._rgRender();
+    root.querySelector('#rgClose').onclick=()=>{const o=document.getElementById('__regGrid');if(o)o.remove();};
+    root.querySelector('#rgCsv').onclick=()=>this.openRegisterImport();
+    root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;re();};
+    root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;re();};
+    root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
+    {const qi=root.querySelector('#rgQ');qi.oninput=e=>{st.q=e.target.value;};
+     qi.onchange=()=>re();qi.onkeydown=e=>{if(e.key==='Enter')re();};}
+    root.querySelector('#rgAdd').onclick=()=>{
+      const zsel=root.querySelector('#rgNewZone'),idi=root.querySelector('#rgNewId');
+      if(this._regAdd(st.lv,zsel.value,st.type,idi.value)){idi.value='';re();}};
+    const at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,type:e.target.dataset.type,id:e.target.dataset.id});
+    root.querySelectorAll('.rgId').forEach(i=>i.onchange=e=>{const a=at(e);
+      if(this._regRename(a.lv,a.zmk,a.type,a.id,e.target.value))re();else re();});
+    root.querySelectorAll('.rgZone').forEach(i=>i.onchange=e=>{const a=at(e);
+      this._regMove(a.lv,a.type,a.id,e.target.value);re();});
+    root.querySelectorAll('.rgKeep').forEach(i=>i.onchange=e=>{const a=at(e);
+      this._regSetKeep(a.lv,a.zmk,a.type,a.id,e.target.checked);re();});
+    root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);
+      this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);re();});
+    root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);
+      this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);re();});
+    root.querySelectorAll('.rgDel').forEach(bt=>bt.onclick=e=>{const a=at(e);
+      this._confirmModal('Take "'+a.id+'" out of every count? It stays in this table, with Keep off, so it can be put back.',()=>{
+        this._regSetKeep(a.lv,a.zmk,a.type,a.id,false);re();});});
+  }
   openRegisterImport(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
     const old=document.getElementById('__regImp');if(old)old.remove();
@@ -4792,6 +4972,18 @@ class Component extends DCLogic {
     let ov=this.root.querySelector('#lookAheadOverlay');if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}ov.style.cssText='position:fixed;inset:0;z-index:210;background:var(--bg);overflow:auto;padding:22px 26px 60px';ov.innerHTML='<div style="max-width:720px;margin:80px auto;text-align:center;color:var(--dim)"><div style="font-size:20px;font-weight:900;color:var(--txt);margin-bottom:10px">Opening Combined Report…</div><div>Loading the selected area.</div></div>';ov.style.display='block';
     setTimeout(()=>{try{this.openLookAhead();}catch(err){console.error('[report] combined open failed',err);ov.innerHTML='<div style="max-width:720px;margin:60px auto;padding:24px;border:1px solid var(--line);border-radius:12px;background:var(--panel);text-align:center"><div style="font-size:20px;font-weight:900;margin-bottom:8px">Report could not finish loading</div><div style="color:var(--dim);margin-bottom:18px">Please retry this area, or open Area Report.</div><div style="display:flex;justify-content:center;gap:8px"><button class="hbtn primary" id="rptRetry">Retry Combined</button><button class="hbtn" id="rptFallback">Area Report</button><button class="hbtn" id="rptFailClose">Close</button></div></div>';const retry=ov.querySelector('#rptRetry'),fallback=ov.querySelector('#rptFallback'),close=ov.querySelector('#rptFailClose');if(retry)retry.onclick=()=>this._openCombinedReport(this._reportCombinedArea);if(fallback)fallback.onclick=()=>{this._reportCombined=false;this.openLookAhead();};if(close)close.onclick=()=>{ov.style.display='none';};}},20);
   }
+  /* Four states, one colour each, across the Combined Schedule:
+       grey   finished
+       yellow being worked this month
+       green  planned, nothing owed
+       red    behind. Red means owed work here and nothing else. */
+  _cmbState(r){
+    if(r.complete)return {c:'#667085',t:'Complete'};
+    const owed=Math.max(0,Number(r.backlogRemaining)||0)+Math.max(0,Number(r.previousBacklog)||0);
+    if(owed>0)return {c:'#c8102e',t:'Behind \u2014 '+owed+' outstanding'};
+    if((Number(r.currentDone)||0)>0)return {c:'#b7791f',t:'In progress this month'};
+    return {c:'#167846',t:'Planned'};
+  }
   _renderCombinedReport(ov,cats,close){
     const defs=this._reportDefs(),mon=(this.ACT_MONTHS||[]).indexOf(this._reportCombinedMonth)>=0?this._reportCombinedMonth:this.actCurLabel(),mi=(this.ACT_MONTHS||[]).indexOf(mon),areaMeta={EB:{name:'EB · Existing Basement',short:'EB',color:'#d94d86'},NB:{name:'NB · New Basement',short:'NB',color:'#e58b2f'},MA:{name:'MR · Marine',short:'MR',color:'#367bc8'}},fmt=n=>Math.round(Number(n)||0).toLocaleString();this._reportCombinedMonth=mon;const areaSel=cats.indexOf(this._reportCombinedArea)>=0?this._reportCombinedArea:'ALL',visibleCats=areaSel==='ALL'?cats:[areaSel];this._reportCombinedArea=areaSel;
     const levelRows=(cat,lv)=>this._combinedScheduleLevelRows(cat,lv,mon);
@@ -4802,12 +4994,12 @@ class Component extends DCLogic {
       const order=levels.filter(lv=>byLv[lv]).concat(Object.keys(byLv).filter(lv=>levels.indexOf(lv)<0)),cell='padding:7px 6px;border-bottom:1px solid #e7ebf0;text-align:right';
       const body=order.map(lv=>`<tr><td colspan="6" style="padding:5px 8px;background:#e5eaf1;color:#344054;font-size:9px;font-weight:900;letter-spacing:.35px">LEVEL ${this.esc(lv)} · ${byLv[lv].length} zone${byLv[lv].length===1?'':'s'}</td></tr>`+byLv[lv].map(r=>{
         const notes=[];if(r.backlogRecovered>0)notes.push(`Previous backlog recovered ${this.esc(fmt(r.backlogRecovered))}${r.unit?' '+this.esc(r.unit):''}`);if(r.earlierCredit>0)notes.push(`Earlier work credited ${this.esc(fmt(r.earlierCredit))}${r.unit?' '+this.esc(r.unit):''}`);const monthNote=notes.length?notes.join(' · '):`${this.esc(mon)} actual work`;
-        return `<tr><td style="padding:7px 8px;border-bottom:1px solid #e7ebf0;white-space:nowrap"><button type="button" class="combined-zone-open" data-lv="${this.esc(r.lv)}" data-zmk="${this.esc(r.zmk)}" style="border:0;background:none;padding:0;color:#202938;font:inherit;font-weight:900;cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:2px" title="Open ${this.esc(r.lv)} · ${this.esc(r.zoneLabel||r.zone)} details">${this.esc(r.lv)} · ${this.esc(r.zone)} ↗</button>${r.critical?'<small style="display:block;color:#c8102e;font-size:7px;font-weight:900;margin-top:2px">CRITICAL</small>':''}</td><td style="${cell}">${qty(r.plan,r.unit,false)}${r.previousBacklog>0?`<small style="display:block;color:#b54708;font-size:7px;font-weight:800">Previous backlog ${this.esc(fmt(r.previousBacklog))}</small>`:''}</td><td style="${cell};background:${r.currentDone>0?'#edf8f1':'transparent'}">${qty(r.currentDone,r.unit,r.currentDone>0)}<small style="display:block;color:#667085;font-size:7px">${monthNote}</small></td><td style="${cell};background:#f4f7fb">${qty(r.siteDone,r.unit,r.siteDone>0)}<small style="display:block;color:${r.sitePct>=100?'#167846':'#5265d5'};font-size:8px;font-weight:900">${this.esc(fmt(r.siteDone))} / ${this.esc(fmt(r.scopeTotal))} · ${r.sitePct}%</small></td><td style="${cell}"><b style="font-size:11px;color:${r.complete?'#167846':'#c8102e'}">${r.monthPct}%</b></td><td style="${cell}"><b style="color:${r.reportOutstanding>0?'#c8102e':'#167846'}">${r.reportOutstanding>0?this.esc(fmt(r.reportOutstanding)):'—'}</b>${r.reportOutstanding>0&&r.unit?`<small style="display:block;color:#667085;font-size:8px">${this.esc(r.unit)}</small>`:''}${r.backlogRemaining>0&&!r.backlogRecovery?`<small style="display:block;color:#b54708;font-size:7px;font-weight:800">Includes backlog ${this.esc(fmt(r.backlogRemaining))}</small>`:''}</td></tr>`;
+        return `<tr><td style="padding:7px 8px;border-bottom:1px solid #e7ebf0;white-space:nowrap"><button type="button" class="combined-zone-open" data-lv="${this.esc(r.lv)}" data-zmk="${this.esc(r.zmk)}" style="border:0;background:none;padding:0;color:#202938;font:inherit;font-weight:900;cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:2px" title="Open ${this.esc(r.lv)} · ${this.esc(r.zoneLabel||r.zone)} details">${(()=>{const st=this._cmbState(r);return '<span title="'+st.t+'" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+st.c+';margin-right:6px;vertical-align:1px"></span>';})()}${this.esc(r.lv)} · ${this.esc(r.zone)} ↗</button>${r.critical?'<small style="display:block;color:#c8102e;font-size:7px;font-weight:900;margin-top:2px">CRITICAL</small>':''}</td><td style="${cell}">${qty(r.plan,r.unit,false)}${r.previousBacklog>0?`<small style="display:block;color:#c8102e;font-size:7px;font-weight:800">Previous backlog ${this.esc(fmt(r.previousBacklog))}</small>`:''}</td><td style="${cell};background:${r.currentDone>0?(r.complete?'#eef1f5':'#fdf6e3'):'transparent'}">${qty(r.currentDone,r.unit,r.currentDone>0)}<small style="display:block;color:#667085;font-size:7px">${monthNote}</small></td><td style="${cell};background:#f4f7fb">${qty(r.siteDone,r.unit,r.siteDone>0)}<small style="display:block;color:${r.sitePct>=100?'#167846':'#5265d5'};font-size:8px;font-weight:900">${this.esc(fmt(r.siteDone))} / ${this.esc(fmt(r.scopeTotal))} · ${r.sitePct}%</small></td><td style="${cell}"><b style="font-size:11px;color:${r.complete?'#167846':'#c8102e'}">${r.monthPct}%</b></td><td style="${cell}"><b style="color:${r.reportOutstanding>0?'#c8102e':'#167846'}">${r.reportOutstanding>0?this.esc(fmt(r.reportOutstanding)):'—'}</b>${r.reportOutstanding>0&&r.unit?`<small style="display:block;color:#667085;font-size:8px">${this.esc(r.unit)}</small>`:''}${r.backlogRemaining>0&&!r.backlogRecovery?`<small style="display:block;color:#c8102e;font-size:7px;font-weight:800">Includes backlog ${this.esc(fmt(r.backlogRemaining))}</small>`:''}</td></tr>`;
       }).join('')).join('');
       return `<div style="overflow-x:auto"><table style="width:100%;min-width:700px;border-collapse:collapse;background:#fff;color:#202938;font-size:9px"><thead><tr style="background:#eef1f5;color:#475467;text-align:left"><th style="padding:7px 8px;border-bottom:1px solid #d9e0e8">Level · Zone</th><th style="padding:7px 6px;border-bottom:1px solid #d9e0e8;text-align:right">${this.esc(mon)} Target Only</th><th style="padding:7px 6px;border-bottom:1px solid #d9e0e8;text-align:right">${this.esc(mon)} Actual</th><th style="padding:7px 6px;border-bottom:1px solid #d9e0e8;text-align:right">Cumulative Actual / Site Progress</th><th style="padding:7px 6px;border-bottom:1px solid #d9e0e8;text-align:right">Monthly Achieved</th><th style="padding:7px 6px;border-bottom:1px solid #d9e0e8;text-align:right">Outstanding</th></tr></thead><tbody>${body}</tbody></table></div>`;
     };
     const actOrder=['earth','exc','piling','demo_wall','demo','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','slab','slab_top','rc','pcbeam','temp_stair','act_cyclical','mep_acmv','mep_fps','mep_elec','mep_bms'];
-    const areaCards=visibleCats.map(cat=>{const d=defs[cat],meta=areaMeta[cat],levels=(d&&d.levels)||[],all=[];levels.forEach(lv=>levelRows(cat,lv).forEach(r=>all.push({...r,cat})));const byAct={};all.forEach(r=>(byAct[r.aid]||(byAct[r.aid]={aid:r.aid,name:r.name,unit:r.unit,rows:[]})).rows.push(r));const acts=Object.values(byAct).sort((a,b)=>{const ai=actOrder.indexOf(a.aid),bi=actOrder.indexOf(b.aid),av=ai<0?999:ai,bv=bi<0?999:bi;return av-bv||String(a.name).localeCompare(String(b.name));});const actBlocks=acts.map(a=>{const mp=a.rows.reduce((n,r)=>n+r.plan,0),md=a.rows.reduce((n,r)=>n+r.currentDone,0),recovered=a.rows.reduce((n,r)=>n+r.backlogRecovered,0),owe=a.rows.reduce((n,r)=>n+r.reportOutstanding,0),completed=a.rows.filter(r=>r.complete),progress=a.rows.filter(r=>!r.complete),empty=msg=>`<div style="padding:14px;text-align:center;color:#98a2b3;background:#fff;font-size:10px">${msg}</div>`,pane=(title,color,bg,rows,msg)=>`<div style="min-width:0;border:1px solid #d9e0e8;border-radius:7px;overflow:hidden"><div style="padding:7px 10px;background:${bg};color:${color};font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.35px">${title} · ${rows.length}</div>${rows.length?tableHtml(rows):empty(msg)}</div>`;return `<section style="border:1px solid #d9e0e8;border-radius:8px;overflow:hidden;background:#fff;break-inside:avoid"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;background:#e8edf3;border-bottom:1px solid #d9e0e8"><b style="font-size:14px;color:#202938">${this.esc(a.name)}</b><span style="font-size:9px;color:#667085;font-weight:700">${a.rows.length} zones · ${this.esc(mon)} Plan ${this.esc(fmt(mp))} · ${this.esc(mon)} Actual ${this.esc(fmt(md))}${recovered>0?` · <b style="color:#b54708">Backlog recovered ${this.esc(fmt(recovered))}</b>`:''}${owe>0?` · <b style="color:#c8102e">Outstanding ${this.esc(fmt(owe))}</b>`:''}</span></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:9px">${pane('✓ '+mon+' Plan achieved / backlog cleared','#167846','#dff3e7',completed,'No '+this.esc(mon)+' planned Zone or recovered backlog is complete yet.')}${pane('● '+mon+' Plan / previous backlog outstanding','#a74d09','#ffead7',progress,'No outstanding work.')}</div></section>`;}).join('')||'<div style="padding:28px;text-align:center;color:#98a2b3">No activity data for this month.</div>';return `<article style="min-width:0;border:1px solid #d9e0e8;background:#fff;border-radius:10px;box-shadow:0 3px 14px rgba(24,39,75,.09);overflow:hidden;break-inside:avoid"><div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:${meta.color};color:#fff"><div style="font-size:17px;font-weight:900">${this.esc(meta.name)}</div><div style="font-size:11px;font-weight:900;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.45);border-radius:20px;padding:3px 10px">${this.esc(mon)}</div></div><div style="display:grid;grid-template-columns:1fr;gap:11px;padding:12px">${actBlocks}</div></article>`;}).join('');
+    const areaCards=visibleCats.map(cat=>{const d=defs[cat],meta=areaMeta[cat],levels=(d&&d.levels)||[],all=[];levels.forEach(lv=>levelRows(cat,lv).forEach(r=>all.push({...r,cat})));const byAct={};all.forEach(r=>(byAct[r.aid]||(byAct[r.aid]={aid:r.aid,name:r.name,unit:r.unit,rows:[]})).rows.push(r));const acts=Object.values(byAct).sort((a,b)=>{const ai=actOrder.indexOf(a.aid),bi=actOrder.indexOf(b.aid),av=ai<0?999:ai,bv=bi<0?999:bi;return av-bv||String(a.name).localeCompare(String(b.name));});const actBlocks=acts.map(a=>{const mp=a.rows.reduce((n,r)=>n+r.plan,0),md=a.rows.reduce((n,r)=>n+r.currentDone,0),recovered=a.rows.reduce((n,r)=>n+r.backlogRecovered,0),owe=a.rows.reduce((n,r)=>n+r.reportOutstanding,0),completed=a.rows.filter(r=>r.complete),progress=a.rows.filter(r=>!r.complete),empty=msg=>`<div style="padding:14px;text-align:center;color:#98a2b3;background:#fff;font-size:10px">${msg}</div>`,pane=(title,color,bg,rows,msg)=>`<div style="min-width:0;border:1px solid #d9e0e8;border-radius:7px;overflow:hidden"><div style="padding:7px 10px;background:${bg};color:${color};font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.35px">${title} · ${rows.length}</div>${rows.length?tableHtml(rows):empty(msg)}</div>`;return `<section style="border:1px solid #d9e0e8;border-radius:8px;overflow:hidden;background:#fff;break-inside:avoid"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;background:#e8edf3;border-bottom:1px solid #d9e0e8"><b style="font-size:14px;color:#202938">${this.esc(a.name)}</b><span style="font-size:9px;color:#667085;font-weight:700">${a.rows.length} zones · ${this.esc(mon)} Plan ${this.esc(fmt(mp))} · ${this.esc(mon)} Actual ${this.esc(fmt(md))}${recovered>0?` · <b style="color:#667085">Backlog recovered ${this.esc(fmt(recovered))}</b>`:''}${owe>0?` · <b style="color:#c8102e">Outstanding ${this.esc(fmt(owe))}</b>`:''}</span></div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:9px">${pane('■ '+mon+' Plan achieved / backlog cleared','#667085','#eef1f5',completed,'No '+this.esc(mon)+' planned Zone or recovered backlog is complete yet.')}${pane('● '+mon+' Plan / previous backlog outstanding','#c8102e','#fbece9',progress,'No outstanding work.')}</div></section>`;}).join('')||'<div style="padding:28px;text-align:center;color:#98a2b3">No activity data for this month.</div>';return `<article style="min-width:0;border:1px solid #d9e0e8;background:#fff;border-radius:10px;box-shadow:0 3px 14px rgba(24,39,75,.09);overflow:hidden;break-inside:avoid"><div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:${meta.color};color:#fff"><div style="font-size:17px;font-weight:900">${this.esc(meta.name)}</div><div style="font-size:11px;font-weight:900;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.45);border-radius:20px;padding:3px 10px">${this.esc(mon)}</div></div><div style="display:grid;grid-template-columns:1fr;gap:11px;padding:12px">${actBlocks}</div></article>`;}).join('');
     const monthBtns=(this.ACT_MONTHS||[]).map(m=>`<button type="button" data-rpt-month="${this.esc(m)}" class="${m===mon?'on':''}">${this.esc(m)}</button>`).join('');
     const areaBtns=`<button type="button" data-rpt-area="ALL" class="${areaSel==='ALL'?'on':''}">All areas</button>`+cats.map(c=>`<button type="button" data-rpt-area="${c}" class="${areaSel===c?'on':''}">${this.esc(areaMeta[c].short)}</button>`).join('');
     const exportCat=areaSel==='ALL'?cats[0]:areaSel,exportLevels=(defs[exportCat]&&defs[exportCat].levels)||[],exportAreaOpts=cats.map(c=>`<option value="${c}" ${c===exportCat?'selected':''}>${this.esc(areaMeta[c].short)}</option>`).join(''),exportLevelOpts=exportLevels.map(lv=>`<option value="${this.esc(lv)}">${this.esc(lv)}</option>`).join('');
@@ -7171,7 +7363,7 @@ class Component extends DCLogic {
     {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
     {const _zpb=this.root.querySelector('#openZoneProg');if(_zpb)_zpb.addEventListener('click',()=>this.openZoneProgramme());}
     {const _nc=this.root.querySelector('#openNumChk');if(_nc)_nc.addEventListener('click',()=>this.openNumberCheck());}
-    {const _rg=this.root.querySelector('#openElemReg');if(_rg)_rg.addEventListener('click',()=>this.openRegisterImport());}
+    {const _rg=this.root.querySelector('#openElemReg');if(_rg)_rg.addEventListener('click',()=>this.openRegisterGrid());}
     {const _cl=this.root.querySelector('#openColList');if(_cl)_cl.addEventListener('click',()=>{this._pcLv='__all';this.openPlacedColList();});}
     {const _si=this.root.querySelector('#openSchedImport');if(_si)_si.addEventListener('click',()=>this.openScheduleImport());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
