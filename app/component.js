@@ -999,8 +999,12 @@ class Component extends DCLogic {
       if(el.classList.contains('resource-core-qty')){const card=el.closest('.resource-core-card'),i=card?Number(card.dataset.i):-1;if(i<0||!cs[i])return;cs[i][el.dataset.key]=this._resourceNum(el.value);this._resourceSave();this.render();this._renderResourcePanel();}};
     if(p._resourceCapture)p.removeEventListener('click',p._resourceCapture,true);p._resourceCapture=e=>{const editBtn=e.target.closest&&e.target.closest('#resourceEdit');if(editBtn){e.preventDefault();e.stopImmediatePropagation();this._resourceEditing=!this._resourceEditing;this.render();this._renderResourcePanel();return;}const cb=e.target.closest&&e.target.closest('.resource-core-remove');if(cb&&t){e.preventDefault();e.stopImmediatePropagation();const cc=cb.closest('.resource-core-card'),k=cc?Number(cc.dataset.i):-1;if(k>=0&&cs[k]){const at=t.cores.indexOf(cs[k]);if(at>=0)t.cores.splice(at,1);this._resourceInspect=null;this._resourceCoreRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();}return;}
     const b=e.target.closest&&e.target.closest('.resource-up,.resource-down,.resource-remove');if(!b||!t)return;e.preventDefault();e.stopImmediatePropagation();const card=b.closest('.resource-zone-card'),i=card?Number(card.dataset.i):-1;if(i<0||!zs[i])return;if(b.classList.contains('resource-remove')){const at=t.zones.indexOf(zs[i]);if(at>=0)t.zones.splice(at,1);this._resourceInspect=null;}else{const j=b.classList.contains('resource-up')?i-1:i+1;if(j<0||j>=zs.length)return;const a=zs[i].order,c=zs[j].order;zs[i].order=c;zs[j].order=a;}this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};p.addEventListener('click',p._resourceCapture,true);
-    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}${(()=>{const _M=this._mpMonths(),_i=Math.max(0,_M.indexOf(this._resMon()));return `<span style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel)"><button class="hbtn" id="resourceMonPrev" title="Previous month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i<=0?' disabled':''}>\u2039</button><b id="resourceMonLbl" style="padding:0 8px;font-size:11px;font-weight:800;color:var(--txt);white-space:nowrap">${this.esc(_M[_i]||'')}</b><button class="hbtn" id="resourceMonNext" title="Next month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i>=_M.length-1?' disabled':''}>\u203a</button></span>`;})()}<button class="hbtn" id="resourceMpMonth" style="padding:5px 8px" title="Men per area and level, month by month">\u25a6 Month</button>${admin?`<button class="hbtn ${this._mzClick?'primary':''}" id="resourceZoneMen" style="padding:5px 8px" title="Click a zone on the map to type the men on it for the month now shown">\u270e Zone men</button>`:''}<button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button><button class="hbtn" id="resourceSeqPng" style="padding:5px 8px" title="Export the work sequence of every team on this level as a PNG">\u2b07 PNG</button><button class="hbtn" id="resourceTable" style="padding:5px 8px" title="Edit the whole plan as a table">\u25a4 Table</button><button class="hbtn" id="resourceClearLv" style="padding:5px 8px;color:var(--crit)" title="Remove every Team\u2019s zones and core walls on the level you are looking at">\ud83d\uddd1 Clear level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
-    p.querySelector('#resourceClose').onclick=()=>this._closeResourcePlanner();{const _cl=p.querySelector('#resourceCopyLv');if(_cl)_cl.onclick=()=>this.openResourceCopyLevel();}{const _xl=p.querySelector('#resourceClearLv');if(_xl)_xl.onclick=()=>this.resourceClearLevel();}{const _rt=p.querySelector('#resourceTable');if(_rt)_rt.onclick=()=>this.openResourceTable();}{const _sp=p.querySelector('#resourceSeqPng');if(_sp)_sp.onclick=()=>this.exportResourceSeqPng();}{const _mp=p.querySelector('#resourceMpMonth');if(_mp)_mp.onclick=()=>this.openManpowerMonth();}{const _M=this._mpMonths(),_step=d=>{const i=Math.max(0,_M.indexOf(this._resMon()))+d;if(i<0||i>=_M.length)return;this._resMonSel=_M[i];this.render();this._renderResourcePanel();};const _pv=p.querySelector('#resourceMonPrev');if(_pv)_pv.onclick=()=>_step(-1);const _nx=p.querySelector('#resourceMonNext');if(_nx)_nx.onclick=()=>_step(1);}{const _zm=p.querySelector('#resourceZoneMen');if(_zm)_zm.onclick=()=>{this._mzClick=!this._mzClick;this._toast&&this._toast(this._mzClick?'Click a zone to type its men \u00b7 '+this._mzMonth():'Zone-men entry off');this._renderResourcePanel();};}const edit=p.querySelector('#resourceEdit');if(edit)edit.onclick=()=>{this._resourceEditing=!this._resourceEditing;this._renderResourcePanel();};p.querySelectorAll('.resource-team-tab').forEach(b=>b.onclick=()=>{this._resourceTeamId=b.dataset.team;this._resourceInspect=null;this.render();this._renderResourcePanel();});const add=p.querySelector('#resourceAddTeam');if(add)add.onclick=()=>{const name=window.prompt('Team name','Team '+String.fromCharCode(65+d.teams.length));if(!name||!name.trim())return;const id='team_'+Date.now().toString(36);const _used=new Set(d.teams.map(q=>String(q.color||'').toLowerCase()));const _free=colors.find(c=>!_used.has(String(c).toLowerCase()))||colors[d.teams.length%colors.length];d.teams.push({id,name:name.trim(),color:_free,zones:[]});this._resourceTeamId=id;this._resourceSave();this.render();this._renderResourcePanel();};if(!t)return;const tn=p.querySelector('#resourceTeamName'),tc=p.querySelector('#resourceTeamColor');if(tn)tn.onchange=()=>{t.name=tn.value.trim()||t.name;this._resourceSave();this.render();this._renderResourcePanel();};if(tc)tc.onchange=()=>{t.color=tc.value;this._resourceSave();this.render();this._renderResourcePanel();};const del=p.querySelector('#resourceDeleteTeam');if(del)del.onclick=()=>this._confirmModal('Delete this team and its Zone assignment?',()=>{d.teams=d.teams.filter(q=>q.id!==t.id);this._resourceTeamId=(d.teams[0]||{}).id;this._resourceSave();this.render();this._renderResourcePanel();});p.querySelectorAll('.resource-core-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;if(!cs[i])return;this._resourceInspect={core:true,lv:cs[i].lv,id:cs[i].id};this.render();this._renderResourcePanel();};});
+    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}${(()=>{const _M=this._mpMonths(),_i=Math.max(0,_M.indexOf(this._resMon()));return `<span style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel)"><button class="hbtn" id="resourceMonPrev" title="Previous month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i<=0?' disabled':''}>\u2039</button><b id="resourceMonLbl" style="padding:0 8px;font-size:11px;font-weight:800;color:var(--txt);white-space:nowrap">${this.esc(_M[_i]||'')}</b><button class="hbtn" id="resourceMonNext" title="Next month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i>=_M.length-1?' disabled':''}>\u203a</button></span>`;})()}<button class="hbtn" id="resourceMpMonth" style="padding:5px 8px" title="Men per area and level, month by month">\u25a6 Month</button><button class="hbtn" id="resourceBigMap" style="padding:5px 8px" title="\u6bcf\u5c42\u4e00\u5f20\u5927\u56fe\uff0c\u4e0a\u4e0b\u6392\u5f00\uff0c\u53ef\u9009\u5bbd\u5ea6\u548c\u500d\u6570">\u2b07 \u5927\u56fe</button><button class="hbtn ${this._cleanMap?'primary':''}" id="resourceClean" style="padding:5px 8px" title="\u5e73\u9762\u5e72\u51c0\u7248: \u7070\u5e95 + \u5f53\u524d\u6708\u6709\u5de5\u4f5c\u7684 zone \u6d82\u7ea2\uff0c\u53ef\u4ee5\u76f4\u63a5\u622a\u56fe">\u25a3 \u5e72\u51c0\u7248</button>${admin?`<button class="hbtn ${this._mzClick?'primary':''}" id="resourceZoneMen" style="padding:5px 8px" title="Click a zone on the map to type the men on it for the month now shown">\u270e Zone men</button>`:''}<button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button><button class="hbtn" id="resourceSeqPng" style="padding:5px 8px" title="Export the work sequence of every team on this level as a PNG">\u2b07 PNG</button><button class="hbtn" id="resourceTable" style="padding:5px 8px" title="Edit the whole plan as a table">\u25a4 Table</button><button class="hbtn" id="resourceClearLv" style="padding:5px 8px;color:var(--crit)" title="Remove every Team\u2019s zones and core walls on the level you are looking at">\ud83d\uddd1 Clear level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
+    p.querySelector('#resourceClose').onclick=()=>this._closeResourcePlanner();{const _cl=p.querySelector('#resourceCopyLv');if(_cl)_cl.onclick=()=>this.openResourceCopyLevel();}{const _xl=p.querySelector('#resourceClearLv');if(_xl)_xl.onclick=()=>this.resourceClearLevel();}{const _rt=p.querySelector('#resourceTable');if(_rt)_rt.onclick=()=>this.openResourceTable();}{const _sp=p.querySelector('#resourceSeqPng');if(_sp)_sp.onclick=()=>this.exportResourceSeqPng();}{const _mp=p.querySelector('#resourceMpMonth');if(_mp)_mp.onclick=()=>this.openManpowerMonth();}
+    {const _bm=p.querySelector('#resourceBigMap');if(_bm)_bm.onclick=()=>this.openBigMapExport();}
+    {const _cm=p.querySelector('#resourceClean');if(_cm)_cm.onclick=()=>{this._cleanMap=!this._cleanMap;
+      this._toast(this._cleanMap?'干净版：灰底，当前月有工作的分区涂红。再点一次回到正常视图。':'回到正常视图。');
+      this.render();this._renderResourcePanel();};}{const _M=this._mpMonths(),_step=d=>{const i=Math.max(0,_M.indexOf(this._resMon()))+d;if(i<0||i>=_M.length)return;this._resMonSel=_M[i];this.render();this._renderResourcePanel();};const _pv=p.querySelector('#resourceMonPrev');if(_pv)_pv.onclick=()=>_step(-1);const _nx=p.querySelector('#resourceMonNext');if(_nx)_nx.onclick=()=>_step(1);}{const _zm=p.querySelector('#resourceZoneMen');if(_zm)_zm.onclick=()=>{this._mzClick=!this._mzClick;this._toast&&this._toast(this._mzClick?'Click a zone to type its men \u00b7 '+this._mzMonth():'Zone-men entry off');this._renderResourcePanel();};}const edit=p.querySelector('#resourceEdit');if(edit)edit.onclick=()=>{this._resourceEditing=!this._resourceEditing;this._renderResourcePanel();};p.querySelectorAll('.resource-team-tab').forEach(b=>b.onclick=()=>{this._resourceTeamId=b.dataset.team;this._resourceInspect=null;this.render();this._renderResourcePanel();});const add=p.querySelector('#resourceAddTeam');if(add)add.onclick=()=>{const name=window.prompt('Team name','Team '+String.fromCharCode(65+d.teams.length));if(!name||!name.trim())return;const id='team_'+Date.now().toString(36);const _used=new Set(d.teams.map(q=>String(q.color||'').toLowerCase()));const _free=colors.find(c=>!_used.has(String(c).toLowerCase()))||colors[d.teams.length%colors.length];d.teams.push({id,name:name.trim(),color:_free,zones:[]});this._resourceTeamId=id;this._resourceSave();this.render();this._renderResourcePanel();};if(!t)return;const tn=p.querySelector('#resourceTeamName'),tc=p.querySelector('#resourceTeamColor');if(tn)tn.onchange=()=>{t.name=tn.value.trim()||t.name;this._resourceSave();this.render();this._renderResourcePanel();};if(tc)tc.onchange=()=>{t.color=tc.value;this._resourceSave();this.render();this._renderResourcePanel();};const del=p.querySelector('#resourceDeleteTeam');if(del)del.onclick=()=>this._confirmModal('Delete this team and its Zone assignment?',()=>{d.teams=d.teams.filter(q=>q.id!==t.id);this._resourceTeamId=(d.teams[0]||{}).id;this._resourceSave();this.render();this._renderResourcePanel();});p.querySelectorAll('.resource-core-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;if(!cs[i])return;this._resourceInspect={core:true,lv:cs[i].lv,id:cs[i].id};this.render();this._renderResourcePanel();};});
     p.querySelectorAll('.resource-zone-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();};card.querySelectorAll('.resource-qty').forEach(inp=>inp.onchange=()=>{zs[i][inp.dataset.key]=this._resourceNum(inp.value);this._resourceSave();this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();});const up=card.querySelector('.resource-up'),dn=card.querySelector('.resource-down'),rm=card.querySelector('.resource-remove');if(up)up.onclick=()=>{if(i<1)return;[zs[i-1],zs[i]]=[zs[i],zs[i-1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(dn)dn.onclick=()=>{if(i>=zs.length-1)return;[zs[i+1],zs[i]]=[zs[i],zs[i+1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(rm)rm.onclick=()=>{const gone=zs[i];zs.splice(i,1);if(this._resourceInspect&&this._resourceInspect.lv===gone.lv&&this._resourceInspect.zmk===gone.zmk)this._resourceInspect=null;this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};});}
   _monthlySummaryRows(cat,mon){
     const M=this.ACT_MONTHS||[],mi=M.indexOf(mon),prev=mi>0?M[mi-1]:null,earlier=mi>1?M[mi-2]:null,by={critical:{},noncritical:{}};if(mi<0)return {critical:[],noncritical:[],prev,earlier};
@@ -3466,6 +3470,122 @@ class Component extends DCLogic {
   }
   /* One map per level, drawn in Resource mode for the month being exported, greyed where
      nobody works.  Shared by both manpower exports so the pictures always match. */
+  /* One map per level, at print size. The report sheets put four maps on a row
+     to fit a page, which leaves each one too small to read when it is the map
+     itself you want. This draws them one under another at a fixed large width,
+     with a device-pixel multiplier, so the picture stays sharp when it is
+     dropped into a slide or blown up on a screen. */
+  async exportBigLevelMaps(opts){
+    if(!this.rwsIsAdmin&&!this.rwsCanResource()){this.rwsDeny('Not allowed.');return;}
+    const o=opts||{};
+    const W=Math.max(1200,Math.min(4000,Number(o.width)||2400));
+    const SCALE=Math.max(1,Math.min(4,Number(o.scale)||2));
+    const clean=o.clean!==false;
+    const mon=o.month||(this._resMon&&this._resMon())||this.planMonth();
+    const only=o.levels&&o.levels.length?o.levels:null;
+    const lvAll=(this.DATA.order||[]).slice().reverse()
+      .filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length)
+      .filter(lv=>!only||only.indexOf(lv)>=0);
+    if(!lvAll.length){this._toast('No level to draw.');return;}
+    const keep={lv:this.curLevel,cm:this.colorMode,pm:this._planMonth,rm:this._resourceMode,
+                re:this._resourceEditing,fc:this.filterCat,vb:{...this.vb},cols:this.showColumns,
+                zc:this.showSubZC,sc:this.showSubC,sp:this.showSubP,acc:this.showAccess,
+                crit:this.showCrit,dts:this.showDates,dly:this.showDelay,cw:this.showCoreWalls,
+                lf:this.showLifts,ovl:{...this.showOvl},clean:this._cleanMap,
+                reo:this._resExportOnly,rem:this._resExportMonth};
+    this._toast('正在生成 '+lvAll.length+' 张大图…');
+    const shots=[];
+    try{
+      for(const lv of lvAll){
+        this.curLevel=lv;this._resourceMode=true;this._resourceEditing=false;this.filterCat='all';
+        this._resExportOnly=true;this._resExportMonth=mon||'';
+        this._cleanMap=clean;
+        this.showColumns=false;this.showAccess=false;this.showDates=false;this.showDelay=false;
+        this.showCoreWalls=!clean;this.showLifts=!clean;this.showCrit=!clean;
+        this.showSubZC=true;this.showSubC=true;this.showSubP=true;
+        this.showOvl=clean?{...this.showOvl,transfer:false,podcis:false,podium:false}
+                          :{...this.showOvl,transfer:true,podcis:true,podium:true};
+        if(mon)this._planMonth=mon;
+        try{this.vb={...this.base};}catch(e){}
+        this.render();
+        await new Promise(r=>setTimeout(r,30));
+        const cv=await this._svgSnapshot(W*SCALE);
+        if(cv)shots.push({lv,cv});
+      }
+    }finally{
+      this.curLevel=keep.lv;this.colorMode=keep.cm;this._planMonth=keep.pm;this._resourceMode=keep.rm;
+      this._resourceEditing=keep.re;this.filterCat=keep.fc;this.vb=keep.vb;this.showColumns=keep.cols;
+      this.showSubZC=keep.zc;this.showSubC=keep.sc;this.showSubP=keep.sp;this.showAccess=keep.acc;
+      this.showCrit=keep.crit;this.showDates=keep.dts;this.showDelay=keep.dly;this.showCoreWalls=keep.cw;
+      this.showLifts=keep.lf;this.showOvl=keep.ovl;this._cleanMap=keep.clean;
+      this._resExportOnly=keep.reo;this._resExportMonth=keep.rem;
+      this.render();
+    }
+    if(!shots.length){this._toast('Nothing rendered.');return;}
+    const PAD=Math.round(40*SCALE),HEAD=Math.round(64*SCALE),GAP=Math.round(26*SCALE);
+    const cw=W*SCALE;
+    let H=PAD;shots.forEach(s=>{H+=HEAD+Math.round(s.cv.height*(cw/s.cv.width))+GAP;});
+    H=H-GAP+PAD;
+    const cv=document.createElement('canvas');cv.width=cw+PAD*2;cv.height=H;
+    const g=cv.getContext('2d');
+    g.fillStyle='#ffffff';g.fillRect(0,0,cv.width,cv.height);
+    let y=PAD;
+    shots.forEach(s=>{
+      const h=Math.round(s.cv.height*(cw/s.cv.width));
+      g.fillStyle='#18232a';g.font='800 '+Math.round(34*SCALE)+'px "Segoe UI",Arial,sans-serif';
+      g.textBaseline='top';g.fillText(s.lv,PAD,y+Math.round(8*SCALE));
+      if(mon){g.fillStyle='#6b7a86';g.font='600 '+Math.round(22*SCALE)+'px "Segoe UI",Arial,sans-serif';
+        g.fillText(mon,PAD+g.measureText(s.lv).width+Math.round(24*SCALE),y+Math.round(16*SCALE));}
+      y+=HEAD;
+      g.drawImage(s.cv,PAD,y,cw,h);
+      y+=h+GAP;
+    });
+    const stamp=this.todayISOStr?this.todayISOStr():'';
+    this._showPngPreview(cv.toDataURL('image/png'),'RWS_P1_levels_'+(mon||'').replace(/\W+/g,'')+'_'+stamp+'.png',shots.length);
+  }
+  openBigMapExport(){
+    if(!this.rwsCanResource()){this.rwsDeny('Not allowed.');return;}
+    const old=document.getElementById('__bigMap');if(old)old.remove();
+    const esc=s=>this.esc(s);
+    const lvs=(this.DATA.order||[]).slice().reverse().filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
+    const M=this._mpMonths?this._mpMonths():[],cur=(this._resMon&&this._resMon())||this.planMonth();
+    const ov=document.createElement('div');ov.id='__bigMap';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:520px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
+        <b>导出大图</b><button class="hbtn" id="bmX">关闭</button></div>
+      <div style="padding:14px 16px">
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:12px">每层一张，上下排开，不挤在一行。宽度和倍数越大越清晰，文件也越大。</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;font-size:13px;margin-bottom:12px">
+          <label>月份 <select id="bmMon" class="hbtn">${M.map(m=>`<option value="${esc(m)}"${m===cur?' selected':''}>${esc(m)}</option>`).join('')}</select></label>
+          <label>宽度 <select id="bmW" class="hbtn">${[1600,2000,2400,3000,3600].map(w=>`<option value="${w}"${w===2400?' selected':''}>${w}px</option>`).join('')}</select></label>
+          <label>倍数 <select id="bmS" class="hbtn">${[1,2,3,4].map(x=>`<option value="${x}"${x===2?' selected':''}>${x}×</option>`).join('')}</select></label>
+          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bmClean" checked>干净版（灰底+红）</label>
+        </div>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:6px">楼层</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px 10px;margin-bottom:12px">
+          ${lvs.map(lv=>`<label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" class="bmLv" value="${esc(lv)}" checked>${esc(lv)}</label>`).join('')}</div>
+        <div id="bmMsg" style="font-size:12.5px;color:var(--dim);min-height:18px;margin-bottom:8px"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button class="hbtn primary" id="bmGo">生成</button></div>
+      </div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#bmX').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    const est=()=>{const w=+ov.querySelector('#bmW').value,s=+ov.querySelector('#bmS').value;
+      const n=[...ov.querySelectorAll('.bmLv')].filter(x=>x.checked).length;
+      ov.querySelector('#bmMsg').textContent=n?('输出约 '+(w*s)+' px 宽 · '+n+' 层，一张长图'):'至少选一个楼层。';};
+    ov.querySelectorAll('#bmW,#bmS,.bmLv').forEach(x=>x.onchange=est);est();
+    ov.querySelector('#bmGo').onclick=()=>{
+      const levels=[...ov.querySelectorAll('.bmLv')].filter(x=>x.checked).map(x=>x.value);
+      if(!levels.length){est();return;}
+      /* Read every field before the dialog goes, or the values go with it. */
+      const opts={levels,month:ov.querySelector('#bmMon').value,
+                  width:+ov.querySelector('#bmW').value,scale:+ov.querySelector('#bmS').value,
+                  clean:ov.querySelector('#bmClean').checked};
+      ov.remove();
+      this.exportBigLevelMaps(opts);
+    };
+  }
   async _mpMapShots(rows,only,W,PAD){
     const lvOrder=(this.DATA.order||[]).slice().reverse();
     /* Every level that exists gets a map, including the ones with nobody on them — an empty floor
@@ -5190,6 +5310,21 @@ class Component extends DCLogic {
    figures 'Use live' just pulled in.  Dropping the row because it happens to match the live
    numbers is what made a saved report quietly revert the next time the live data moved. */
         all[key]={planned:Math.min(vals.total,vals.planned),done:Math.min(vals.total,vals.done),total:vals.total,basePlanned:live.planned,baseDone:live.done,baseTotal:live.total};});if(bad){bad.style.borderColor='#c8102e';bad.focus();this._toast('Report values must be whole numbers.');return;}this._appCfg=this._appCfg||{};this._appCfg.reportOverrides=all;const catOnly={};Object.keys(all).forEach(k=>{if(k.indexOf(cat+'||')===0)catOnly[k]=all[k];});this._appCfg['reportOverrides:'+cat]=catOnly;try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}try{if(typeof rwsSyncKV==='function')Promise.resolve(rwsSyncKV('settings','reportOverrides:'+cat,catOnly,cat,null)).catch(()=>{});}catch(e){}this._reportEditing=false;this._toast('Report updated.');this.openLookAhead();}; }
+  /* A flat version of the map for putting in a report: every zone one grey,
+     the zones carrying this month's work in red, white lines between them and
+     nothing else on top. The screen and the export share it, so what is
+     screenshotted is what is exported. */
+  _cleanOn(){return !!this._cleanMap;}
+  _cleanZoneWork(z){
+    const m=(this._resMon&&this._resMon())||this.planMonth&&this.planMonth();
+    if(!m)return false;
+    const zmk=z.mk||z.lid,ms=this._mpZoneMonths?this._mpZoneMonths(this.curLevel,zmk):null;
+    if(ms&&ms.indexOf(m)>=0)return true;
+    /* Men typed against the zone for this month count as work even when no
+       activity carries dates yet. */
+    const v=this._mzVal?this._mzVal(this.curLevel,zmk,m):null;
+    return v!=null&&v>0;
+  }
   zoneFill(z){
     if(this._resourceMode){const r=this._resourceEntry(this.curLevel,z.mk||z.lid);return r?(r.team.color||'#3157d5'):'#d9dee7';}
     if(this.showDelay)return '#f3f4f6';
@@ -5259,6 +5394,11 @@ class Component extends DCLogic {
       if(_maL1&&!this.showSubZC)op=0;
       const _aggPicked=this.rwsIsAdmin()&&this._adminAggLevel===this.curLevel&&this._adminAggSet&&this._adminAggSet.has(String(z.mk||z.lid));
       const _resInspect=this._resourceMode&&this._resourceInspect&&this._resourceInspect.lv===this.curLevel&&this._resourceInspect.zmk===(z.mk||z.lid);
+      if(this._cleanOn()){
+        const on=this._cleanZoneWork(z);
+        s+=`<polygon class="zone" data-i="${i}" points="${pts}" fill="${on?'#b4303a':'#c9ccd2'}" fill-opacity="1" style="stroke:#ffffff;stroke-width:900px;stroke-linejoin:round"/>`;
+        return;
+      }
       s+=`<polygon class="zone${vis?'':' dim'}${crit}${planst}${_aggPicked?' aggpick':''}" data-i="${i}" points="${pts}" fill="${this.zoneFill(z)}" fill-opacity="${op}"${_strictHidden?' stroke-opacity="0" pointer-events="none"':''}${_resInspect?' style="stroke:#111827;stroke-width:1500px;filter:drop-shadow(0 0 900px #fff)"':''}/>`;
     });
     {const _hk=['podcis','podium','transfer'].filter(k=>this.showOvl[k]);
@@ -5272,6 +5412,7 @@ class Component extends DCLogic {
     let _topDates='';   /* 所有浇筑/计划日期文字收集到这里, 最后画 → 永远在最上层, 不被柱子/overlay 盖住 */
     let _stairHitHtml='';   /* 楼梯独立点击层最后绘制，避免被 Column、Zone 边界或日期层挡住 */
     ['podcis','podium','transfer'].forEach(k=>{
+      if(this._cleanOn())return;
       if(!this.showOvl[k])return;const o=this.OVL[k];
       (this.DATA.overlays[k]||[]).forEach(seg=>{
         const p=seg.pts.map(pt=>{const q=this.proj(pt,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
@@ -5279,10 +5420,13 @@ class Component extends DCLogic {
         /* The width of these lines is a screen width, held by `vector-effect` in the stylesheet.  A
            snapshot carries attributes but not always that rule, so it is written on the element too —
            without it the stroke is measured in map units and vanishes. */
-        _ovlLines+=`<${tag} class="ovl" points="${p}" vector-effect="non-scaling-stroke" fill="none" stroke="#ffffff" stroke-width="${(o.w*1.05+0.8).toFixed(1)}" stroke-opacity="0.9"/>`;
+        /* The halo under these lines was there to lift them off the plan. They
+           are meant to read as background now — just enough to see a boundary
+           exists — so it is thin and faint instead. */
+        _ovlLines+=`<${tag} class="ovl" points="${p}" vector-effect="non-scaling-stroke" fill="none" stroke="#ffffff" stroke-width="${(o.w*0.55+0.5).toFixed(1)}" stroke-opacity="0.45"/>`;
         /* Export: outline only.  The hatch wash reads as "coloured area" in a picture whose whole
            point is which areas are coloured, so it is dropped there. */
-        _ovlLines+=`<${tag} class="ovl" points="${p}" vector-effect="non-scaling-stroke" ${(seg.closed&&!this._resExportOnly)?`style="fill:url(#hz_${k})"`:'fill="none"'} stroke="${o.c}" stroke-width="${(o.w*1.05).toFixed(1)}" stroke-dasharray="6 4.5" stroke-opacity="0.95"/>`;
+        _ovlLines+=`<${tag} class="ovl" points="${p}" vector-effect="non-scaling-stroke" fill="none" stroke="${o.c}" stroke-width="${(o.w*0.55).toFixed(1)}" stroke-dasharray="5 5" stroke-opacity="0.42"/>`;
       });
     });
     if(!_focusOnly&&this.rwsIsAdmin() && this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
