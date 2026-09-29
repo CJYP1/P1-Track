@@ -5359,13 +5359,22 @@ class Component extends DCLogic {
      against it.  A number someone entered by hand is a statement that men are there, and it
      outranks a date that was never filled in: without this, men typed on a zone whose dates
      are missing simply vanished from the picture and from the export. */
+  /* A month that has already happened is history, and history is read from what was built, not
+     from what was programmed for it: the programme is what the months ahead are drawn from. */
+  _monIsHistory(m){
+    const v=this._mpMonVal?this._mpMonVal(m):null;if(v==null)return false;
+    const c=this._mpMonVal?this._mpMonVal(this.actCurLabel()):null;
+    return c!=null&&v<=c;}
   _zoneWorksIn(lv,zmk,m){
     if(!m)return false;
-    if(this._zoneDidWorkIn(lv,zmk,m))return true;      /* what actually happened wins */
-    const ms=this._mpZoneMonths?this._mpZoneMonths(lv,zmk):null;
-    if(ms&&ms.indexOf(m)>=0)return true;
+    if(this._zoneDidWorkIn(lv,zmk,m))return true;      /* what actually happened */
+    /* Men typed against the zone are a statement that people were there, in any month. */
     const v=this._mzVal?this._mzVal(lv,zmk,m):null;
-    return v!=null&&v>0;}
+    if(v!=null&&v>0)return true;
+    /* Only the months still ahead take their picture from the programme. */
+    if(this._monIsHistory(m))return false;
+    const ms=this._mpZoneMonths?this._mpZoneMonths(lv,zmk):null;
+    return !!(ms&&ms.indexOf(m)>=0);}
   /* What actually happened in a month, as against what was programmed.  Output booked into the
      activity table counts, and so does an element ticked complete with a cast date in that month.
      An element ticked but never dated is left out rather than assumed to be today's — guessing
