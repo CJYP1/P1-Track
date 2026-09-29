@@ -5361,10 +5361,36 @@ class Component extends DCLogic {
      are missing simply vanished from the picture and from the export. */
   _zoneWorksIn(lv,zmk,m){
     if(!m)return false;
+    if(this._zoneDidWorkIn(lv,zmk,m))return true;      /* what actually happened wins */
     const ms=this._mpZoneMonths?this._mpZoneMonths(lv,zmk):null;
     if(ms&&ms.indexOf(m)>=0)return true;
     const v=this._mzVal?this._mzVal(lv,zmk,m):null;
     return v!=null&&v>0;}
+  /* What actually happened in a month, as against what was programmed.  Output booked into the
+     activity table counts, and so does an element ticked complete with a cast date in that month.
+     An element ticked but never dated is left out rather than assumed to be today's — guessing
+     would pile every undated tick onto the current month and empty the months before it. */
+  _actualWorkIdx(){
+    if(this._awIdx)return this._awIdx;
+    const S=new Set();
+    const D=this._actDoneM||{};
+    Object.keys(D).forEach(k=>{const v=Number(D[k]);if(!(v>0))return;
+      const q=k.split('||');if(q.length<4)return;S.add(q[0]+'||'+q[1]+'||'+q.slice(3).join('||'));});
+    const E=this.elem||{};
+    Object.keys(E).forEach(k=>{if(E[k]!=='done')return;
+      const q=k.split('||');if(q.length<2)return;
+      const d=this.elemDate?this.elemDate(k):'';if(!d)return;
+      const m=this.dateToActMonth?this.dateToActMonth(d):null;if(!m)return;
+      S.add(q[0]+'||'+q[1]+'||'+m);});
+    return (this._awIdx=S);}
+  _zoneDidWorkIn(lv,zmk,m){return !!m&&this._actualWorkIdx().has(lv+'||'+zmk+'||'+m);}
+  /* A finished zone is dropped from a look-ahead picture — but not from the picture of a month
+     in which it was actually built.  Without this, every map of a month already worked came out
+     empty, because by now everything on it is complete. */
+  _castHidesZone(lv,z,m){
+    let info=null;try{info=this._zoneCastInfo(lv,z)||{};}catch(e){return false;}
+    if(!info.done)return false;
+    return !this._zoneDidWorkIn(lv,z.mk||z.lid,m);}
   _cleanZoneWork(z){
     const m=(this._resMon&&this._resMon())||this.planMonth&&this.planMonth();
     if(!m)return false;
@@ -5385,6 +5411,7 @@ class Component extends DCLogic {
 
   /* ---------- SVG render ---------- */
   render(){
+    this._awIdx=null;   /* recomputed once per render, from whatever the data now says */
     const L=this.DATA.levels[this.curLevel],H=L.h,W=L.w;
     const _focusOnly=!!(this.showDelay||this.showRpVsAc);
     this._syncFocusButtons();
@@ -5416,7 +5443,7 @@ class Component extends DCLogic {
       if(this._resExportOnly&&this._resourceMode){
         let _ghost=!_monthEntry;
         /* A slab already cast is finished work — it does not belong in a look-ahead picture. */
-        if(!_ghost){try{if((this._zoneCastInfo(this.curLevel,z)||{}).done)_ghost=true;}catch(_e){}}
+        if(!_ghost&&this._castHidesZone(this.curLevel,z,this._resExportMonth||this._resMon()))_ghost=true;
         if(!_ghost&&this._resExportMonth&&!this._zoneWorksIn(this.curLevel,z.mk||z.lid,this._resExportMonth))_ghost=true;
         if(_ghost){
           const _gp=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
@@ -5532,7 +5559,7 @@ class Component extends DCLogic {
          in the exported month leaves no number behind. */
       if(this._resourceMode&&this.zoneVisible(z)&&!(this._resExportOnly&&this._resExportMonth&&
           !this._zoneWorksIn(this.curLevel,z.mk||z.lid,this._resExportMonth))
-          &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB',z.mk||z.lid);_occ.push({x:_rx,y:_ry,w:_rr*2.3,h:_rr*2.3,fixed:true});_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
+          &&!(this._resExportOnly&&this._castHidesZone(this.curLevel,z,this._resExportMonth||this._resMon()))){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB',z.mk||z.lid);_occ.push({x:_rx,y:_ry,w:_rr*2.3,h:_rr*2.3,fixed:true});_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       /* A zone with men typed on it but no team drawn: print the figure in grey so the number is
          on the map all the same, instead of only inside the table. */
       if(this._resourceMode&&!this._resourceEntry(this.curLevel,z.mk||z.lid)&&(this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0)>0){const _gs=Math.max(this.vb.w,1)*(this._resExportOnly?0.026:0.018),_mzHere=this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0;
@@ -5631,7 +5658,7 @@ class Component extends DCLogic {
       if(this._resourceMode&&!this._resourceEditing&&!_resSub)return;
       if(this._resExportOnly&&_resSub){
         const _z9={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')};
-        try{if((this._zoneCastInfo(this.curLevel,_z9)||{}).done)return;}catch(_e9){}
+        if(this._castHidesZone(this.curLevel,_z9,this._resExportMonth||this._resMon()))return;
         if(this._resExportMonth&&!this._zoneWorksIn(this.curLevel,this.curLevel+'|'+e.label,this._resExportMonth))return;}
       if(this._resourceMode){base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;fill=_resSub?(_resSub.team.color||'#3157d5'):'#d9dee7';fo=_resSub?0.68:0.22;drawCol=_resSub?fill:col;
       } else if(this.colorMode==='castdate'){   /* Cast: marine 板也参与, 按浇筑时间上色 */
