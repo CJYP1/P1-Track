@@ -5355,15 +5355,20 @@ class Component extends DCLogic {
      nothing else on top. The screen and the export share it, so what is
      screenshotted is what is exported. */
   _cleanOn(){return !!this._cleanMap;}
+  /* Is a zone working in a month?  Its activity dates say so — and so does a figure typed
+     against it.  A number someone entered by hand is a statement that men are there, and it
+     outranks a date that was never filled in: without this, men typed on a zone whose dates
+     are missing simply vanished from the picture and from the export. */
+  _zoneWorksIn(lv,zmk,m){
+    if(!m)return false;
+    const ms=this._mpZoneMonths?this._mpZoneMonths(lv,zmk):null;
+    if(ms&&ms.indexOf(m)>=0)return true;
+    const v=this._mzVal?this._mzVal(lv,zmk,m):null;
+    return v!=null&&v>0;}
   _cleanZoneWork(z){
     const m=(this._resMon&&this._resMon())||this.planMonth&&this.planMonth();
     if(!m)return false;
-    const zmk=z.mk||z.lid,ms=this._mpZoneMonths?this._mpZoneMonths(this.curLevel,zmk):null;
-    if(ms&&ms.indexOf(m)>=0)return true;
-    /* Men typed against the zone for this month count as work even when no
-       activity carries dates yet. */
-    const v=this._mzVal?this._mzVal(this.curLevel,zmk,m):null;
-    return v!=null&&v>0;
+    return this._zoneWorksIn(this.curLevel,z.mk||z.lid,m);
   }
   zoneFill(z){
     if(this._resourceMode){const r=this._resourceEntry(this.curLevel,z.mk||z.lid);return r?(r.team.color||'#3157d5'):'#d9dee7';}
@@ -5412,8 +5417,7 @@ class Component extends DCLogic {
         let _ghost=!_monthEntry;
         /* A slab already cast is finished work — it does not belong in a look-ahead picture. */
         if(!_ghost){try{if((this._zoneCastInfo(this.curLevel,z)||{}).done)_ghost=true;}catch(_e){}}
-        if(!_ghost&&this._resExportMonth){const _ms=this._mpZoneMonths(this.curLevel,z.mk||z.lid);
-          if(!_ms||_ms.indexOf(this._resExportMonth)<0)_ghost=true;}
+        if(!_ghost&&this._resExportMonth&&!this._zoneWorksIn(this.curLevel,z.mk||z.lid,this._resExportMonth))_ghost=true;
         if(_ghost){
           const _gp=z.ring.map(p=>{const q=this.proj(p,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
           s+=`<polygon class="zone dim" points="${_gp}" fill="none" stroke="#c2cad7" stroke-width="240" stroke-opacity="0.95" pointer-events="none"/>`;
@@ -5527,7 +5531,7 @@ class Component extends DCLogic {
       /* The headline number follows the same month filter as the shapes, so a team with no work
          in the exported month leaves no number behind. */
       if(this._resourceMode&&this.zoneVisible(z)&&!(this._resExportOnly&&this._resExportMonth&&
-          !((this._mpZoneMonths(this.curLevel,z.mk||z.lid)||[]).indexOf(this._resExportMonth)>=0))
+          !this._zoneWorksIn(this.curLevel,z.mk||z.lid,this._resExportMonth))
           &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB',z.mk||z.lid);_occ.push({x:_rx,y:_ry,w:_rr*2.3,h:_rr*2.3,fixed:true});_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       /* A zone with men typed on it but no team drawn: print the figure in grey so the number is
          on the map all the same, instead of only inside the table. */
@@ -5628,8 +5632,7 @@ class Component extends DCLogic {
       if(this._resExportOnly&&_resSub){
         const _z9={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')};
         try{if((this._zoneCastInfo(this.curLevel,_z9)||{}).done)return;}catch(_e9){}
-        if(this._resExportMonth){const _ms2=this._mpZoneMonths(this.curLevel,this.curLevel+'|'+e.label);
-          if(!_ms2||_ms2.indexOf(this._resExportMonth)<0)return;}}
+        if(this._resExportMonth&&!this._zoneWorksIn(this.curLevel,this.curLevel+'|'+e.label,this._resExportMonth))return;}
       if(this._resourceMode){base=`<polygon points="${pts}" fill="#ffffff" fill-opacity="0.92" stroke="none" pointer-events="none"/>`;fill=_resSub?(_resSub.team.color||'#3157d5'):'#d9dee7';fo=_resSub?0.68:0.22;drawCol=_resSub?fill:col;
       } else if(this.colorMode==='castdate'){   /* Cast: marine 板也参与, 按浇筑时间上色 */
         const _z={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',cols:[],piles:[],beams:[],lifts:[],stairs:[],sub:[],counts:{},_pod:(cls==='subP'),_mslab:(cls==='subC')};
@@ -5758,7 +5761,7 @@ class Component extends DCLogic {
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k];let ps=e.pts||[];if(!ps.length)return;
         /* Put the figure on ground the team is working THIS month.  Anchoring it on an idle zone is
            what made the map look like it had men standing where there was no work. */
-        if(_ovMon){const q=ps.filter(z=>z.zmk&&(this._mpZoneMonths(this.curLevel,z.zmk)||[]).indexOf(_ovMon)>=0);
+        if(_ovMon){const q=ps.filter(z=>z.zmk&&this._zoneWorksIn(this.curLevel,z.zmk,_ovMon));
           if(q.length)ps=q;else if(_ovAdj[k]!=null&&!_ovFb[k])return;}
         const cx0=ps.reduce((a,q)=>a+q.x,0)/ps.length,cy0=ps.reduce((a,q)=>a+q.y,0)/ps.length;
         /* Anchor on the Team's Zone nearest its centre, so the number always sits on coloured
