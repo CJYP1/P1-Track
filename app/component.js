@@ -3567,7 +3567,7 @@ class Component extends DCLogic {
     const cw=W*SCALE;
     /* The heading is sized from the sheet, not from the export multiplier: at 2400px x2 a 34px
        title was two thousandths of the picture and unreadable at any sensible zoom. */
-    const TFS=Math.max(34*SCALE,Math.round(cw*0.030)),MFS=Math.round(TFS*0.66);
+    const TFS=Math.max(34*SCALE,Math.round(cw*0.052)),MFS=Math.round(TFS*0.76);
     const PAD=Math.round(36*SCALE),HEAD=Math.round(TFS*1.75);
     const stamp=this.todayISOStr?this.todayISOStr():'';
     const tag=(mon||'').replace(/\W+/g,'');
