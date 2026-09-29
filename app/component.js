@@ -2355,6 +2355,14 @@ class Component extends DCLogic {
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
         if(!this._reportStructureAid(a.id))return;/* Every Slab row is the whole level, NB L2 included: it used to be the one exception. */
         const filter=null;
+        /* The CIS zones are poured as their own scope, so alongside the
+           whole-level Slab row a subset row adds up just those. It is a slice of
+           the row above, not extra work — the label says so. */
+        if(a.id==='slab'&&this._reportZoneOk(z,cat,'cis')){
+          const ck=lv+'\u0001'+a.id+'\u0001cis';
+          by[ck]=by[ck]||{a:a.label+' \u00b7 CIS \u5206\u533a\u5c0f\u8ba1',levels:[lv],aid:a.id,unit:a.unit||'',filter:'cis',subset:true,hasSchedule};
+          if(hasSchedule)by[ck].hasSchedule=true;
+        }
         const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
         const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':(filter==='nocis'?'Slab (excl. CIS)':((cat==='MA'&&maLabel[a.id])||a.label))),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
     return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0||r.hasSchedule).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
@@ -4340,7 +4348,12 @@ class Component extends DCLogic {
     const out=[];
     (this.DATA.order||[]).forEach(lv=>{
       const L=this.DATA.levels[lv];if(!L)return;
-      (L.zones||[]).forEach(z=>{
+      /* zone-data carries a few zones twice (SLAB 10-1, SLAB 7-1 on L1). Keeping
+         both would report every figure for them twice. */
+      const by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);
+      (L.zones||[]).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');
+        if(!by[k]||score(z)>score(by[k]))by[k]=z;});
+      Object.keys(by).forEach(kk=>{const z=by[kk];
         const zmk=z.mk||z.lid,c=z.counts||{};
         ACTS.forEach(([aid,ckey,label])=>{
           const reg=ckey?Number(c[ckey]||0):Number(this.lsAll(c)||0);
@@ -4645,6 +4658,36 @@ class Component extends DCLogic {
     this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
     this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
   }
+  /* Beam marks carry the level in their first character — 2VB11 is L2, 3HB4 is
+     L3. L3 and L4 were cloned from L2 and kept its 2-series marks, so every beam
+     on those levels is wrongly named. This renumbers a level's marks to its own
+     digit in one pass, carrying each tick and cast date across. */
+  _rgLvDigit(lv){const m=String(lv||'').match(/^L(\d+)$/);return m?m[1]:null;}
+  _rgPrefixable(st){
+    if(!st||st.lv==='__all')return false;
+    if(['beam','col','pile'].indexOf(st.type)<0)return false;
+    const d=this._rgLvDigit(st.lv);if(!d)return false;
+    return this._regRows().some(r=>r.lv===st.lv&&r.type===st.type&&/^\d/.test(r.id)&&r.id[0]!==d);
+  }
+  _rgRenumber(st,after){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can renumber.');return;}
+    const d=this._rgLvDigit(st.lv);if(!d)return;
+    const rows=this._regRows().filter(r=>r.lv===st.lv&&r.type===st.type&&/^\d/.test(r.id)&&r.id[0]!==d);
+    if(!rows.length){this._toast('这一层的编号开头已经都是 '+d+' 了。');return;}
+    const have=new Set(this._regRows().filter(r=>r.lv===st.lv&&r.type===st.type).map(r=>this._colKey(r.id)));
+    const clash=[],plan=[];
+    rows.forEach(r=>{const nid=d+r.id.slice(1);
+      if(have.has(this._colKey(nid)))clash.push(r.id+' → '+nid);else plan.push([r,nid]);});
+    const sample=plan.slice(0,3).map(x=>x[0].id+' → '+x[1]).join('、');
+    this._confirmModal('把 '+st.lv+' 的 '+plan.length+' 个编号开头改成 '+d+'？例如 '+sample
+      +(clash.length?('。有 '+clash.length+' 个会撞名，将跳过：'+clash.slice(0,3).join('、')):'')
+      +'。已打的勾和浇筑日期会一起跟过去。',()=>{
+      let n=0;plan.forEach(x=>{if(this._regRename(x[0].lv,x[0].zmk,x[0].type,x[0].id,x[1]))n++;});
+      this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+      this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+      this._toast('改了 '+n+' 个编号'+(clash.length?('，跳过 '+clash.length+' 个撞名的'):'')+'。');
+      after&&after();});
+  }
   openRegisterGrid(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit the register.');return;}
     const old=document.getElementById('__regGrid');if(old)old.remove();
@@ -4664,41 +4707,50 @@ class Component extends DCLogic {
     const root=document.getElementById('rgRoot');if(!root)return;
     const st=this._rg,esc=s=>this.esc(s);
     const TYPES=this._regTypes();
-    const zones=((this.DATA.levels[st.lv]||{}).zones||[]);
-    const all=this._regRows().filter(r=>r.lv===st.lv&&r.type===st.type);
+    const ALLLV=st.lv==='__all';
+    const zones=ALLLV?[]:((this.DATA.levels[st.lv]||{}).zones||[]);
+    const all=this._regRows().filter(r=>(ALLLV||r.lv===st.lv)&&r.type===st.type);
     const q=String(st.q||'').trim().toUpperCase();
-    const rows=all.filter(r=>(st.cat==='all'||r.cat===st.cat)&&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0));
+    const matched=all.filter(r=>(st.cat==='all'||r.cat===st.cat)
+      &&(!st.zone||st.zone==='__all'||r.zone===st.zone)
+      &&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0));
+    const CAP=400,rows=matched.slice(0,CAP);
+    const zoneNames=[];all.forEach(r=>{if(zoneNames.indexOf(r.zone)<0)zoneNames.push(r.zone);});zoneNames.sort();
     const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
     const TH=t=>'<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>';
     const IN='font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:inherit';
-    const kept=all.filter(r=>r.keep==='Y').length,done=all.filter(r=>r.keep==='Y'&&r.st==='done').length;
+    const kept=matched.filter(r=>r.keep==='Y').length,done=matched.filter(r=>r.keep==='Y'&&r.st==='done').length;
     let h='';
     h+='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px">'
       +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1 · admin</div>'
-      +'<div style="font-size:24px;font-weight:800;line-height:1.15">Register — edit on the page</div></div>'
+      +'<div style="font-size:24px;font-weight:800;line-height:1.15">构件台账 — 直接在网页上改</div></div>'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
       +'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
-      +'<select id="rgLv" class="hbtn">'+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
+      +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'全部楼层')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
       +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+'</select>'
-      +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'All areas')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
+      +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'全部区域')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
+      +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','全部分区')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
       +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="筛选 mark / zone" style="'+IN+';width:170px">'
-      +'<span style="color:var(--dim)">'+rows.length+' shown · '+kept+' counted · '+done+' done</span>'
+      +'<span style="color:var(--dim)">显示 '+rows.length+(matched.length>rows.length?' / 共 '+matched.length:'')+' · 计入 '+kept+' · 已完成 '+done+'</span>'
+      +(this._rgPrefixable(st)?'<button class="hbtn" id="rgPrefix" title="把这一层的编号开头改成该层的数字，例如 2VB11 → 3VB11">↺ 按楼层改编号</button>':'')
       +'<span style="flex:1"></span>'
-      +'<select id="rgNewZone" class="hbtn">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
-      +'<input id="rgNewId" placeholder="新编号" style="'+IN+';width:130px">'
-      +'<button class="hbtn primary" id="rgAdd">+ Add</button></div>';
-    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Edits apply as you make them and sync to everyone. <b>Keep</b> off takes an element out of every count without touching the drawing. Changing <b>Zone</b> moves it and carries its tick and cast date across.</div>';
+      +(ALLLV?'<span style="color:var(--dim);font-size:12px">选一个楼层才能新增</span>'
+        :('<select id="rgNewZone" class="hbtn">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
+          +'<input id="rgNewId" placeholder="新编号" style="'+IN+';width:130px">'
+          +'<button class="hbtn primary" id="rgAdd">+ 新增</button>'))+'</div>';
+    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">改一格存一格，自动同步给所有账号。<b>计入</b> 取消勾 = 这个构件不再算进任何统计（地图、Zone 清单、Report、磁贴），但图纸数据不动，随时勾回来。改 <b>分区</b> = 把它搬到那个 zone，已打的勾和浇筑日期一起搬过去。</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="8" style="padding:26px;text-align:center;color:var(--dim)">Nothing here. Add one with the box above.</td></tr>';
+      +(ALLLV?TH('楼层'):'')+TH('编号 Mark')+TH('尺寸 Size')+TH('分区 Zone')+TH('区域')+TH('计入 Keep')+TH('状态 Status')+TH('浇筑日期')+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="9" style="padding:26px;text-align:center;color:var(--dim)">这里没有构件，用上面的框新增。</td></tr>';
     rows.forEach(r=>{
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
+        +(ALLLV?'<td style="padding:5px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>'+esc(r.lv)+'</b></td>':'')
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:150px;font-weight:700"></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
-        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgZone" '+d+' style="'+IN+'">'
-          +zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
+          +(ALLLV?esc(r.zone):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>'
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
@@ -4712,14 +4764,16 @@ class Component extends DCLogic {
     const re=()=>this._rgRender();
     root.querySelector('#rgClose').onclick=()=>{const o=document.getElementById('__regGrid');if(o)o.remove();};
     root.querySelector('#rgCsv').onclick=()=>this.openRegisterImport();
-    root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;re();};
-    root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;re();};
+    root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;st.zone='__all';re();};
+    root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
     {const qi=root.querySelector('#rgQ');qi.oninput=e=>{st.q=e.target.value;};
      qi.onchange=()=>re();qi.onkeydown=e=>{if(e.key==='Enter')re();};}
-    root.querySelector('#rgAdd').onclick=()=>{
+    {const ab=root.querySelector('#rgAdd');if(ab)ab.onclick=()=>{
       const zsel=root.querySelector('#rgNewZone'),idi=root.querySelector('#rgNewId');
-      if(this._regAdd(st.lv,zsel.value,st.type,idi.value)){idi.value='';re();}};
+      if(this._regAdd(st.lv,zsel.value,st.type,idi.value)){idi.value='';re();}};}
+    {const zb=root.querySelector('#rgZone');if(zb)zb.onchange=e=>{st.zone=e.target.value;re();};}
+    {const pb=root.querySelector('#rgPrefix');if(pb)pb.onclick=()=>this._rgRenumber(st,re);}
     this._bindRegHandlers(root,re);
   }
   openRegisterImport(){
@@ -4837,6 +4891,7 @@ class Component extends DCLogic {
     if(this._ncOnlyBad)rows=bad;
     if(this._ncLv!=='all')rows=rows.filter(r=>r.lv===this._ncLv);
     if(this._ncCat!=='all')rows=rows.filter(r=>r.cat===this._ncCat);
+    if(this._ncAid&&this._ncAid!=='all')rows=rows.filter(r=>r.aid===this._ncAid);
     const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(t||v)+'</option>';
     const TH=(t,r)=>'<th style="text-align:'+(r?'right':'left')+';font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>';
     const TD=(v,al)=>'<td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:'+(al||'right')+';font-variant-numeric:tabular-nums">'+v+'</td>';
@@ -4858,10 +4913,13 @@ class Component extends DCLogic {
         +TD(v.bad?'<b style="color:#c2412d">'+v.bad+'</b>':'<span style="color:#2e7d4f">0</span>')+'</tr>';});
     h+='</tbody></table></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px;margin-bottom:10px">'
-      +'<label><input type="checkbox" id="ncBad"'+(this._ncOnlyBad?' checked':'')+'> only rows that disagree</label>'
-      +'<select id="ncLv" class="hbtn">'+opt('all',this._ncLv,'All levels')+(this.DATA.order||[]).map(x=>opt(x,this._ncLv)).join('')+'</select>'
-      +'<select id="ncCat" class="hbtn">'+opt('all',this._ncCat,'All areas')+['NB','EB','MA'].map(x=>opt(x,this._ncCat)).join('')+'</select>'
-      +'<span style="color:var(--dim)">'+rows.length+' of '+all.length+' rows · '+bad.length+' disagree</span></div>';
+      +'<label><input type="checkbox" id="ncBad"'+(this._ncOnlyBad?' checked':'')+'> 只看对不上的</label>'
+      +'<select id="ncLv" class="hbtn">'+opt('all',this._ncLv,'全部楼层')+(this.DATA.order||[]).map(x=>opt(x,this._ncLv)).join('')+'</select>'
+      +'<select id="ncCat" class="hbtn">'+opt('all',this._ncCat,'全部区域')+['NB','EB','MA'].map(x=>opt(x,this._ncCat)).join('')+'</select>'
+      +'<select id="ncAid" class="hbtn">'+opt('all',this._ncAid||'all','全部活动')
+        +(()=>{const seen=[];all.forEach(r=>{if(!seen.some(x=>x[0]===r.aid))seen.push([r.aid,r.label]);});
+               return seen.map(x=>opt(x[0],this._ncAid||'all',x[1])).join('');})()+'</select>'
+      +'<span style="color:var(--dim)">显示 '+rows.length+' / 共 '+all.length+' 行 · '+bad.length+' 行对不上</span></div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
       +TH('Level')+TH('Zone')+TH('Area')+TH('Activity')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Ticked',1)+TH('Counted done',1)+TH('Difference',1)+TH('')+'</tr></thead><tbody>';
     if(!rows.length)h+='<tr><td colspan="11" style="padding:26px;text-align:center;color:var(--dim)">Nothing disagrees here.</td></tr>';
@@ -4887,6 +4945,7 @@ class Component extends DCLogic {
     root.querySelector('#ncBad').onchange=e=>{this._ncOnlyBad=e.target.checked;this._ncRender();};
     root.querySelector('#ncLv').onchange=e=>{this._ncLv=e.target.value;this._ncRender();};
     root.querySelector('#ncCat').onchange=e=>{this._ncCat=e.target.value;this._ncRender();};
+    {const ab=root.querySelector('#ncAid');if(ab)ab.onchange=e=>{this._ncAid=e.target.value;this._ncRender();};}
     root.querySelector('#ncCsv').onclick=()=>this._ncCsv(all);
     root.querySelectorAll('.ncGo').forEach(b=>b.onclick=()=>{
       const o=document.getElementById('__numChk');if(o)o.remove();
