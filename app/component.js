@@ -294,6 +294,7 @@ class Component extends DCLogic {
          因此整层清空后只用 COLUMNS 中实际绘制的柱子重建。 */
       if(ledger.length)zones.forEach(z=>{z.cols=[];});
       ledger.forEach(c=>{if(lv==='L1'&&l1PodiumOnly.has(String(c.id||'').trim().toUpperCase()))return;const z=this._resolvedColZone(lv,c,zones); if(!z)return; c.zone=z.label; z.cols=z.cols||[];
+        if(this._elemDropped&&this._elemDropped(lv,z.mk||z.lid,'col',c.id))return;
         if(!z.cols.some(x=>((typeof x==='string')?x:x.id)===c.id)) z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit});});
       /* Hand-placed columns belong in the Zone's Column list exactly like mapped ones, so
          they can be ticked off, dated and jumped to from the map. */
@@ -1496,7 +1497,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList','#openElemReg'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
@@ -1853,13 +1854,13 @@ class Component extends DCLogic {
   ekey(lv,z,type,id){return lv+'||'+(z.mk||z.lid)+'||'+type+'||'+id;}
   levelTypeStats(){const seen={},physical={},rank={todo:0,wip:1,done:2},st={col:{total:0,done:0,wip:0},pile:{total:0,done:0,wip:0},beam:{total:0,done:0,wip:0},lift:{total:0,done:0,wip:0},stair:{total:0,done:0,wip:0},core:{total:0,done:0,wip:0}};this.DATA.levels[this.curLevel].zones.forEach(z=>{if(!this.zoneVisible(z))return;const k=this.zid(z);if(seen[k])return;seen[k]=1;this.zoneElems(this.curLevel,z).forEach(it=>{if(!st[it.type])return;const id=String(it.id||it.key.split('||').pop()||'').trim().toUpperCase(),pk=it.type+'||'+id,s2=this.elemStatus(it.key),old=physical[pk];if(!old||rank[s2]>rank[old])physical[pk]=s2;});});Object.keys(physical).forEach(k=>{const type=k.split('||')[0],o=st[type],s2=physical[k];if(!o)return;o.total++;if(s2==='done')o.done++;else if(s2==='wip')o.wip++;});return st;}
   zoneElems(lv,z){
-    const out=[];
-    (z.cols||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'col',id),type:'col',id});});
-    (z.piles||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'pile',id),type:'pile',id});});
-    (z.beams||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'beam',id),type:'beam',id});});
-    (z.lifts||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'lift',id),type:'lift',id});});
-    (z.stairs||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'stair',id),type:'stair',id});});
-    (z.cores||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;out.push({key:this.ekey(lv,z,'core',id),type:'core',id});});
+    const out=[],_zmk0=z.mk||z.lid,_drop=(t,id)=>this._elemDropped&&this._elemDropped(lv,_zmk0,t,id);
+    (z.cols||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_drop('col',id))return;out.push({key:this.ekey(lv,z,'col',id),type:'col',id});});
+    (z.piles||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_drop('pile',id))return;out.push({key:this.ekey(lv,z,'pile',id),type:'pile',id});});
+    (z.beams||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_drop('beam',id))return;out.push({key:this.ekey(lv,z,'beam',id),type:'beam',id});});
+    (z.lifts||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_drop('lift',id))return;out.push({key:this.ekey(lv,z,'lift',id),type:'lift',id});});
+    (z.stairs||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_drop('stair',id))return;out.push({key:this.ekey(lv,z,'stair',id),type:'stair',id});});
+    (z.cores||[]).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_drop('core',id))return;out.push({key:this.ekey(lv,z,'core',id),type:'core',id});});
     const zmk=this.zid(z),pre=lv+'||'+zmk+'||';
     Object.keys(this._elemAdd||{}).forEach(k=>{if(k.indexOf(pre)!==0)return;const type=k.split('||')[2];this.customItemsFor(lv,zmk,type).forEach(id=>out.push({key:pre+type+'||'+id,type,id}));});
     return out;
@@ -2322,9 +2323,28 @@ class Component extends DCLogic {
   /* Confirmed L1 New Basement structural register totals.  These are scoped
      totals (not the whole L1 drawing): Podium-owned columns such as C41/C53/
      C60/C66 are excluded from NB. */
-  _reportScopeTotal(levels,aid,cat,filter){const one=(levels||[]).length===1?(levels||[])[0]:'';if(one==='L1'&&cat==='NB'&&!filter)return ({col:46,mbeam:34,cbeam:5})[aid]??null;return null;}
+  /* L1 NB used to be pinned here to 46 columns / 34 steel beams / 5 cast steel
+     beams while everything around it counted live. Nothing is pinned now. */
+  _reportScopeTotal(levels,aid,cat,filter){return null;}
+  /* For anything counted one element at a time, the denominator is how many
+     elements are actually in the lists — the same population the numerator
+     counts ticks from. Summing the typed per-zone totals instead let the two
+     drift apart, which is how a Report row could read 166 where the register
+     held 216, or move on its own when a column changed zone. */
+  _reportElemTotal(levels,aid,cat,filter){
+    if(!this._elemAct(aid))return null;
+    const seen=new Set();let n=0;
+    (levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{
+      if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;
+      const zmk=z.mk||z.lid;
+      (this._activityElemRefs(lv,zmk,aid,z)||[]).forEach(r=>{
+        const k=r.key||(lv+'||'+zmk+'||'+aid+'||'+r.id);
+        if(seen.has(k))return;seen.add(k);n++;});}));
+    return n>0?n:null;
+  }
   /* Catch-Up and Actual share one authoritative full-level denominator. */
-  _reportCommonTotal(levels,aid,cat,filter,A,P){const fixed=this._reportScopeTotal(levels,aid,cat,filter);if(fixed!=null)return fixed;const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
+  _reportCommonTotal(levels,aid,cat,filter,A,P){const fixed=this._reportScopeTotal(levels,aid,cat,filter);if(fixed!=null)return fixed;const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const el=this._reportElemTotal(levels,aid,cat,filter);if(el!=null)return el;
+    const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
@@ -4339,6 +4359,115 @@ class Component extends DCLogic {
       });
     });
     return out;
+  }
+  /* ===================== Element register (admin) =====================
+     The drawing take-off is the only place a count can be wrong at source, and
+     until now there was no way to correct it without editing zone-data by hand.
+     This exports every element the app knows about, takes the edited sheet
+     back, and keeps the ones marked N out of every count — map, zone list,
+     Report and Number check alike. The drop list lives in settings, so it
+     syncs and nothing in the drawing data is destroyed. */
+  _regTypes(){return [['col','cols','Column'],['pile','piles','Pilecap'],['beam','beams','Steel Main Beam'],
+                      ['lift','lifts','Lift'],['stair','stairs','Stair'],['core','cores','Core Wall']];}
+  _elemDrop(){const c=this._appCfg=this._appCfg||{};return c.elemDrop=c.elemDrop||{};}
+  _elemDropped(lv,zmk,type,id){
+    const a=this._elemDrop()[lv+'||'+zmk+'||'+type];
+    if(!a||!a.length)return false;
+    const k=this._colKey(id);
+    return a.some(x=>this._colKey(x)===k);
+  }
+  _regRows(){
+    const out=[];
+    (this.DATA.order||[]).forEach(lv=>{
+      const L=this.DATA.levels[lv];if(!L)return;
+      (L.zones||[]).forEach(z=>{
+        const zmk=z.mk||z.lid;
+        this._regTypes().forEach(([type,arr,label])=>{
+          (z[arr]||[]).forEach(x=>{
+            const id=(typeof x==='string')?x:x.id;
+            out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',type,label,id,
+                      keep:this._elemDropped(lv,zmk,type,id)?'N':'Y'});});});});});
+    return out;
+  }
+  _regCsv(){
+    const rows=this._regRows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    const lines=[['楼层 Level','分区 Zone','区域 Area','构件 Type','编号 Mark','保留 Keep (Y/N)'].map(q).join(',')];
+    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.keep].map(q).join(',')));
+    const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='RWS_P1_element_register.csv';document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);
+    this._toast('Exported '+rows.length+' elements. Set Keep to N for anything that should not count, then import it back.');
+  }
+  _regImport(text){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return null;}
+    const rows=this._pcParseCsv(text);
+    if(rows.length<2)return {err:'The file has no rows under the header.'};
+    const head=rows[0].map(h=>String(h).trim());
+    const find=(...n)=>{for(const x of n){const i=head.findIndex(h=>h===x||h.indexOf(x)===0);if(i>=0)return i;}return -1;};
+    const iLv=find('楼层','Level'),iZ=find('分区','Zone'),iT=find('构件','Type'),iId=find('编号','Mark'),iK=find('保留','Keep');
+    if(iLv<0||iT<0||iId<0||iK<0)return {err:'Missing a column. The header needs 楼层, 分区, 构件, 编号 and 保留 — export once and edit that file.'};
+    /* Index the live register so a row can be matched back to its zone even if
+       the Zone cell was edited or the sheet reordered. */
+    const idx={};this._regRows().forEach(r=>{
+      (idx[r.lv+'|'+r.label+'|'+this._colKey(r.id)]=idx[r.lv+'|'+r.label+'|'+this._colKey(r.id)]||[]).push(r);
+      (idx[r.lv+'|'+r.label+'|'+this._colKey(r.id)+'|'+r.zone]=[r]);});
+    const drop={},bad=[];let kept=0,dropped=0,unknown=0;
+    rows.slice(1).forEach((r,n)=>{
+      const lv=String(r[iLv]||'').trim(),lab=String(r[iT]||'').trim(),id=String(r[iId]||'').trim();
+      const keep=String(r[iK]||'').trim().toUpperCase();
+      if(!lv&&!id)return;
+      if(!id){bad.push('row '+(n+2)+': no mark');return;}
+      if(keep!=='Y'&&keep!=='N'){bad.push('row '+(n+2)+': Keep must be Y or N');return;}
+      const zn=iZ>=0?String(r[iZ]||'').trim():'';
+      const hit=idx[lv+'|'+lab+'|'+this._colKey(id)+'|'+zn]||idx[lv+'|'+lab+'|'+this._colKey(id)];
+      if(!hit||!hit.length){unknown++;return;}
+      hit.forEach(h=>{
+        if(keep==='N'){const k=h.lv+'||'+h.zmk+'||'+h.type;(drop[k]=drop[k]||[]).push(h.id);dropped++;}
+        else kept++;});
+    });
+    this._appCfg=this._appCfg||{};
+    this._appCfg.elemDrop=drop;
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',drop,null,null);
+    try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();}catch(e){}
+    this.buildMetrics&&this.buildMetrics();this.render();
+    return {kept,dropped,unknown,bad,zones:Object.keys(drop).length};
+  }
+  openRegisterImport(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
+    const old=document.getElementById('__regImp');if(old)old.remove();
+    const cur=this._elemDrop(),n=Object.keys(cur).reduce((m,k)=>m+((cur[k]||[]).length),0);
+    const ov=document.createElement('div');
+    ov.id='__regImp';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:640px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
+        <b>Element register</b><button class="hbtn" id="regX">Close</button></div>
+      <div style="padding:14px 16px">
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Export every column, pile cap, beam, lift, stair and core the app knows about, set <b>保留 Keep</b> to <b>N</b> on anything that should not count, and bring the sheet back. Dropped elements disappear from the map, the Zone lists, the Report and Number check. The drawing data is never changed — the list of what to ignore lives in settings and syncs to everyone.</div>
+        ${n?`<div style="font-size:12.5px;color:#b7791f;margin-bottom:10px">${n} element${n===1?'':'s'} currently dropped. Importing replaces that list; import a sheet with every Keep set to Y to clear it.</div>`:''}
+        <div style="display:flex;gap:8px;margin-bottom:10px"><button class="hbtn primary" id="regDl">⬇ Export register</button></div>
+        <input type="file" id="regFile" accept=".csv,text/csv" style="margin-bottom:10px">
+        <textarea id="regTxt" placeholder="…or paste the sheet here" style="width:100%;height:140px;font:12px ui-monospace,Menlo,monospace;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink)"></textarea>
+        <div id="regMsg" style="font-size:12.5px;margin:8px 0;min-height:18px"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button class="hbtn primary" id="regGo">⬆ Import</button></div>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const msg=ov.querySelector('#regMsg'),ta=ov.querySelector('#regTxt');
+    ov.querySelector('#regX').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    ov.querySelector('#regDl').onclick=()=>this._regCsv();
+    ov.querySelector('#regFile').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
+      const rd=new FileReader();rd.onload=()=>{ta.value=String(rd.result||'');msg.innerHTML='<span style="color:var(--dim)">Loaded '+this.esc(f.name)+'.</span>';};rd.readAsText(f,'utf-8');};
+    ov.querySelector('#regGo').onclick=()=>{
+      this._confirmModal('Apply this sheet? Anything marked N stops counting everywhere.',()=>{
+        const r=this._regImport(ta.value);if(!r)return;
+        if(r.err){msg.innerHTML='<span style="color:var(--crit)">'+this.esc(r.err)+'</span>';return;}
+        msg.innerHTML='<span style="color:#2e7d4f">'+r.kept+' kept · '+r.dropped+' dropped across '+r.zones+' lists.</span>'
+          +(r.unknown?'<div style="color:var(--dim);margin-top:5px">'+r.unknown+' row(s) matched nothing in the register and were ignored.</div>':'')
+          +(r.bad.length?'<div style="color:var(--crit);margin-top:5px">Skipped '+r.bad.length+': '+this.esc(r.bad.slice(0,3).join('; '))+'</div>':'');
+        if(document.getElementById('ncRoot'))this._ncRender();});};
   }
   openNumberCheck(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can open the number check.');return;}
@@ -6931,6 +7060,7 @@ class Component extends DCLogic {
     {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
     {const _zpb=this.root.querySelector('#openZoneProg');if(_zpb)_zpb.addEventListener('click',()=>this.openZoneProgramme());}
     {const _nc=this.root.querySelector('#openNumChk');if(_nc)_nc.addEventListener('click',()=>this.openNumberCheck());}
+    {const _rg=this.root.querySelector('#openElemReg');if(_rg)_rg.addEventListener('click',()=>this.openRegisterImport());}
     {const _cl=this.root.querySelector('#openColList');if(_cl)_cl.addEventListener('click',()=>{this._pcLv='__all';this.openPlacedColList();});}
     {const _si=this.root.querySelector('#openSchedImport');if(_si)_si.addEventListener('click',()=>this.openScheduleImport());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
