@@ -3028,16 +3028,18 @@ class Component extends DCLogic {
     if(this._resMonSel&&M.indexOf(this._resMonSel)>=0)return this._resMonSel;
     return (M.indexOf(this.planMonth())>=0)?this.planMonth():(M[0]||'');}
   /* The men typed against a core wall or staircase for the month on screen, drawn on the shape. */
-  _cwMenSVG(lv,name,x,y){
+  _cwMenSVG(lv,name,x,y,occ){
     if(!this._resourceMode)return '';
     const m=this._resMon();if(!m)return '';
     const v=this._mzVal(lv,'CW:'+this._lw8Name(name),m);
     if(v==null||!v)return '';
     /* A green pill with the figure in white: a core-wall gang is a separate crew and its number
        has to read at a glance against the team colours around it. */
-    const _t=this.fmt(v),_f=this._resExportOnly?7200:5200,_w=Math.max(_f*1.5,String(_t).length*_f*0.66+_f*0.55),_h=_f*1.3,_y=y+1900;
+    const _t=this.fmt(v),_f=this._resExportOnly?4700:3800,_w=Math.max(_f*1.5,String(_t).length*_f*0.66+_f*0.55),_h=_f*1.3,_y=y+1750;
+    /* The pill is a fixed obstacle on the sheet: the team labels are placed around it. */
+    if(occ)occ.push({x:x,y:_y+_h*0.5,w:_w*1.06,h:_h*1.25,fixed:true});
     return `<g style="pointer-events:none">`
-      +`<rect x="${(x-_w/2).toFixed(0)}" y="${_y.toFixed(0)}" width="${_w.toFixed(0)}" height="${_h.toFixed(0)}" rx="${(_h*0.32).toFixed(0)}" fill="#15803d" stroke="#ffffff" stroke-width="360" stroke-linejoin="round"/>`
+      +`<rect x="${(x-_w/2).toFixed(0)}" y="${_y.toFixed(0)}" width="${_w.toFixed(0)}" height="${_h.toFixed(0)}" rx="${(_h*0.32).toFixed(0)}" fill="#15803d" stroke="#ffffff" stroke-width="240" stroke-linejoin="round"/>`
       +`<text x="${x.toFixed(0)}" y="${(_y+_h*0.76).toFixed(0)}" font-size="${_f}" fill="#ffffff" text-anchor="middle" style="font-weight:950">${_t}</text>`
       +`</g>`;
   }
@@ -5412,6 +5414,9 @@ class Component extends DCLogic {
     /* Resource mode: each Zone only gets its small work-order badge; the Team's headline figure
        is drawn ONCE per Team, at the centre of that Team's zones, so the map stays readable. */
     const _resTeams={};
+    /* Everything already printed on the map that a team label must not cover:
+       work-order badges and core-wall pills push their footprint in here. */
+    const _occ=[];
     const _resMark=(t,x,y,r,cat,zmk)=>{if(!t)return;const k=t.id||t.name;const e=_resTeams[k]||(_resTeams[k]={t,pts:[],cat:cat||'NB'});if(cat)e.cat=e.cat||cat;e.pts.push({x,y,r:r||0,zmk:zmk||''});};
     let _topDates='';   /* 所有浇筑/计划日期文字收集到这里, 最后画 → 永远在最上层, 不被柱子/overlay 盖住 */
     let _stairHitHtml='';   /* 楼梯独立点击层最后绘制，避免被 Column、Zone 边界或日期层挡住 */
@@ -5489,7 +5494,7 @@ class Component extends DCLogic {
          in the exported month leaves no number behind. */
       if(this._resourceMode&&this.zoneVisible(z)&&!(this._resExportOnly&&this._resExportMonth&&
           !((this._mpZoneMonths(this.curLevel,z.mk||z.lid)||[]).indexOf(this._resExportMonth)>=0))
-          &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB',z.mk||z.lid);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
+          &&!(this._resExportOnly&&(this._zoneCastInfo(this.curLevel,z)||{}).done)){const _re=this._resourceEntry(this.curLevel,z.mk||z.lid);if(_re){const _rr=Math.max(1150,fs*0.82),_rx=cx,_ry=cy,_rc=_re.team.color||'#3157d5',_rn=_re.item.order||((_re.team.zones||[]).indexOf(_re.item)+1);_resMark(_re.team,cx,cy,_rr,z.cat||'NB',z.mk||z.lid);_occ.push({x:_rx,y:_ry,w:_rr*2.3,h:_rr*2.3,fixed:true});_topDates+=`<g style="pointer-events:none"><title>${this.esc(_re.team.name)} · Work order ${_rn}</title><circle cx="${_rx.toFixed(0)}" cy="${_ry.toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_rc}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${_rx.toFixed(0)}" y="${(_ry+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.06).toFixed(0)}px" fill="${this._darken(_rc,0.45)}" style="font-weight:950">${_rn}</text></g>`;}}
       /* A zone with men typed on it but no team drawn: print the figure in grey so the number is
          on the map all the same, instead of only inside the table. */
       if(this._resourceMode&&!this._resourceEntry(this.curLevel,z.mk||z.lid)&&(this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0)>0){const _gs=Math.max(this.vb.w,1)*(this._resExportOnly?0.026:0.018),_mzHere=this._mzVal(this.curLevel,z.mk||z.lid,this._resMon())||0;
@@ -5613,7 +5618,7 @@ class Component extends DCLogic {
       const _aggZone=this._marineSubCalcZone(cls.replace('sub',''),i),_aggKey=_aggZone&&String(_aggZone.mk||_aggZone.lid),_aggPicked=this.rwsIsAdmin()&&this._adminAggLevel===this.curLevel&&this._adminAggSet&&this._adminAggSet.has(_aggKey);
       s+=base+`<polygon class="subz ${cls}${_aggPicked?' aggpick':''}" data-sk="${cls}|${i}" points="${pts}" fill="${fill}" fill-opacity="${fo}" stroke="${drawCol}" stroke-width="650"${dash?' stroke-dasharray="2200,1300"':''}/>`;
       if(!(this.colorMode==='castdate'&&this.showCastNames===false)) s+=`<text class="subzlbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="3400" fill="${drawCol}">${this.esc(e.label)}</text>`;
-      if(_resSub){const _rn=_resSub.item.order||((_resSub.team.zones||[]).indexOf(_resSub.item)+1),_rr=Math.max(1050,Math.min(1600,_bh*0.125));_resMark(_resSub.team,lq[0],lq[1],_rr,'MA',this.curLevel+'|'+e.label);_topDates+=`<g style="pointer-events:none"><title>${this.esc(_resSub.team.name)} · Work order ${_rn}</title><circle cx="${lq[0].toFixed(0)}" cy="${lq[1].toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_resSub.team.color}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${lq[0].toFixed(0)}" y="${(lq[1]+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.02).toFixed(0)}" fill="${this._darken(_resSub.team.color||'#3157d5',0.45)}" font-weight="950">${_rn}</text></g>`;}
+      if(_resSub){const _rn=_resSub.item.order||((_resSub.team.zones||[]).indexOf(_resSub.item)+1),_rr=Math.max(1050,Math.min(1600,_bh*0.125));_resMark(_resSub.team,lq[0],lq[1],_rr,'MA',this.curLevel+'|'+e.label);_occ.push({x:lq[0],y:lq[1],w:_rr*2.3,h:_rr*2.3,fixed:true});_topDates+=`<g style="pointer-events:none"><title>${this.esc(_resSub.team.name)} · Work order ${_rn}</title><circle cx="${lq[0].toFixed(0)}" cy="${lq[1].toFixed(0)}" r="${_rr.toFixed(0)}" fill="#ffffff" stroke="${_resSub.team.color}" stroke-width="${Math.max(260,_rr*0.20).toFixed(0)}"/><text x="${lq[0].toFixed(0)}" y="${(lq[1]+_rr*0.38).toFixed(0)}" text-anchor="middle" font-size="${(_rr*1.02).toFixed(0)}" fill="${this._darken(_resSub.team.color||'#3157d5',0.45)}" font-weight="950">${_rn}</text></g>`;}
       if(!_focusOnly&&this.colorMode==='castdate'&&cls!=='subP'&&this._castSlabsOn()&&this.showCastDates!==false&&!(cls==='subZC'&&this.showSubC)){ const _z2={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_pod:false,_mslab:(cls==='subC')}; const _ci2=cls==='subZC'?this._marineCastInfo(this.curLevel,_z2):this._zoneCastInfo(this.curLevel,_z2); if(_ci2.done||_ci2.date){const _dl=_ci2.done?'Completed':this._fmtDShort(_ci2.date); const _dfs=Math.max(1250,Math.min(2100,_bw/(Math.max(6,_dl.length)*0.68),_bh*0.18)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.45:lq[1]+_dfs*1.35; const _dp=_placeMDate(lq[0],_dy,_dl,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="900" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(420,_dfs*0.26).toFixed(0)}" paint-order="stroke">${this.esc(_dl)}</text>`;} }
       if(!_focusOnly&&this.colorMode==='castdate'&&cls==='subP'&&this._castColumnsOn()&&this.showCastDates!==false){ const _cd=this._actDateOf(this.curLevel,this.curLevel+'|'+e.label,'col'); const _mo=this._dateToActMonth(_cd.end||_cd.start); if(_mo){const _dfs=Math.max(1150,Math.min(1750,_bw/(Math.max(5,_mo.length)*0.72),_bh*0.16)); const _dy=(this.showCastNames===false)?lq[1]+_dfs*0.42:lq[1]+_dfs*1.42; const _dp=_placeMDate(lq[0],_dy,_mo,_dfs); _topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#141414" stroke="#ffffff" stroke-width="${Math.max(380,_dfs*0.25).toFixed(0)}" paint-order="stroke">COL ${this.esc(_mo)}</text>`;} }
       if(!_focusOnly&&this.showDates&&this.colorMode!=='castdate'&&!(cls==='subZC'&&this.showSubC)){const _z3={mk:this.curLevel+'|'+e.label,label:e.label,cat:'MA',_mslab:(cls==='subC')},_mi=cls==='subZC'?this._marineCastInfo(this.curLevel,_z3):this._zoneCastInfo(this.curLevel,_z3);if(_mi.start||_mi.end){const _ds=[_mi.start&&('▶ '+this._fmtDShort(_mi.start)),_mi.end&&('■ '+this._fmtDShort(_mi.end))].filter(Boolean).join(' → '),_dfs=Math.max(1050,Math.min(1650,_bw/(Math.max(10,_ds.length)*0.62),_bh*0.15)),_dp=_placeMDate(lq[0],lq[1]+_dfs*1.35,_ds,_dfs);_topDates+=`<text class="subzlbl" x="${_dp.x.toFixed(0)}" y="${_dp.y.toFixed(0)}" font-size="${_dfs.toFixed(0)}" font-weight="850" fill="#315b96" stroke="#fff" stroke-width="${Math.max(360,_dfs*0.22).toFixed(0)}" paint-order="stroke">${this.esc(_ds)}</text>`;}}
@@ -5646,7 +5651,7 @@ class Component extends DCLogic {
         s+=`<text class="corewalllbl" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_cc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:none;opacity:${_top?0.75:1}">${this.esc(this._shapeLabel(w))}${_top?' \u23f9':''}</text>`;
         /* The figure goes on the top layer with the other numbers, so nothing drawn afterwards —
            columns, sub-zones, overlays — can bury it in the exported picture. */
-        if(!_top)_topDates+=this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]);});
+        if(!_top)_topDates+=this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1],_occ);});
       }
       if(this._drawingCore&&this._coreBuf&&this._coreBuf.length){
         const bp=this._coreBuf.map(q=>{const r=this.proj(q,H);return r[0].toFixed(1)+','+r[1].toFixed(1);}).join(' ');
@@ -5661,7 +5666,7 @@ class Component extends DCLogic {
         if(_top)_lc=['#c3c8d1','#8b93a1'];   /* tops out here: grey marker only */
         s+=`<polygon class="liftwall${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" points="${pp}" fill="${_lc[0]}" fill-opacity="${_foreign?0.13:0.2}" stroke="${_lc[1]}" stroke-width="500"${_foreign?' stroke-dasharray="1400,700"':''} style="cursor:pointer"/>`;
         s+=`<text class="liftlbl${_top?' shape-top':''}" data-lwi="${_top?'':wi}" data-lwlv="${swlv}" x="${lq[0].toFixed(0)}" y="${lq[1].toFixed(0)}" font-size="1950" fill="${_lc[1]}" text-anchor="middle" style="font-weight:800;pointer-events:auto;cursor:pointer">${this.esc(this._shapeLabel(w))}</text>`;
-        if(!_top)_topDates+=this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1]);
+        if(!_top)_topDates+=this._cwMenSVG(swlv,this._shapeLabel(w),lq[0],lq[1],_occ);
         /* Large, almost-invisible top hit layer.  The staircase line sits on top
            of zone/column shapes, and stopping mousedown prevents a small hand
            movement from turning the intended click into map-pan. */
@@ -5683,7 +5688,7 @@ class Component extends DCLogic {
     s+=_colHtml;   /* 柱子放到最后 → 浮在 Marine 子区图层之上, 柱名可见、可点选 */
     if(this._resourceMode){   /* one headline number per Team, anchored on one of its own Zones */
       /* Bigger in an export: a sheet is looked at as a whole page, not zoomed into. */
-      const _bs=Math.max(this.vb.w,1)*(this._resExportOnly?0.034:0.024);
+      const _bs=Math.max(this.vb.w,1)*(this._resExportOnly?0.026:0.022);
       /* A figure typed into the Manpower table is the truth for that area and level, so the map
          prints it too: each team is scaled to its share, and the last one absorbs the rounding so
          the numbers on the picture add up to exactly what the table says. */
@@ -5695,7 +5700,7 @@ class Component extends DCLogic {
       if(_ovMon)Object.keys(_resTeams).forEach(k2=>{const e2=_resTeams[k2];
         const v=this._mzTeamMen(e2.t,this.curLevel,_ovMon);
         _ovAdj[k2]=(v==null)?0:v;if(v)_ovFb[k2]=true;});
-      const _lblPos=[];
+      const _lblPos=_occ;
       /* One halo for every figure on the map: thin, round-joined and behind the
          glyph. The old one was almost a third of the type size, which read as a
          white box around the number. */
@@ -5704,12 +5709,15 @@ class Component extends DCLogic {
          every figure already placed, trying below, above, then to the sides. */
       const _place=(x,y,w,h)=>{
         const hit=(px,py)=>_lblPos.some(q=>Math.abs(q.x-px)<((q.w||w)+w)*0.5&&Math.abs(q.y-py)<((q.h||h)+h)*0.5);
-        if(!hit(x,y)){_lblPos.push({x,y,w,h});return {x,y};}
-        const step=h*1.12;
-        for(let i=1;i<=14;i++){
-          const cand=[[x,y+step*i],[x,y-step*i],[x+w*0.9*i,y],[x-w*0.9*i,y],
-                      [x+w*0.75*i,y+step*i],[x-w*0.75*i,y+step*i]];
-          for(const c of cand){if(!hit(c[0],c[1])){_lblPos.push({x:c[0],y:c[1],w,h});return {x:c[0],y:c[1]};}}
+        if(!hit(x,y))return _lblPos.push({x,y,w,h})&&{x,y};
+        /* A ring search: nearest free spot first, so a label never travels further
+           from its own zone than it has to. Small steps, because the obstacles
+           (badges, pills) are small compared with a label block. */
+        const sx=w*0.42,sy=h*0.42;
+        for(let i=1;i<=22;i++){
+          const cand=[];
+          for(let a=0;a<12;a++){const th=a*Math.PI/6;cand.push([x+Math.cos(th)*sx*i,y+Math.sin(th)*sy*i]);}
+          for(const c of cand){if(!hit(c[0],c[1]))return _lblPos.push({x:c[0],y:c[1],w,h})&&{x:c[0],y:c[1]};}
         }
         _lblPos.push({x,y,w,h});return {x,y};
       };
@@ -5726,12 +5734,15 @@ class Component extends DCLogic {
         /* Marine's Podium zones sit almost on top of one another, so several
            teams would print in the same spot. The figure and its team name are
            one block, kept clear of every label already placed. */
-        {const _p=_place(x,y,_bs*2.6,_bs*1.75);x=_p.x;y=_p.y;}
         const v=this._resourceTeamValues(e.t,this.curLevel),cv=this._resourceCoreValues(e.t,this.curLevel),
               w=(_ovAdj[k]!=null?_ovAdj[k]:((Number(v.workers)||0)+(Number(cv.workers)||0))),c=this._darken(e.t.color||'#3157d5',0.42);
+        if(_ovMon&&_ovAdj[k]===0)return;   /* decided before any space is reserved */
+        /* The block is as wide as the widest of its two lines really is — the team
+           name, not the figure, is what used to run over its neighbours. */
+        {const _nm=String(e.t.name||'').toUpperCase(),_nw=Math.max(_bs*1.6,_nm.length*_bs*0.46*0.64),
+               _p=_place(x,y,_nw*1.05,_bs*1.9);x=_p.x;y=_p.y;}
         /* A team with no work in the month being looked at gets no label at all — a bare 0 on the
            map only invites the question of whether something was forgotten. */
-        if(_ovMon&&_ovAdj[k]===0)return;
         _topDates+=`<g style="pointer-events:none">`
           +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:900;${_halo(_bs,0.10)}">${this.fmt(w)}</text>`
           +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:800;letter-spacing:0.04em;${_halo(_bs*0.46,0.13)}">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
