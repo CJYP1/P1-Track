@@ -529,6 +529,28 @@ class Component extends DCLogic {
   setUserLevelCutoff(lv){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change this.');return;}if(this.DATA.order.indexOf(lv)<0)return;this._appCfg=this._appCfg||{};this._appCfg.userLevelCutoff=lv;try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','userLevelCutoff',lv,null,null);this.buildRail();this.render();}
   /* 按楼层隐藏柱子(admin 地图点选, 云端同步) —— 该层不显示这些柱(地图点 + 清单都不显示) */
   _colHidden(lv,id){const h=(this._appCfg&&this._appCfg.hideCols&&this._appCfg.hideCols[lv])||[];return h.indexOf(id)>=0;}
+  /* Un-hide a column on any level. toggleHideCol only ever works on the level
+     being looked at, which is no use from a list that spans all of them. */
+  _unhideCol(lv,id){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can unhide columns.');return;}
+    const hc=(this._appCfg&&this._appCfg.hideCols)||null;if(!hc||!hc[lv])return;
+    hc[lv]=hc[lv].filter(x=>x!==id);
+    if(!hc[lv].length)delete hc[lv];
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','hideCols',hc,null,null);
+    try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();}catch(e){}
+    this.render();
+  }
+  _hiddenColRows(){
+    const hc=(this._appCfg&&this._appCfg.hideCols)||{},out=[];
+    Object.keys(hc).forEach(lv=>(hc[lv]||[]).forEach(id=>{
+      const placed=((this._colAdd&&this._colAdd[lv])||[]).some(c=>this._colKey(c.id)===this._colKey(id));
+      const real=((this.COLUMNS&&this.COLUMNS[lv])||[]).find(c=>this._colKey(c.id)===this._colKey(id));
+      out.push({lv,id,zone:real?(real.zone||''):'',src:placed?'placed by hand':(real?'from the drawing':'no longer on this level')});
+    }));
+    out.sort((a,b)=>(this.DATA.order||[]).indexOf(a.lv)-(this.DATA.order||[]).indexOf(b.lv)||String(a.id).localeCompare(String(b.id)));
+    return out;
+  }
   toggleHideCol(id){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can hide columns.');return;}this._appCfg=this._appCfg||{};const hc=this._appCfg.hideCols=this._appCfg.hideCols||{};const lv=this.curLevel;const arr=hc[lv]=hc[lv]||[];const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);else arr.push(id);if(!arr.length)delete hc[lv];try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','hideCols',this._appCfg.hideCols||{},null,null);this.render();}
   toggleHideColMode(){if(!this.rwsIsAdmin())return;this._hidingCol=!this._hidingCol;if(this._placingCol&&this._hidingCol)this._placingCol=false;this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   actDefaultMonthVis(){const dm=this.actDefaultMonth(),VM=this.visMonths();return VM.indexOf(dm)>=0?dm:VM[VM.length-1];}
@@ -1443,7 +1465,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
@@ -1564,6 +1586,7 @@ class Component extends DCLogic {
          data under the old one. */
       try{this._migrateLW8&&this._migrateLW8();}catch(_e){console.error('rename migrate',_e);}
       try{this._migrateDotIds&&this._migrateDotIds();}catch(_e){console.error('dot migrate',_e);}
+      try{const _s=this._seedPlacedCols&&this._seedPlacedCols();if(_s)this._toast('Added '+_s+' hand-placed column'+(_s===1?'':'s')+' to the cloud \u2014 everyone can see them now.');}catch(_e){console.error('col seed',_e);}
       try{const _n=this._wipeReportOverrides&&this._wipeReportOverrides();if(_n)this._toast('Cleared '+_n+' typed Report figure'+(_n===1?'':'s')+' \u2014 the Area Report is live only now.');}catch(_e){console.error('report wipe',_e);}
       this.applyUpdates(); this.buildRail(); this.buildTimeline(); this.render(); this.refreshUpdBadge();
       /* The Construction Schedule is its own page: without this it kept showing whatever was on it
@@ -2187,7 +2210,17 @@ class Component extends DCLogic {
       const rows=Object.keys(acts).map(k=>{const o=acts[k];return {lv:o.lv,label:o.lv+' · '+o.label,unit:o.unit,target:o.total>0?Math.round(o.ptd/o.total*100):0,actual:o.total>0?Math.round(o.done/o.total*100):0,done:Math.round(o.done),total:Math.round(o.total),mplan:Math.round(o.mp),mdone:Math.round(o.md),mpct:o.mp>0?Math.min(100,Math.round(o.md/o.mp*100)):(o.md>0?100:0),end:o.end};}).filter(r=>this._laMonth?(r.mplan>0||r.mdone>0):r.total>0).sort((a,b)=>(lvOrder.indexOf(a.lv)-lvOrder.indexOf(b.lv))||a.label.localeCompare(b.label));
       if(rows.length)out.push({cat,label,rows}); });
     return out; }
+  /* L1 NB: the M-SLAB panels belong to Marine's scope and the capping beams are
+     substructure, so neither counts towards the New Basement superstructure.
+     They are dropped from every Report figure for this area — quantity,
+     denominator and area alike. */
+  _reportZoneDropped(z,cat){
+    if((cat||'NB')!=='NB')return false;
+    const s=String((z&&(z.label||z.mk))||'').trim().toUpperCase().replace(/\s+/g,' ');
+    return /^M-?SLAB\b/.test(s)||/^CAPPING BEAM\b/.test(s);
+  }
   _reportZoneOk(z,cat,filter){if(cat&&(z.cat||'NB')!==cat)return false;
+    if(this._reportZoneDropped(z,cat))return false;
     const _isCis=()=>/CIS/i.test(String(z.label||'')+' '+String(z.mk||''));
     if(filter==='cis')return _isCis();
     /* The whole level's slab with the CIS zones taken out. */
@@ -4182,10 +4215,21 @@ class Component extends DCLogic {
         ACTS.forEach(([aid,ckey,label])=>{
           const reg=ckey?Number(c[ckey]||0):Number(this.lsAll(c)||0);
           const tot=Number(this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid))||0);
-          const els=(this._activityElemRefs(lv,zmk,aid)||[]).length;
+          const refs=this._activityElemRefs(lv,zmk,aid)||[],els=refs.length;
           if(!reg&&!tot&&!els)return;
-          out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',aid,label,reg,tot,els,
-                    ok:(reg===tot&&reg===els)});
+          /* Ticked vs counted. The Report only ever counts a done element into
+             the month its completion date falls in, so an element that is
+             ticked but whose date lands outside the month list is invisible to
+             every figure downstream. That gap is what this pair exposes. */
+          let ticked=0,undated=0,outside=0;
+          const MS=this.ACT_MONTHS||[];
+          refs.forEach(r=>{if(this.elemStatus(r.key)!=='done')return;ticked++;
+            const d=this.elemDate(r.key);if(!d)undated++;
+            const m=this.dateToActMonth(d||this.todayISOStr());
+            if(MS.indexOf(m)<0)outside++;});
+          let counted=0;MS.forEach(m=>{const v=this.actDoneMonth(lv,zmk,aid,m);if(v)counted+=(+v||0);});
+          out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',aid,label,reg,tot,els,ticked,counted,undated,outside,
+                    ok:(reg===tot&&reg===els&&ticked===counted)});
         });
       });
     });
@@ -4215,8 +4259,8 @@ class Component extends DCLogic {
     const TH=(t,r)=>'<th style="text-align:'+(r?'right':'left')+';font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>';
     const TD=(v,al)=>'<td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:'+(al||'right')+';font-variant-numeric:tabular-nums">'+v+'</td>';
     /* Per level, how far the Activity figure sits from the drawing take-off. */
-    const byLv={};all.forEach(r=>{const k=r.lv;byLv[k]=byLv[k]||{reg:0,tot:0,els:0,bad:0};
-      byLv[k].reg+=r.reg;byLv[k].tot+=r.tot;byLv[k].els+=r.els;if(!r.ok)byLv[k].bad++;});
+    const byLv={};all.forEach(r=>{const k=r.lv;byLv[k]=byLv[k]||{reg:0,tot:0,els:0,tick:0,cnt:0,bad:0};
+      byLv[k].reg+=r.reg;byLv[k].tot+=r.tot;byLv[k].els+=r.els;byLv[k].tick+=r.ticked;byLv[k].cnt+=r.counted;if(!r.ok)byLv[k].bad++;});
     let h='';
     h+='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:14px">'
       +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1 · admin</div>'
@@ -4225,9 +4269,10 @@ class Component extends DCLogic {
       +'<button class="hbtn" id="ncCsv">⬇ CSV</button><button class="hbtn" id="ncClose">✕ Close</button></div></div>';
     h+='<div style="font-size:13px;color:var(--dim);margin-bottom:12px;max-width:80ch">Three counts for the same thing. <b>Register</b> is the drawing take-off stored on the zone. <b>Activity</b> is what the Activity card and the Report use — a typed total replaces it. <b>Elements</b> is how many marks are in the checklist, including any added by hand. Where they disagree, the screen decides which number you see; this is where to look first when a figure feels wrong.</div>';
     h+='<div style="overflow-x:auto;margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +TH('Level')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Rows that disagree',1)+'</tr></thead><tbody>';
+      +TH('Level')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Ticked',1)+TH('Counted done',1)+TH('Rows that disagree',1)+'</tr></thead><tbody>';
     (this.DATA.order||[]).forEach(lv=>{const v=byLv[lv];if(!v)return;
       h+='<tr>'+TD('<b>'+esc(lv)+'</b>','left')+TD(v.reg.toLocaleString())+TD(v.tot.toLocaleString())+TD(v.els.toLocaleString())
+        +TD(v.tick.toLocaleString())+TD(v.tick!==v.cnt?'<b style="color:#c2412d">'+v.cnt.toLocaleString()+'</b>':v.cnt.toLocaleString())
         +TD(v.bad?'<b style="color:#c2412d">'+v.bad+'</b>':'<span style="color:#2e7d4f">0</span>')+'</tr>';});
     h+='</tbody></table></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px;margin-bottom:10px">'
@@ -4236,8 +4281,8 @@ class Component extends DCLogic {
       +'<select id="ncCat" class="hbtn">'+opt('all',this._ncCat,'All areas')+['NB','EB','MA'].map(x=>opt(x,this._ncCat)).join('')+'</select>'
       +'<span style="color:var(--dim)">'+rows.length+' of '+all.length+' rows · '+bad.length+' disagree</span></div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +TH('Level')+TH('Zone')+TH('Area')+TH('Activity')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Difference',1)+TH('')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="9" style="padding:26px;text-align:center;color:var(--dim)">Nothing disagrees here.</td></tr>';
+      +TH('Level')+TH('Zone')+TH('Area')+TH('Activity')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Ticked',1)+TH('Counted done',1)+TH('Difference',1)+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="11" style="padding:26px;text-align:center;color:var(--dim)">Nothing disagrees here.</td></tr>';
     rows.forEach(r=>{
       const d=r.tot-r.reg,de=r.els-r.reg;
       const col=v=>v===0?'<span style="color:var(--dim)">0</span>':'<b style="color:'+(v>0?'#c2412d':'#b7791f')+'">'+(v>0?'+':'')+v+'</b>';
@@ -4245,7 +4290,10 @@ class Component extends DCLogic {
         +TD('<b style="font-family:ui-monospace,monospace">'+esc(r.lv)+'</b>','left')
         +TD(esc(r.zone),'left')+TD(esc(r.cat),'left')+TD(esc(r.label),'left')
         +TD(r.reg)+TD(r.tot)+TD(r.els)
-        +TD('act '+col(d)+' · el '+col(de))
+        +TD(r.ticked+(r.undated?'<div style="font-size:11px;color:var(--dim)">'+r.undated+' no date</div>':''))
+        +TD((r.ticked!==r.counted?'<b style="color:#c2412d">'+r.counted+'</b>':String(r.counted))
+            +(r.outside?'<div style="font-size:11px;color:#c2412d">'+r.outside+' outside the month list</div>':''))
+        +TD('act '+col(d)+' · el '+col(de)+(r.ticked!==r.counted?'<div style="font-size:11px;color:#c2412d">done '+col(r.counted-r.ticked)+'</div>':''))
         +TD('<button class="hbtn ncGo" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'">Open</button>','right')
         +'</tr>';});
     h+='</tbody></table></div>';
@@ -4261,8 +4309,8 @@ class Component extends DCLogic {
   }
   _ncCsv(rows){
     const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-    const lines=[['Level','Zone','Area','Activity','Register','Activity total','Element list','Activity-Register','Elements-Register'].map(q).join(',')];
-    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.reg,r.tot,r.els,r.tot-r.reg,r.els-r.reg].map(q).join(',')));
+    const lines=[['Level','Zone','Area','Activity','Register','Activity total','Element list','Ticked done','Counted done','Ticked with no date','Date outside month list','Activity-Register','Elements-Register','Counted-Ticked'].map(q).join(',')];
+    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.reg,r.tot,r.els,r.ticked,r.counted,r.undated,r.outside,r.tot-r.reg,r.els-r.reg,r.counted-r.ticked].map(q).join(',')));
     const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='RWS_P1_number_check.csv';document.body.appendChild(a);a.click();
@@ -5093,7 +5141,7 @@ class Component extends DCLogic {
     p.style.display='flex';
     const _nHid=((this._appCfg&&this._appCfg.hideCols&&this._appCfg.hideCols[this.curLevel])||[]).length;
     const _adminOpen=this._editToolsOpen||this._placingCol||this._hidingCol||this._drawingCore||this._drawingLift||this._drawingAcc||this._underlayAdjust;
-    const _editToolsStr=this.rwsIsAdmin()?`<span class="szchip ${this._placingCol?'on':''}" data-k="__place" style="${this._placingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._placingCol?'● 放置中·点地图':'＋ 放置柱子'}</span><span class="szchip ${this._hidingCol?'on':''}" data-k="__hidecol" style="${this._hidingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._hidingCol?'● 点柱子隐藏/恢复':'⊘ 隐藏柱子'}${_nHid?' ('+_nHid+')':''}</span>${(this.placedCols(this.curLevel).length||Object.keys(this._colAdd||{}).length)?`<span class="szchip" data-k="__listcol" title="List every column you placed on this level and remove or rename it by name">≡ 柱子清单</span><span class="szchip" data-k="__expcol">⬇ 导出柱子</span>`:''}${this._drawingCore?`<span class="szchip on" data-k="__corefin" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 完成 (${(this._coreBuf||[]).length})</span><span class="szchip" data-k="__coreundo">↶ 撤销</span><span class="szchip" data-k="__corecancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawcore">▱ 画 Core Wall</span>`}${this._drawingLift?`<span class="szchip on" style="border-color:#1d4ed8;color:#1d4ed8;background:rgba(29,78,216,.12)">画 Staircase: 点3下(一条边+宽度)</span><span class="szchip" data-k="__liftcancel">取消</span>`:`<span class="szchip" data-k="__drawlift">▭ 画 Staircase(可斜)</span>`}${this._drawingAcc?`<span class="szchip on" data-k="__accfin" style="border-color:#1e3a8a;color:#1e3a8a;background:rgba(30,58,138,.12)">✓ 完成 Access (${(this._accBuf||[]).length}点)</span><span class="szchip" data-k="__accundo">↶ 撤销</span><span class="szchip" data-k="__acccancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawacc">➵ 画 Access(箭头线)</span>`}${(()=>{const _u=this._curUnderlay();return !_u?`<span class="szchip" data-k="__ulload">🖼 载入底图</span>`:(this._underlayAdjust?`<span class="szchip on" data-k="__uladj" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 底图完成</span><span style="font-size:9px;color:var(--faint);align-self:center">滚轮缩放·Shift只缩宽·Alt只缩高·拖动移动</span>${this._ulAligning?`<span class="szchip on" style="border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)">对齐中 (${(this._ulAlignPts||[]).length}/4)</span><span class="szchip" data-k="__ulaligncancel">取消对齐</span>`:`<span class="szchip" data-k="__ulalign" style="border-color:#5b6bd6;color:#5b6bd6">🎯 两点对齐</span>`}<span class="szchip" data-k="__ulop-">透−</span><span class="szchip" data-k="__ulop+">透+</span><span class="szchip" data-k="__ulrot-">转−</span><span class="szchip" data-k="__ulrot+">转+</span><span class="szchip" data-k="__ulrm">移除底图</span>`:`<span class="szchip" data-k="__uladj">🖼 底图·调整</span>`);})()}`:'';
+    const _editToolsStr=this.rwsIsAdmin()?`<span class="szchip ${this._placingCol?'on':''}" data-k="__place" style="${this._placingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._placingCol?'● 放置中·点地图':'＋ 放置柱子'}</span><span class="szchip ${this._hidingCol?'on':''}" data-k="__hidecol" style="${this._hidingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._hidingCol?'● 点柱子隐藏/恢复':'⊘ 隐藏柱子'}${_nHid?' ('+_nHid+')':''}</span>${(this.placedCols(this.curLevel).length||Object.keys(this._colAdd||{}).length)?`<span class="szchip" data-k="__listcol" title="List every column you placed on this level and remove or rename it by name">≡ 柱子清单</span><span class="szchip" data-k="__expcol">⬇ 导出柱子</span><span class="szchip" data-k="__impcol" title="Bring an edited 导出柱子 sheet back in">⬆ 导入柱子</span>`:''}${this._drawingCore?`<span class="szchip on" data-k="__corefin" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 完成 (${(this._coreBuf||[]).length})</span><span class="szchip" data-k="__coreundo">↶ 撤销</span><span class="szchip" data-k="__corecancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawcore">▱ 画 Core Wall</span>`}${this._drawingLift?`<span class="szchip on" style="border-color:#1d4ed8;color:#1d4ed8;background:rgba(29,78,216,.12)">画 Staircase: 点3下(一条边+宽度)</span><span class="szchip" data-k="__liftcancel">取消</span>`:`<span class="szchip" data-k="__drawlift">▭ 画 Staircase(可斜)</span>`}${this._drawingAcc?`<span class="szchip on" data-k="__accfin" style="border-color:#1e3a8a;color:#1e3a8a;background:rgba(30,58,138,.12)">✓ 完成 Access (${(this._accBuf||[]).length}点)</span><span class="szchip" data-k="__accundo">↶ 撤销</span><span class="szchip" data-k="__acccancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawacc">➵ 画 Access(箭头线)</span>`}${(()=>{const _u=this._curUnderlay();return !_u?`<span class="szchip" data-k="__ulload">🖼 载入底图</span>`:(this._underlayAdjust?`<span class="szchip on" data-k="__uladj" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 底图完成</span><span style="font-size:9px;color:var(--faint);align-self:center">滚轮缩放·Shift只缩宽·Alt只缩高·拖动移动</span>${this._ulAligning?`<span class="szchip on" style="border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)">对齐中 (${(this._ulAlignPts||[]).length}/4)</span><span class="szchip" data-k="__ulaligncancel">取消对齐</span>`:`<span class="szchip" data-k="__ulalign" style="border-color:#5b6bd6;color:#5b6bd6">🎯 两点对齐</span>`}<span class="szchip" data-k="__ulop-">透−</span><span class="szchip" data-k="__ulop+">透+</span><span class="szchip" data-k="__ulrot-">转−</span><span class="szchip" data-k="__ulrot+">转+</span><span class="szchip" data-k="__ulrm">移除底图</span>`:`<span class="szchip" data-k="__uladj">🖼 底图·调整</span>`);})()}`:'';
     const _editBtn=this.rwsIsAdmin()?`<span style="width:1px;height:16px;background:var(--line);margin:0 4px"></span><span class="szchip ${_adminOpen?'on':''}" data-k="__edittoggle" style="${_adminOpen?'border-color:#5b6bd6;color:#5b6bd6;background:rgba(91,107,214,.12)':''}">✎ Edit${_adminOpen?' ✕':''}</span>`:'';
     const _adminTools=_editBtn+(_adminOpen?_editToolsStr:'');
     p.innerHTML=(_hasMarine?`<span class="szttl">Marine sub-zones</span><span class="szchip ${this.showSubZC?'on':''}" data-k="ZC">Top slab</span><span class="szchip ${this.showSubC?'on':''}" data-k="C">Bottom slab</span><span class="szchip ${this.showSubP?'on':''}" data-k="P">Podium</span>`:`<span class="szttl">Edit · ${this.esc(this._lvName?this._lvName(this.curLevel):this.curLevel)}</span>`)+_adminTools;
@@ -5125,6 +5173,7 @@ class Component extends DCLogic {
       if(k==='__ulaligncancel'){this._ulAlignCancel();return;}
       if(k==='__listcol'){this.openPlacedColList();return;}
       if(k==='__expcol'){this.exportPlacedCols();return;}
+      if(k==='__impcol'){this.openPlacedColImport();return;}
       /* 三个 Marine 视图互斥；地图、KPI、进度和月度清单始终使用同一范围。 */
       if(k==='ZC'){this.showSubZC=true;this.showSubC=false;this.showSubP=false;}
       else if(k==='C'){this.showSubZC=false;this.showSubC=true;this.showSubP=false;}
@@ -5681,44 +5730,74 @@ class Component extends DCLogic {
   openPlacedColList(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can manage placed columns.');return;}
     const old=document.getElementById('__pcList');if(old)old.remove();
-    const lv=this.curLevel,rows=[];
-    (this._colAdd&&this._colAdd[lv]||[]).forEach((c,i)=>rows.push({src:lv,i,c,here:true}));
-    const ord=this._floorOrd(lv);
-    Object.keys(this._colAdd||{}).forEach(src=>{
-      if(src===lv)return;const so=this._floorOrd(src);
-      if(so==null||ord==null||so>=ord)return;
-      (this._colAdd[src]||[]).forEach((c,i)=>{if(c.thru===false)return;
-        if(!this._colZoneAt(lv,c,6000))return;
-        rows.push({src,i,c,here:false});});});
+    if(this._pcLv==null)this._pcLv=this.curLevel;
+    const lv=this._pcLv,rows=[],ALL=(lv==='__all');
+    if(ALL){(this.DATA.order||[]).forEach(src=>(this._colAdd&&this._colAdd[src]||[])
+      .forEach((c,i)=>rows.push({src,i,c,here:true})));}
+    else{
+      (this._colAdd&&this._colAdd[lv]||[]).forEach((c,i)=>rows.push({src:lv,i,c,here:true}));
+      const ord=this._floorOrd(lv);
+      Object.keys(this._colAdd||{}).forEach(src=>{
+        if(src===lv)return;const so=this._floorOrd(src);
+        if(so==null||ord==null||so>=ord)return;
+        (this._colAdd[src]||[]).forEach((c,i)=>{if(c.thru===false)return;
+          if(!this._colZoneAt(lv,c,6000))return;
+          rows.push({src,i,c,here:false});});});}
     const esc=s=>this.esc(s);
     const body=rows.length?rows.map(r=>`<tr data-src="${esc(r.src)}" data-i="${r.i}">
         <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>${esc(r.c.id||'')}</b></td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--line)">${esc(r.c.zone||'—')}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--dim)">${r.here?'placed here':'from '+esc(r.src)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--dim)">${ALL?esc(r.src):(r.here?'placed here':'carried from '+esc(r.src))}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><label style="display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer"><input type="checkbox" class="pcThru"${r.c.thru===false?'':' checked'}><span style="font-size:12px;color:var(--dim)">${r.c.thru===false?'this level only':'carries up'}</span></label></td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:right">
           <button class="hbtn pcRen" type="button">Rename</button>
           <button class="hbtn pcDel" type="button" style="color:var(--crit)">Remove</button></td></tr>`).join('')
-      :'<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--dim)">No placed columns on this level.</td></tr>';
+      :'<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--dim)">No placed columns here.</td></tr>';
     const ov=document.createElement('div');
     ov.id='__pcList';
     ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:640px;width:100%;max-height:82vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
-        <b>Placed columns · ${esc(lv)}</b><button class="hbtn" id="pcClose">Close</button></div>
+        <b>Placed columns</b><span style="display:flex;gap:8px;align-items:center">
+          <select id="pcLv" class="hbtn">${['__all'].concat(this.DATA.order||[]).map(x=>`<option value="${esc(x)}"${x===lv?' selected':''}>${x==='__all'?'All levels':esc(x)}</option>`).join('')}</select>
+          <button class="hbtn" id="pcClose">Close</button></span></div>
       <div style="padding:6px 10px 14px">
-        <div style="font-size:12px;color:var(--dim);padding:6px 6px 10px">Columns you added by clicking the map. Removing one here also removes it from every level it was carried up to. Everyone sees these once they sync.</div>
+        <div style="font-size:12px;color:var(--dim);padding:6px 6px 10px">Columns you added by clicking the map. A placed column runs up through the structure by default, showing on every level above the one it was placed on \u2014 untick <b>carries up</b> for one that stops where it is. Removing one here removes it everywhere. Everyone sees these once they sync.</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr>${['Column','Zone','Origin',''].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
-          <tbody>${body}</tbody></table></div></div>`;
+          <thead><tr>${['Column','Zone','Origin','Above','' ].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
+          <tbody>${body}</tbody></table>
+        ${(()=>{const hr=this._hiddenColRows();
+          return `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px">
+            <b style="font-size:13px">Hidden columns</b>
+            <div style="font-size:12px;color:var(--dim);padding:5px 0 8px">Columns hidden with <b>\u2298 \u9690\u85cf\u67f1\u5b50</b>. Nobody sees these on the map or in a Zone's column list, on any account.</div>
+            ${hr.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr>${['Level','Column','Zone','Source',''].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
+              <tbody>${hr.map(r=>`<tr data-hlv="${esc(r.lv)}" data-hid="${esc(r.id)}">
+                <td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>${esc(r.lv)}</b></td>
+                <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>${esc(r.id)}</b></td>
+                <td style="padding:6px 8px;border-bottom:1px solid var(--line)">${esc(r.zone||'\u2014')}</td>
+                <td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--dim)">${esc(r.src)}</td>
+                <td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn pcUnhide" type="button">Unhide</button></td></tr>`).join('')}</tbody></table>`
+              :'<div style="color:var(--dim);font-size:13px;padding:6px 0">No column is hidden.</div>'}
+          </div>`;})()}
+        </div></div>`;
     document.body.appendChild(ov);
     ov.querySelector('#pcClose').onclick=()=>ov.remove();
     ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    {const sel=ov.querySelector('#pcLv');if(sel)sel.onchange=e=>{this._pcLv=e.target.value;this.openPlacedColList();};}
     ov.querySelectorAll('.pcDel').forEach(b=>b.onclick=()=>{
       const tr=b.closest('tr'),src=tr.dataset.src,i=Number(tr.dataset.i);
       const arr=this._colAdd[src]||[],c=arr[i];if(!c)return;
       this._confirmModal('Remove column "'+(c.id||'')+'"? It disappears from every level it reaches.',()=>{
         arr.splice(i,1);if(!arr.length)delete this._colAdd[src];
         this.savePlacedCols();this.render();this.openPlacedColList();});});
+    ov.querySelectorAll('.pcUnhide').forEach(b=>b.onclick=()=>{
+      const tr=b.closest('tr');this._unhideCol(tr.dataset.hlv,tr.dataset.hid);this.openPlacedColList();});
+    ov.querySelectorAll('.pcThru').forEach(b=>b.onchange=()=>{
+      const tr=b.closest('tr'),src=tr.dataset.src,i=Number(tr.dataset.i);
+      const c=(this._colAdd[src]||[])[i];if(!c)return;
+      if(b.checked)delete c.thru;else c.thru=false;
+      this.savePlacedCols();this.render();this.openPlacedColList();});
     ov.querySelectorAll('.pcRen').forEach(b=>b.onclick=()=>{
       const tr=b.closest('tr'),src=tr.dataset.src,i=Number(tr.dataset.i);
       const c=(this._colAdd[src]||[])[i];if(!c)return;
@@ -5726,6 +5805,131 @@ class Component extends DCLogic {
         onOk:v=>{v=(v||'').trim();if(!v)return;
           if(/[.。]+$/.test(v)){const f=this._dotFixId(v);this._toast('A trailing dot is invisible next to the same number without one — saved as "'+f+'".');v=f;}
           c.id=v;this.savePlacedCols();this.render();this.openPlacedColList();}});});
+  }
+  /* Import the same sheet "⬇ 导出柱子" writes, so a round trip through Excel
+     works: 楼层,分区,柱号,x,y,尺寸,关键路径. Matching is by level + column
+     mark, so re-importing an edited export moves and renames rather than
+     duplicating. Zone is re-derived from the coordinates when the cell is
+     blank. Everything goes through savePlacedCols, so it syncs like any other
+     placement and every account sees it. */
+  _pcParseCsv(text){
+    const src=String(text||'').replace(/^﻿/,'').replace(/\r\n?/g,'\n');
+    const rows=[];let cur=[],f='',q=false;
+    for(let i=0;i<src.length;i++){const ch=src[i];
+      if(q){if(ch==='"'){if(src[i+1]==='"'){f+='"';i++;}else q=false;}else f+=ch;}
+      else if(ch==='"')q=true;
+      else if(ch===','){cur.push(f);f='';}
+      else if(ch==='\n'){cur.push(f);rows.push(cur);cur=[];f='';}
+      else f+=ch;}
+    if(f!==''||cur.length){cur.push(f);rows.push(cur);}
+    return rows.filter(r=>r.some(c=>String(c).trim()!==''));
+  }
+  importPlacedCols(text,replace){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can import columns.');return null;}
+    const rows=this._pcParseCsv(text);
+    if(rows.length<2)return {err:'The file has no rows under the header.'};
+    const head=rows[0].map(h=>String(h).trim());
+    const find=(...names)=>{for(const n of names){const i=head.findIndex(h=>h===n);if(i>=0)return i;}return -1;};
+    const iLv=find('楼层','Level','level'),iZ=find('分区','Zone','zone'),
+          iId=find('柱号','Column','Mark','id'),iX=find('x','X'),iY=find('y','Y'),
+          iSz=find('尺寸','Size','size'),iC=find('关键路径','Critical','crit');
+    if(iLv<0||iId<0||iX<0||iY<0)
+      return {err:'Missing a column. The header needs at least 楼层, 柱号, x and y — export once and edit that file.'};
+    const order=this.DATA.order||[],next={},bad=[];
+    let added=0,moved=0,renamed=0,kept=0;
+    const base=replace?{}:JSON.parse(JSON.stringify(this._colAdd||{}));
+    rows.slice(1).forEach((r,n)=>{
+      const lv=String(r[iLv]==null?'':r[iLv]).trim();
+      let id=String(r[iId]==null?'':r[iId]).trim();
+      const x=Number(String(r[iX]||'').trim()),y=Number(String(r[iY]||'').trim());
+      if(!lv&&!id)return;
+      if(order.indexOf(lv)<0){bad.push('row '+(n+2)+': unknown level "'+lv+'"');return;}
+      if(!id){bad.push('row '+(n+2)+': no column mark');return;}
+      if(!Number.isFinite(x)||!Number.isFinite(y)){bad.push('row '+(n+2)+': x/y is not a number');return;}
+      if(/[.。]+$/.test(id))id=this._dotFixId(id);
+      const arr=base[lv]=base[lv]||[];
+      const key=this._colKey(id);
+      let z=iZ>=0?String(r[iZ]||'').trim():'';
+      if(!z)z=this._colZoneAt(lv,{x,y},6000)||'';
+      const sz=iSz>=0?String(r[iSz]||'').trim():'';
+      const crit=iC>=0?/^(是|y|yes|true|1)$/i.test(String(r[iC]||'').trim()):false;
+      /* Same mark on this level → update it. Otherwise the same spot → rename. */
+      let j=arr.findIndex(c=>this._colKey(c.id)===key);
+      if(j<0)j=arr.findIndex(c=>Math.hypot(c.x-x,c.y-y)<600);
+      if(j>=0){const c=arr[j];
+        if(this._colKey(c.id)!==key){c.id=id;renamed++;}
+        else if(Math.hypot(c.x-x,c.y-y)>1)moved++;else kept++;
+        c.x=x;c.y=y;c.zone=z;c.sz=sz;c.crit=crit;c.placed=true;}
+      else{arr.push({id,x,y,zone:z,sz,crit,placed:true});added++;}
+    });
+    Object.keys(base).forEach(k=>{if(!(base[k]||[]).length)delete base[k];});
+    const before=Object.keys(this._colAdd||{}).reduce((n,k)=>n+((this._colAdd[k]||[]).length),0);
+    const after=Object.keys(base).reduce((n,k)=>n+(base[k]||[]).length,0);
+    this._colAdd=base;
+    this.savePlacedCols();
+    this.render();
+    return {added,moved,renamed,kept,removed:replace?Math.max(0,before-after):0,bad,total:after};
+  }
+  /* The three columns placed by hand before placements were synced. They only
+     existed in one browser, so they are written in here once and pushed up, and
+     every account picks them up from the cloud like any other placement.
+     Merge only: nothing is removed, and an existing mark is left alone. */
+  _seedPlacedCols(){
+    const cfg=this._appCfg=this._appCfg||{};
+    if(cfg.placedColsSeed1)return 0;
+    if(!(this.rwsIsAdmin&&this.rwsIsAdmin()))return 0;
+    const SEED=[['L1','SLAB 10-2','WF-B2C66',240383,151216],
+                ['B1','A-04','WF-B2C41a',261699,124952],
+                ['L2','2.4','C21a',145037,170508]];
+    this._colAdd=this._colAdd||{};
+    let n=0;
+    SEED.forEach(([lv,zone,id,x,y])=>{
+      const arr=this._colAdd[lv]=this._colAdd[lv]||[];
+      const key=this._colKey(id);
+      if(arr.some(c=>this._colKey(c.id)===key))return;
+      if(arr.some(c=>Math.hypot(c.x-x,c.y-y)<600))return;
+      arr.push({id,x,y,zone,sz:'',crit:false,placed:true});n++;});
+    cfg.placedColsSeed1=true;
+    this.savePlacedCols();
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(cfg));}catch(e){}
+    if(typeof rwsSyncKV==='function'){try{Promise.resolve(rwsSyncKV('settings','placedColsSeed1',true,null,null)).catch(()=>{});}catch(e){}}
+    return n;
+  }
+  openPlacedColImport(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can import columns.');return;}
+    const old=document.getElementById('__pcImp');if(old)old.remove();
+    const ov=document.createElement('div');
+    ov.id='__pcImp';
+    ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:620px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
+        <b>Import placed columns</b><button class="hbtn" id="pcImpX">Close</button></div>
+      <div style="padding:14px 16px">
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Take the sheet from <b>⬇ 导出柱子</b>, edit it, bring it back. Columns are matched by level and mark, so an edited export moves and renames instead of duplicating. Header needed: <code>楼层, 分区, 柱号, x, y, 尺寸, 关键路径</code>.</div>
+        <input type="file" id="pcImpFile" accept=".csv,text/csv" style="margin-bottom:10px">
+        <textarea id="pcImpTxt" placeholder="…or paste the sheet here" style="width:100%;height:150px;font:12px ui-monospace,Menlo,monospace;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink)"></textarea>
+        <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;margin:10px 0"><input type="checkbox" id="pcImpRep"> Replace every placed column with this file <span style="color:var(--crit)">(anything not in the file is deleted)</span></label>
+        <div id="pcImpMsg" style="font-size:12.5px;margin:8px 0;min-height:18px"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button class="hbtn primary" id="pcImpGo">Import</button></div>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const msg=ov.querySelector('#pcImpMsg'),ta=ov.querySelector('#pcImpTxt');
+    ov.querySelector('#pcImpX').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    ov.querySelector('#pcImpFile').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;
+      const rd=new FileReader();rd.onload=()=>{ta.value=String(rd.result||'');msg.innerHTML='<span style="color:var(--dim)">Loaded '+this.esc(f.name)+'.</span>';};rd.readAsText(f,'utf-8');};
+    ov.querySelector('#pcImpGo').onclick=()=>{
+      const rep=ov.querySelector('#pcImpRep').checked;
+      const run=()=>{const r=this.importPlacedCols(ta.value,rep);
+        if(!r)return;
+        if(r.err){msg.innerHTML='<span style="color:var(--crit)">'+this.esc(r.err)+'</span>';return;}
+        const parts=[];if(r.added)parts.push(r.added+' added');if(r.moved)parts.push(r.moved+' moved');
+        if(r.renamed)parts.push(r.renamed+' renamed');if(r.kept)parts.push(r.kept+' unchanged');
+        if(r.removed)parts.push(r.removed+' removed');
+        msg.innerHTML='<span style="color:#2e7d4f">'+this.esc(parts.join(' · ')||'nothing changed')+' — '+r.total+' placed columns now.</span>'
+          +(r.bad.length?'<div style="color:var(--crit);margin-top:6px">Skipped '+r.bad.length+': '+this.esc(r.bad.slice(0,4).join('; '))+(r.bad.length>4?' …':'')+'</div>':'');
+        this._toast('Columns imported.');};
+      if(rep)this._confirmModal('Replace every placed column with this file? Anything not in it is deleted.',run);else run();};
   }
   exportPlacedCols(){
     const rows=[['楼层','分区','柱号','x','y','尺寸','关键路径']];
@@ -6616,6 +6820,7 @@ class Component extends DCLogic {
     {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
     {const _zpb=this.root.querySelector('#openZoneProg');if(_zpb)_zpb.addEventListener('click',()=>this.openZoneProgramme());}
     {const _nc=this.root.querySelector('#openNumChk');if(_nc)_nc.addEventListener('click',()=>this.openNumberCheck());}
+    {const _cl=this.root.querySelector('#openColList');if(_cl)_cl.addEventListener('click',()=>{this._pcLv='__all';this.openPlacedColList();});}
     {const _si=this.root.querySelector('#openSchedImport');if(_si)_si.addEventListener('click',()=>this.openScheduleImport());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
     {const _hm=this.root.querySelector('#headerMore');if(_hm){_hm.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>setTimeout(()=>_hm.removeAttribute('open'),0)));document.addEventListener('click',e=>{if(_hm.open&&!e.target.closest('#headerMore'))_hm.removeAttribute('open');});}}
