@@ -2253,6 +2253,14 @@ class Component extends DCLogic {
     const s=String((z&&(z.label||z.mk))||'').trim().toUpperCase().replace(/\s+/g,' ');
     return /^M-?SLAB\b/.test(s)||/^CAPPING BEAM\b/.test(s);
   }
+  /* Does this level have any CIS zone in this area? Decides whether the Slab
+     row splits. */
+  _levelHasCis(lv,cat){
+    const k=lv+'|'+cat;this._cisLvCache=this._cisLvCache||{};
+    if(this._cisLvCache[k]!=null)return this._cisLvCache[k];
+    const has=(this._reportZones(lv,cat)||[]).some(z=>/CIS/i.test(String(z.label||'')+' '+String(z.mk||'')));
+    return (this._cisLvCache[k]=has);
+  }
   _reportZoneOk(z,cat,filter){if(cat&&(z.cat||'NB')!==cat)return false;
     if(this._reportZoneDropped(z,cat))return false;
     const _isCis=()=>/CIS/i.test(String(z.label||'')+' '+String(z.mk||''));
@@ -2354,17 +2362,14 @@ class Component extends DCLogic {
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
         if(!this._reportStructureAid(a.id))return;/* Every Slab row is the whole level, NB L2 included: it used to be the one exception. */
-        const filter=null;
-        /* The CIS zones are poured as their own scope, so alongside the
-           whole-level Slab row a subset row adds up just those. It is a slice of
-           the row above, not extra work — the label says so. */
-        if(a.id==='slab'&&this._reportZoneOk(z,cat,'cis')){
-          const ck=lv+'\u0001'+a.id+'\u0001cis';
-          by[ck]=by[ck]||{a:a.label+' \u00b7 CIS \u5206\u533a\u5c0f\u8ba1',levels:[lv],aid:a.id,unit:a.unit||'',filter:'cis',subset:true,hasSchedule};
-          if(hasSchedule)by[ck].hasSchedule=true;
-        }
+        /* The CIS zones are poured as their own scope, so on a level that has
+           them the Slab row splits in two — CIS and Non-CIS — which add back up
+           to the level. Levels with no CIS zone keep the single row. */
+        let filter=null;
+        if(a.id==='slab'&&this._levelHasCis(lv,cat))filter=this._reportZoneOk(z,cat,'cis')?'cis':'nocis';
         const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
-        const k=lv+'\u0001'+a.id;by[k]=by[k]||{a:(filter==='cis'?'Slab CIS':(filter==='nocis'?'Slab (excl. CIS)':((cat==='MA'&&maLabel[a.id])||a.label))),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
+        const k=lv+'\u0001'+a.id+(filter?'\u0001'+filter:'');
+        by[k]=by[k]||{a:(filter==='cis'?'CIS Slab':(filter==='nocis'?'Non-CIS Slab':((cat==='MA'&&maLabel[a.id])||a.label))),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
     return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0||r.hasSchedule).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
   /* NB/EB/MA 三份 Report: 普通账号按区域权限查看; admin / RWS 看全部 */
   _reportDefs(){ return {
