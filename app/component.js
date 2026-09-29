@@ -4443,8 +4443,14 @@ class Component extends DCLogic {
     const add=(lv,z,zmk,type,label,id)=>{
       const key=this.ekey(lv,z,type,id);
       if(seen.has(key))return;seen.add(key);
-      out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',type,label,id,key,
-                keep:this._elemDropped(lv,zmk,type,id)?'N':'Y',
+      const hid=type==='col'&&this._colHidden&&this._colHidden(lv,id);
+      const drp=(this._elemDrop()[lv+'||'+zmk+'||'+type]||[]).some(x=>this._colKey(x)===this._colKey(id));
+      let sz='';
+      if(type==='col'){const CO=(this.COLUMNS&&this.COLUMNS[lv])||[];
+        const c=CO.find(x=>this._colKey(x.id)===this._colKey(id));if(c&&c.sz)sz=c.sz;
+        if(!sz){const pc=((this._colAdd&&this._colAdd[lv])||[]).find(x=>this._colKey(x.id)===this._colKey(id));if(pc&&pc.sz)sz=pc.sz;}}
+      out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',type,label,id,key,sz,
+                keep:(hid||drp)?'N':'Y',why:hid?'隐藏 hidden':(drp?'剔除 dropped':''),
                 st:this.elemStatus(key),date:this.elemDate(key)||''});};
     (this.DATA.order||[]).forEach(lv=>{
       const L=this.DATA.levels[lv];if(!L)return;
@@ -4473,8 +4479,8 @@ class Component extends DCLogic {
   }
   _regCsv(){
     const rows=this._regRows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-    const lines=[['楼层 Level','分区 Zone','区域 Area','构件 Type','编号 Mark','保留 Keep (Y/N)','状态 Status','完成日期 Date'].map(q).join(',')];
-    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.keep,r.st,r.date].map(q).join(',')));
+    const lines=[['楼层 Level','分区 Zone','区域 Area','构件 Type','编号 Mark','尺寸 Size','保留 Keep (Y/N)','不计原因 Why','状态 Status','完成日期 Date'].map(q).join(',')];
+    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.sz,r.keep,r.why,r.st,r.date].map(q).join(',')));
     const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='RWS_P1_element_register.csv';document.body.appendChild(a);a.click();
@@ -4606,6 +4612,9 @@ class Component extends DCLogic {
   }
   _regSetKeep(lv,zmk,type,id,keep){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
+    /* Hidden and dropped both stop an element counting, so putting one back has
+       to lift whichever is holding it out. */
+    if(keep&&type==='col'&&this._colHidden&&this._colHidden(lv,id))this._unhideCol(lv,id);
     const D=this._elemDrop(),k=lv+'||'+zmk+'||'+type,a=D[k]=D[k]||[];
     const i=a.findIndex(x=>this._colKey(x)===this._colKey(id));
     if(keep){if(i>=0)a.splice(i,1);if(!a.length)delete D[k];}
@@ -4681,16 +4690,18 @@ class Component extends DCLogic {
       +'<button class="hbtn primary" id="rgAdd">+ Add</button></div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Edits apply as you make them and sync to everyone. <b>Keep</b> off takes an element out of every count without touching the drawing. Changing <b>Zone</b> moves it and carries its tick and cast date across.</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +TH('Mark')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="7" style="padding:26px;text-align:center;color:var(--dim)">Nothing here. Add one with the box above.</td></tr>';
+      +TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="8" style="padding:26px;text-align:center;color:var(--dim)">Nothing here. Add one with the box above.</td></tr>';
     rows.forEach(r=>{
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:150px;font-weight:700"></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgZone" '+d+' style="'+IN+'">'
           +zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
-        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>'
+          +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'
           +['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
@@ -4709,20 +4720,7 @@ class Component extends DCLogic {
     root.querySelector('#rgAdd').onclick=()=>{
       const zsel=root.querySelector('#rgNewZone'),idi=root.querySelector('#rgNewId');
       if(this._regAdd(st.lv,zsel.value,st.type,idi.value)){idi.value='';re();}};
-    const at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,type:e.target.dataset.type,id:e.target.dataset.id});
-    root.querySelectorAll('.rgId').forEach(i=>i.onchange=e=>{const a=at(e);
-      if(this._regRename(a.lv,a.zmk,a.type,a.id,e.target.value))re();else re();});
-    root.querySelectorAll('.rgZone').forEach(i=>i.onchange=e=>{const a=at(e);
-      this._regMove(a.lv,a.type,a.id,e.target.value);re();});
-    root.querySelectorAll('.rgKeep').forEach(i=>i.onchange=e=>{const a=at(e);
-      this._regSetKeep(a.lv,a.zmk,a.type,a.id,e.target.checked);re();});
-    root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);
-      this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);re();});
-    root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);
-      this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);re();});
-    root.querySelectorAll('.rgDel').forEach(bt=>bt.onclick=e=>{const a=at(e);
-      this._confirmModal('Take "'+a.id+'" out of every count? It stays in this table, with Keep off, so it can be put back.',()=>{
-        this._regSetKeep(a.lv,a.zmk,a.type,a.id,false);re();});});
+    this._bindRegHandlers(root,re);
   }
   openRegisterImport(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
@@ -4759,6 +4757,65 @@ class Component extends DCLogic {
           +(r.unknown?'<div style="color:var(--dim);margin-top:5px">'+r.unknown+' row(s) matched nothing in the register and were ignored.</div>':'')
           +(r.bad.length?'<div style="color:var(--crit);margin-top:5px">Skipped '+r.bad.length+': '+this.esc(r.bad.slice(0,3).join('; '))+'</div>':'');
         if(document.getElementById('ncRoot'))this._ncRender();});};
+  }
+  /* The count table and the editable list were two screens showing the same
+     thing from opposite ends: one said a figure disagreed, the other let you
+     fix it. A row expands into its own elements now, so the correction happens
+     where the discrepancy is seen. */
+  _ncAidTypes(aid){
+    const m={col:['col'],pile:['pile'],mbeam:['beam'],cbeam:['beam'],ls:['lift','stair','core'],act_corewall:['core']};
+    return m[aid]||[];
+  }
+  _ncEditHtml(lv,zmk,aid){
+    const esc=s=>this.esc(s),types=this._ncAidTypes(aid);
+    if(!types.length)return '<div style="padding:10px 14px;color:var(--dim);font-size:12.5px">This activity is measured by quantity, not element by element, so there is nothing to list.</div>';
+    const zones=((this.DATA.levels[lv]||{}).zones||[]);
+    const rows=this._regRows().filter(r=>r.lv===lv&&r.zmk===zmk&&types.indexOf(r.type)>=0);
+    const IN='font:inherit;font-size:12px;padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:inherit';
+    const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
+    let h='<div style="padding:8px 12px 12px;background:var(--bg)">'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;font-size:12px">'
+      +'<b>'+rows.length+' element'+(rows.length===1?'':'s')+'</b>'
+      +'<span style="flex:1"></span>'
+      +'<select class="ncNewType" style="'+IN+'">'+types.map(t=>opt(t,types[0],({col:'Column',pile:'Pilecap',beam:'Beam',lift:'Lift',stair:'Stair',core:'Core Wall'})[t]||t)).join('')+'</select>'
+      +'<input class="ncNewId" placeholder="新编号" style="'+IN+';width:120px">'
+      +'<button class="hbtn ncAdd" data-lv="'+esc(lv)+'" data-zmk="'+esc(zmk)+'">+ 新增</button></div>';
+    if(!rows.length)h+='<div style="color:var(--dim);font-size:12.5px">No element here yet.</div>';
+    else{
+      h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>'
+        +['编号 Mark','尺寸 Size','分区 Zone','计入 Keep','状态 Status','浇筑日期 Date',''].map(t=>'<th style="text-align:left;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>').join('')
+        +'</tr></thead><tbody>';
+      rows.forEach(r=>{
+        const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
+        h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:135px;font-weight:700"></td>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select></td>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>'
+            +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'+['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit);padding:1px 6px">✕</button></td>'
+          +'</tr>';});
+      h+='</tbody></table>';
+    }
+    return h+'</div>';
+  }
+  /* Shared by the expanded rows here and by the standalone grid. */
+  _bindRegHandlers(root,after){
+    const at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,type:e.target.dataset.type,id:e.target.dataset.id});
+    root.querySelectorAll('.rgId').forEach(i=>i.onchange=e=>{const a=at(e);this._regRename(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgZone').forEach(i=>i.onchange=e=>{const a=at(e);this._regMove(a.lv,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgKeep').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetKeep(a.lv,a.zmk,a.type,a.id,e.target.checked);after();});
+    root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgDel').forEach(b=>b.onclick=e=>{const a=at(e);
+      this._confirmModal('把 "'+a.id+'" 从所有统计里去掉？它仍然留在表里，随时可以勾回来。',()=>{
+        this._regSetKeep(a.lv,a.zmk,a.type,a.id,false);after();});});
+    root.querySelectorAll('.ncAdd').forEach(b=>b.onclick=e=>{
+      const box=e.target.closest('div').parentElement;
+      const t=box.querySelector('.ncNewType'),idi=box.querySelector('.ncNewId');
+      if(this._regAdd(e.target.dataset.lv,e.target.dataset.zmk,t.value,idi.value)){idi.value='';after();}});
   }
   openNumberCheck(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can open the number check.');return;}
@@ -4819,8 +4876,11 @@ class Component extends DCLogic {
         +TD((r.ticked!==r.counted?'<b style="color:#c2412d">'+r.counted+'</b>':String(r.counted))
             +(r.outside?'<div style="font-size:11px;color:#c2412d">'+r.outside+' outside the month list</div>':''))
         +TD('act '+col(d)+' · el '+col(de)+(r.ticked!==r.counted?'<div style="font-size:11px;color:#c2412d">done '+col(r.counted-r.ticked)+'</div>':''))
-        +TD('<button class="hbtn ncGo" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'">Open</button>','right')
-        +'</tr>';});
+        +TD('<button class="hbtn ncEdit" data-k="'+esc(r.lv+'|'+r.zmk+'|'+r.aid)+'">'+(this._ncOpen===r.lv+'|'+r.zmk+'|'+r.aid?'\u25be \u6536\u8d77':'\u25b8 \u7f16\u8f91')+'</button>'
+            +' <button class="hbtn ncGo" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'">\u5730\u56fe</button>','right')
+        +'</tr>';
+      if(this._ncOpen===r.lv+'|'+r.zmk+'|'+r.aid)
+        h+='<tr><td colspan="11" style="padding:0;border-bottom:1px solid var(--line)">'+this._ncEditHtml(r.lv,r.zmk,r.aid)+'</td></tr>';});
     h+='</tbody></table></div>';
     root.innerHTML=h;
     root.querySelector('#ncClose').onclick=()=>{const o=document.getElementById('__numChk');if(o)o.remove();};
@@ -4831,6 +4891,9 @@ class Component extends DCLogic {
     root.querySelectorAll('.ncGo').forEach(b=>b.onclick=()=>{
       const o=document.getElementById('__numChk');if(o)o.remove();
       this.gotoZone(b.dataset.lv,b.dataset.zmk);});
+    root.querySelectorAll('.ncEdit').forEach(b=>b.onclick=()=>{
+      this._ncOpen=(this._ncOpen===b.dataset.k)?null:b.dataset.k;this._ncRender();});
+    this._bindRegHandlers(root,()=>this._ncRender());
   }
   _ncCsv(rows){
     const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
