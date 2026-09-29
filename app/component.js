@@ -5407,11 +5407,12 @@ class Component extends DCLogic {
     if(this.filterCat==='all'){if(OVk.columns!=null)t.columns=OVk.columns; if(OVk.pilecap!=null)t.pilecap=OVk.pilecap;
       if(OVk.mainbeam!=null)t.mainbeam=OVk.mainbeam; if(OVk.steelbeam!=null)t.steelbeam=OVk.steelbeam;
       if(OVk.liftstair!=null)t.ls=OVk.liftstair; if(OVk.area!=null)t.area=OVk.area;}
-    /* L1 NB register confirmed by the structural schedule: 46 columns
-       (including rectangular columns), 34 steel beams and 5 cast steel beams. */
-    const l1nb=this.curLevel==='L1'&&this.filterCat==='NB';if(l1nb){t.columns=46;t.mainbeam=34;t.steelbeam=5;}
+    /* The L1 NB tiles used to be pinned to 46 columns / 34 steel beams / 5 cast
+       steel beams while the bar underneath counted live element ticks. A fixed
+       denominator over a live numerator moves on its own, and a column that
+       changes zone silently drops out of the numerator, so the percentage fell
+       without any work being undone. Both now come from the same register. */
     const S=this.levelTypeStats();
-    if(l1nb){S.col.total=46;S.col.done=Math.min(46,S.col.done);S.col.wip=Math.min(Math.max(0,46-S.col.done),S.col.wip);S.beam.total=34;S.beam.done=Math.min(34,S.beam.done);S.beam.wip=Math.min(Math.max(0,34-S.beam.done),S.beam.wip);}
     const lsS={total:S.lift.total+S.stair.total,done:S.lift.done+S.stair.done,wip:S.lift.wip+S.stair.wip};
     const dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
     const mini=(es)=>{ if(!es||!es.total) return ''; const rem=es.total-es.done-es.wip;
