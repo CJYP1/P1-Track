@@ -1,0 +1,363 @@
+﻿Lv,Zone,Pkg,m2,Team,Jul'26,Aug'26,Sep'26,Oct'26
+New Basement,,,,,,,,
+B2,B2-S1,NB,999,Team D,15,,,3
+B2,B2-S1a,NB,636,Team E,9,9,11,3
+B2,B2-S2-1,NB,223,Team D,,,,1
+B2,B2-S2-2,NB,824,Team D,,,,3
+B2,B2-S2a,NB,664,Team E,10,10,,4
+B2,B2-S3-1,NB,742,Team D,,,,7
+B2,B2-S3-2,NB,612,Team D,,,,3
+B2,B2-S4-1,NB,1012,Team D,,,,3
+B2,B2-S4-2,NB,296,Team D,,,,1
+B2,B2-S5-1,NB,874,Team D,,,,3
+B2,B2-S5-2,NB,622,Team D,,,,3
+B2,B2-S6,NB,832,Team F,,,,-
+B2,B2-S6a,NB,633,Team F,,,,3
+B2,B2-S7,NB,1030,Team F,,,,3
+B2,B2-S8,NB,989,Team B,,,,8
+B2,B2-S8a,NB,629,Team C,,,11,5
+B2,B2-S9,NB,871,Team A,,,,8
+B2,B2-S10,NB,955,Team A,,,,8
+B2,B2-S11,NB,605,Team A,9,9,,5
+B2,B2-S12,NB,1291,Team A,19,19,,11
+B2,B2-S13,NB,695,Team B,,10,,12
+B2,B2-S13a,NB,374,Team C,,5,,6
+B2,B2-S14,NB,622,Team B,9,9,,-
+B2,B2-S14a,NB,398,Team C,,,,-
+B1,A-01,NB,363,Team C,,,,-
+B1,A-02,NB,490,Team C,,,,-
+B1,A-03,NB,554,Team B,,,,-
+B1,A-04,NB,563,Team A,,,,-
+B1,A-05,NB,428,Team C,,,,-
+B1,A-06,NB,560,Team B,,,,-
+B1,A-07,NB,571,Team C,,,,-
+B1,B-01,NB,690,Team B,,,,-
+B1,B-02,NB,720,Team A,,,,-
+B1,B-03,NB,1201,Team A,,,,4
+B1,B-04,NB,804,Team A,,,,-
+B1,B-04A,NB,317,Team A,,,,-
+B1,C-01a,NB,426,Team E,,,,-
+B1,C-01a-1,NB,307,Team E,,,,-
+B1,C-01b,NB,610,Team E,,,,6
+B1,C-02-1,NB,343,Team E,,,,-
+B1,C-02-2,NB,726,Team E,,,,-
+B1,C-02-3,NB,388,Team E,,,,-
+B1,D-01,NB,1349,Team F,,,24,13
+B1,D-02,NB,1611,Team F,,,29,5
+B1,E-01-1,NB,615,Team D,,,,6
+B1,E-01-2,NB,800,Team D,,,,8
+B1,F-01-1,NB,1227,Team D,,,22,6
+B1,F-01-2,NB,714,Team D,,,13,2
+B1,F-02-1,NB,472,Team D,,,9,1
+B1,F-02-2,NB,529,Team D,,,10,1
+B1M,S-1,NB,976,Team C,,,,8
+B1M,S-2,NB,1113,Team A,,,,-
+B1M,S-3,NB,1915,Team A,,,,8
+B1M,S-4,NB,1514,Team A,,,,13
+B1M,S-5,NB,1510,Team D.,,,,-
+B1M,S-6,NB,1364,Team D.,,,,-
+B1M,S-7,NB,1539,Team F,,,,4
+B1M,S-8,NB,836,Team F,,,,-
+L1,CAPPING BEAM 1A,NB,58,,,,,-
+L1,CAPPING BEAM 1B,NB,115,,,,,-
+L1,CAPPING BEAM 1C,NB,68,,,,,-
+L1,CAPPING BEAM 2A,NB,87,,,,,-
+L1,CAPPING BEAM 2B,NB,62,,,,,-
+L1,CAPPING BEAM 3A,NB,76,,,,,-
+L1,CAPPING BEAM 3B,NB,125,,,,,-
+L1,CAPPING BEAM 4,NB,140,,,,,-
+L1,CAPPING BEAM 5,NB,176,,,,,-
+L1,CAPPING BEAM 6,NB,132,,,,,-
+L1,CAPPING BEAM 7,NB,143,,2,,,-
+L1,CAPPING BEAM 8,NB,106,,,,,-
+L1,M-SLAB 1,NB,661,,,,,-
+L1,M-SLAB 2,NB,633,,,,,-
+L1,M-SLAB 3,NB,432,,,,,-
+L1,M-SLAB 4,NB,546,,,,,-
+L1,M-SLAB 5,NB,725,,,,,-
+L1,M-SLAB6,NB,552,,,,,-
+L1,SLAB 1,NB,622,,,,,-
+L1,SLAB 2A,NB,391,,,,,-
+L1,SLAB 2B,NB,638,,,,,-
+L1,SLAB 2C,NB,293,,,,,-
+L1,SLAB 2D,NB,364,,,,,-
+L1,SLAB 2D-1,NB,226,,,,,-
+L1,SLAB 3A,NB,704,,,,,-
+L1,SLAB 3B,NB,440,,,,,-
+L1,SLAB 3C,NB,188,,,,,-
+L1,SLAB 3C-1,NB,190,,,,,-
+L1,SLAB 4A,NB,731,,,,,-
+L1,SLAB 4B,NB,609,,,,,-
+L1,SLAB 5A,NB,357,,,5,,-
+L1,SLAB 5B,NB,853,,,12,,-
+L1,SLAB 6A,NB,261,,,,,-
+L1,SLAB 6A-1,NB,389,,,,,-
+L1,SLAB 6B,NB,543,,,,,-
+L1,SLAB 7-1,NB,373,,,,,-
+L1,SLAB 7-1,NB,373,,,,,-
+L1,SLAB 7-2,NB,524,,,,,-
+L1,SLAB 7-3,NB,518,,8,,,-
+L1,SLAB 7-4,NB,153,,,,,-
+L1,SLAB 8-1,NB,218,,,,,-
+L1,SLAB 8-2,NB,634,,,9,,-
+L1,SLAB 8A-1,NB,220,,3,,4,-
+L1,SLAB 8A-2,NB,497,,7,,9,-
+L1,SLAB 9A,NB,750,,,,,-
+L1,SLAB 9B,NB,934,,,14,,-
+L1,SLAB 10-1,NB,318,,,5,6,-
+L1,SLAB 10-1,NB,318,,,5,6,-
+L1,SLAB 10-2,NB,850,,,,,-
+L1,SLAB 11A,NB,533,,8,,,-
+L1,SLAB 11B,NB,994,,15,,,-
+L1,SLAB 12-1,NB,240,,3,,,-
+L1,SLAB 12-2,NB,390,,6,,7,0
+L1,SLAB 13 (F01-1),NB,1069,,,,,-
+L1,SLAB 13 (F01-2),NB,143,,,,,-
+L2,2.1,NB,351,Team NB2.1,,5,6,-
+L2,2.1CIS,NB,559,Team NB2.1,,8,10,-
+L2,2.1CIST,NB,159,Team NB2.1,,,,-
+L2,2.1T,NB,503,Team NB2.1,,,,-
+L2,2.2,NB,587,Team NB2.2,,,,2
+L2,2.2T,NB,826,Team NB2.2,,12,15,3
+L2,2.3CIST,NB,501,Team NB2.3,,,,-
+L2,2.3T,NB,1173,Team NB2.3,,,,-
+L2,2.4,NB,521,Team NB2.4,,,,-
+L2,2.4T,NB,700,Team NB2.4,,,13,-
+L2,2.6CIS,NB,476,Team NB2.6,,,,0
+L2,2.6CIST,NB,794,Team NB2.6,,,,-
+L3,2.1,NB,351,Team NB2.1,,,,-
+L3,2.1CIS,NB,559,Team NB2.1,,,,0
+L3,2.1CIST,NB,159,Team NB2.1,,,,0
+L3,2.1T,NB,503,Team NB2.1,,,,-
+L3,2.2,NB,587,Team NB2.2,,,,3
+L3,2.2T,NB,826,Team NB2.2,,,,3
+L3,2.3CIST,NB,501,Team NB2.3,,,,3
+L3,2.3T,NB,1173,Team NB2.3,,,,-
+L3,2.4,NB,521,Team NB2.4,,,,-
+L3,2.4T,NB,700,Team NB2.4,,,,0
+L3,2.6CIS,NB,476,Team NB2.6,,,,-
+L3,2.6CIST,NB,794,Team NB2.6,,,,0
+L4,2.1,NB,351,Team NB2.1,,,,0
+L4,2.1CIS,NB,559,Team NB2.1,,,,-
+L4,2.1CIST,NB,159,Team NB2.1,,,,0
+L4,2.1T,NB,503,Team NB2.1,,,,6
+L4,2.2,NB,587,Team NB2.2,,,,-
+L4,2.2T,NB,826,Team NB2.2,,,,-
+L4,2.3CIST,NB,501,Team NB2.3,,,,3
+L4,2.3T,NB,1173,Team NB2.3,,,,5
+L4,2.4,NB,521,Team NB2.4,,,,-
+L4,2.4T,NB,700,Team NB2.4,,,,0
+L4,2.6CIS,NB,476,Team NB2.6,,,,-
+L4,2.6CIST,NB,794,Team NB2.6,,,,-
+L5,2.1,NB,502,Team NB2.1,,,,-
+L5,2.1CIS,NB,773,Team NB2.1,,,,-
+L5,2.1T,NB,347,Team NB2.1,,,,0
+L5,2.2T,NB,1079,Team NB2.2,,,,-
+L5,2.3CIST,NB,504,Team NB2.3,,,,-
+L5,2.3T,NB,1007,Team NB2.3,,,,3
+L5,2.4T,NB,1092,Team NB2.4,,,,-
+Existing Basement,,,,,,,,0
+B2,EB2-1,EB,1685,Team EB4.1,29,35,49,-
+B2,EB2-2.1,EB,1393,Team EB4.1,24,29,41,-
+B2,EB2-2.2,EB,641,Team EB4.1,,,,-
+B2,EB2-2.3,EB,922,Team EB4.2,,,,-
+B2,EB2-2.4,EB,480,Team EB4.2,,,,-
+B2,EB2-3.1A-1,EB,357,Team EB4.3,6,7,10,-
+B2,EB2-3.1A-2,EB,678,Team EB4.3,,,,-
+B2,EB2-3.1B,EB,852,Team EB4.3,,,,-
+B2,EB2-3.1C,EB,352,Team EB4.3,,,,-
+B2,EB2-3.2-1,EB,263,Team EB4.3,,,,-
+B2,EB2-3.2-2,EB,985,Team EB4.3,,,,-
+B2,EB2-3.3,EB,1210,Team EB4.4,21,25,35,-
+B2,EB2-3.4,EB,1324,Team EB4.4,,,,13
+B2,EB2-3.5,EB,701,Team EB4.4,,,,-
+B1,EB1S1,EB,946,Team EB4.1,,,,-
+B1,EB1S2.1,EB,1061,Team EB4.1,,,,-
+B1,EB1S2.2,EB,614,Team EB4.1,,,,-
+B1,EB1S2.3,EB,780,Team EB4.2,,,,-
+B1,EB1S2.4,EB,599,Team EB4.2,10,13,18,-
+B1,EB1S5,EB,380,Team EB4.3,,,,-
+B1,EB1S6,EB,1051,Team EB4.3,,,,-
+B1,EB1S7,EB,763,Team EB4.4,,,,8
+B1,EB1S8,EB,1181,Team EB4.3,,,,11
+L1,SLAB B-1,EB,836,Team EB4.1,,,,-
+L1,SLAB B-2.1,EB,1277,Team EB4.1,,,,-
+L1,SLAB B-2.2,EB,770,Team EB4.1,,,,-
+L1,SLAB B-2.3,EB,737,Team EB4.2,,,,-
+L1,SLAB B-2.4,EB,718,Team EB4.2,,,,-
+L1,SLAB B-3.1,EB,493,Team EB4.3,,,,5
+L1,SLAB B-3.2,EB,741,Team EB4.3,,,,7
+L1,SLAB B-3.3,EB,1209,Team EB4.4,,,,12
+L1,SLAB B-3.4,EB,884,Team EB4.3,,,,8
+L1,SLAB B-3.5,EB,444,Team EB4.4,,,,-
+L2,4.1,EB,589,Team EB4.1,,,,-
+L2,4.1CIST,EB,1272,Team EB4.1,,,,13
+L2,4.2,EB,549,Team EB4.2,,,,-
+L2,4.2T,EB,323,Team EB4.2,,,,-
+L2,4.3CIST,EB,374,Team EB4.3,,,,3
+L2,4.3T,EB,943,Team EB4.3,,,,9
+L2,4.4,EB,750,Team EB4.4,,,,-
+L3,4.1,EB,589,Team EB4.1,,,,6
+L3,4.1CIST,EB,1272,Team EB4.1,,,,12
+L3,4.2,EB,549,Team EB4.2,,,,5
+L3,4.2T,EB,323,Team EB4.2,,,,-
+L3,4.3CIST,EB,374,Team EB4.3,,,,-
+L3,4.3T,EB,943,Team EB4.3,,,,-
+L3,4.4,EB,750,Team EB4.4,,,,-
+L4,4.1,EB,589,Team EB4.1,,,,6
+L4,4.1CIST,EB,1272,Team EB4.1,,,,-
+L4,4.2,EB,549,Team EB4.2,,,,5
+L4,4.2T,EB,323,Team EB4.2,,,,3
+L4,4.3CIST,EB,374,Team EB4.3,,,,-
+L4,4.3T,EB,943,Team EB4.3,,,,-
+L4,4.4,EB,750,Team EB4.4,,,,-
+L5,4.1,EB,377,Team EB4.1,,,,-
+L5,4.1CIST,EB,1124,Team EB4.1,,,,-
+L5,4.1T,EB,472,Team EB4.1,,,,-
+L5,4.2,EB,820,Team EB4.2,,,,-
+L5,4.2T,EB,314,Team EB4.2,,,,3
+L5,4.3CIST,EB,530,Team EB4.3,,,,-
+L5,4.3T,EB,434,Team EB4.3,,,,-
+L5,4.4,EB,745,Team EB4.4,,,,-
+Marine,,,,,,,,0
+L1,C1-1,MA,229,Team MA1.2,3,11,,-
+L1,C1-2,MA,220,Team MA1.2,,,,-
+L1,C1-3,MA,469,Team MA1.2,6,,,-
+L1,C1-4,MA,736,Team MA1.2,10,,,-
+L1,C1-5,MA,1258,Team MA1.2,17,,,-
+L1,C1-6,MA,739,Team MA3.1,,,,-
+L1,C1-7,MA,825,Team MA3.1,,,,-
+L1,C2-1,MA,917,Team MA3.1,,,,-
+L1,C2-2,MA,578,Team MA3.3,,27,,-
+L1,C2-3,MA,1039,Team MA3.3,,,,4
+L1,C2-4,MA,1084,Team MA3.3,,,,-
+L1,C2-5,MA,1063,Team MA3.3,,,,-
+L1,C3.1-1,MA,367,Team MAC3.1,,,,-
+L1,C3.1-2,MA,453,Team MAC3.1,,,,-
+L1,C3.1-3,MA,368,Team MAC3.1,,,,2
+L1,C3.1-4,MA,417,Team MAC3.1,,,,2
+L1,C3.1-5,MA,294,Team MAC3.1,,,,1
+L1,C3.1-6,MA,614,Team MAC3.1,,,,3
+L1,C3.1-7,MA,955,Team MAC3.1,,,,4
+L1,C3.1-8,MA,508,Team MAC3.1,,,,2
+L1,C3.2-1,MA,165,Team MA1.1,,,,-
+L1,C3.2-2,MA,196,Team MA1.1,,,,-
+L1,C3.2-3,MA,244,Team MA1.1,,,,1
+L1,C3.2-4,MA,348,Team MA1.1,,,,2
+L1,C3.2-5,MA,242,Team MAC3.2,,,,1
+L1,C3.2-6,MA,262,Team MAC3.2,,,,1
+L1,C3.2-7,MA,483,Team MAC3.2,,,,2
+L1,P1,MA,568,Team MA1.2,7,,,-
+L1,P2,MA,587,Team MA1.2,,28,,-
+L1,P3-1,MA,346,Team MA1.2,,16,,-
+L1,P3-2,MA,391,Team MA1.2,,18,,-
+L1,P4-1,MA,176,Team MAC3.2,,,,5
+L1,P4-2,MA,389,Team MAC3.1,,,,-
+L1,P5-1,MA,157,Team MAC3.2,,,,5
+L1,P5-2,MA,348,Team MAC3.1,,,,-
+L1,P6-1,MA,170,Team MAC3.2,,,,5
+L1,P6-2,MA,359,Team MAC3.1,,,,-
+L1,P7-1,MA,348,Team MA3.4,,,,2
+L1,P7-2,MA,300,Team MA3.3,,,,-
+L1,P8-1,MA,179,Team MA3.4,,,,5
+L1,P8-2,MA,157,Team MA3.4,,,,5
+L1,P8-3,MA,126,Team MA3.3,,,,-
+L1,P9-1,MA,132,Team MA3.4,,,,0
+L1,P9-2,MA,116,Team MA3.4,,,,0
+L1,P10,MA,730,Team MA3.3,,,,-
+L1,P11,MA,871,Team MAC3.1,,,,-
+L1,P12,MA,585,Team MAC3.2,,,,3
+L1,P13,MA,424,Team MA1.2,,,,-
+L1,P14,MA,540,Team MA1.1,,,,3
+L1,ZC2.1,MA,2495,Team MAZC2.1,,,18,10
+L1,ZC2.1,MA,2495,Team MAZC2.1,,,18,10
+L1,ZC2.2,MA,3119,Team MAZC2.2,,,23,13
+L1,ZC2.2,MA,3119,Team MAZC2.2,,,22,13
+L1,ZC 3.2,MA,1301,,,,,-
+L1,ZC 3.2,MA,1301,,,,,-
+L1,ZC1,MA,3051,,40,,,-
+L1,ZC1,MA,3051,,,,,-
+L1,ZC3.1A,MA,1784,,,,,-
+L1,ZC3.1A,MA,1784,,,,,-
+L1,ZC3.1B,MA,3406,,,,25,-
+L1,ZC3.1B,MA,3406,,,,25,-
+L2,1.1,MA,540,Team MA1.1,,,,3
+L2,1.2,MA,1240,Team MA1.2,,,,-
+L2,1.2T,MA,1075,Team MA1.2,,,,-
+L2,3.1CIST,MA,883,Team MA3.1,,,,3
+L2,3.1T,MA,1096,Team MA3.1,,,,4
+L2,3.2,MA,953,Team MA3.2,,,,4
+L2,3.2T,MA,135,Team MA3.2,,,,6
+L2,3.3CIST,MA,730,Team MA3.3,,,,3
+L2,3.3T,MA,415,Team MA3.3,,,,0
+L2,3.4,MA,659,Team MA3.4,,,,3
+L2,3.4T,MA,274,Team MA3.4,,,,6
+L3,1.1,MA,540,Team MA1.1,,,,-
+L3,1.2,MA,1240,Team MA1.2,,,,5
+L3,1.2T,MA,1075,Team MA1.2,,,,4
+L3,3.1CIST,MA,883,Team MA3.1,,,,3
+L3,3.1T,MA,1096,Team MA3.1,,,,-
+L3,3.2,MA,953,Team MA3.2,,,,-
+L3,3.2T,MA,135,Team MA3.2,,,,-
+L3,3.3CIST,MA,730,Team MA3.3,,,,8
+L3,3.3T,MA,415,Team MA3.3,,,,7
+L3,3.4,MA,659,Team MA3.4,,,,-
+L3,3.4T,MA,274,Team MA3.4,,,,-
+L4,1.1,MA,540,Team MA1.1,,,,-
+L4,1.2,MA,1240,Team MA1.2,,,,5
+L4,1.2T,MA,1075,Team MA1.2,,,,-
+L4,3.1CIST,MA,883,Team MA3.1,,,,-
+L4,3.1T,MA,1096,Team MA3.1,,,,-
+L4,3.2,MA,953,Team MA3.2,,,,-
+L4,3.2T,MA,135,Team MA3.2,,,,-
+L4,3.3CIST,MA,730,Team MA3.3,,,,-
+L4,3.3T,MA,415,Team MA3.3,,,,-
+L4,3.4,MA,659,Team MA3.4,,,,-
+L4,3.4T,MA,274,Team MA3.4,,,,-
+L5,1.1T,MA,935,Team MA1.1,,,,-
+L5,1.2CIST,MA,449,Team MA1.2,,,,-
+L5,1.2T,MA,1086,Team MA1.2,,,,-
+L5,3.1CIST,MA,871,Team MA3.1,,,,-
+L5,3.1T,MA,1194,Team MA3.1,,,,-
+L5,3.3CIST,MA,724,Team MA3.3,,,,-
+L5,3.3T,MA,364,Team MA3.3,,,,-
+L5,3.4T,MA,627,Team MA3.4,,,,-
+Core walls & staircases,,,,,,,,0
+L1,CW01,CW,,,,,,25
+L1,CW2A,CW,,,,,,10
+L1,CW2B,CW,,,,,,8
+L1,CW3A,CW,,,,,,12
+L1,CW3B,CW,,,,,,34
+L1,CW4,CW,,,,,,8
+L1,CW5,CW,,,,,,7
+L1,CW5B,CW,,,,,,0
+L1,CWB3.3,CW,,,,,,0
+L1,Lift 1/2,CW,,,,,,5
+L1,LW6,CW,,,,,,0
+L1,LW7,CW,,,,,,0
+L1,LW9,CW,,,,,,0
+L1,LW10,CW,,,,,,0
+L1,P1-ST-04,CW,,,,,,7
+L1,P1-ST-10/11,CW,,,,,,17
+L1,P1-ST-12/13,CW,,,,,,13
+L1,P1-ST-14/15,CW,,,,,,13
+L1,P1-ST-18/19,CW,,,,,,8
+L1,P1-ST-20/21,CW,,,,,,10
+L1,P1-ST-22/23,CW,,,,,,10
+L1,P1-ST-24/25,CW,,,,,,4
+L1,P1-ST-26/27,CW,,,,,,4
+L1,P1-ST-28/29,CW,,,,,,10
+L1,P1-ST-30/31,CW,,,,,,10
+L1,P1-ST-32/33,CW,,,,,,10
+L1,P1-ST-34/35,CW,,,,,,10
+L1,P1-ST-36/37,CW,,,,,,10
+L1,P1-ST-38/39,CW,,,,,,0
+L1,P1-ST-40/41,CW,,,,,,0
+L1,P1-ST-42/43,CW,,,,,,
+L1,P1-ST-45/46,CW,,,,,,
+L1,P1-ST-47B,CW,,,,,,
+L1,ST-48B (Trf),CW,,,,,,
+L1,ST3,CW,,,,,,
+Zones typed,,,,,,,,
+Zones + core walls,,,,,,,,
+Area figures,,,,,296,355,489,761

@@ -2513,6 +2513,36 @@ class Component extends DCLogic {
       }catch(e){resolve(null);}
     });
   }
+  /* Several finished sheets at once: each is previewed and saved on its own, because
+     what these are for is one picture per level, not one picture of every level. */
+  _showPngSet(items,title){
+    if(!items||!items.length){this._toast('Nothing rendered.');return;}
+    const old=document.getElementById('__pngSet');if(old)old.remove();
+    const ov=document.createElement('div');ov.id='__pngSet';
+    ov.style.cssText='position:fixed;inset:0;z-index:2147483640;background:rgba(15,23,42,.62);display:flex;flex-direction:column';
+    ov.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--panel);color:var(--txt);border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;font-size:13px">${this.esc(String(title||''))} \u00b7 ${items.length} \u5f20\uff08\u6bcf\u5c42\u4e00\u5f20\uff09</div>
+      <button class="hbtn primary" id="__psAll" style="padding:7px 16px">\u2b07 \u5168\u90e8\u4e0b\u8f7d</button>
+      <button class="hbtn" id="__psClose">\u5173\u95ed</button></div>
+    <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:18px;align-items:center">
+      ${items.map((it,i)=>`<div style="width:100%;max-width:1100px;background:var(--panel);border-radius:10px;padding:10px;box-shadow:0 10px 40px rgba(0,0,0,.35)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <b style="flex:1;font-size:13px;color:var(--txt)">${this.esc(String(it.lv))}</b>
+          <a class="hbtn" download="${this.esc(String(it.name))}" href="${it.url}" data-i="${i}" style="text-decoration:none;padding:5px 12px">\u2b07 \u4e0b\u8f7d</a></div>
+        <img src="${it.url}" style="width:100%;background:#fff;border-radius:6px">
+      </div>`).join('')}
+      <div style="color:#e6edf6;font-size:11px;padding-bottom:10px">\u6bcf\u5f20\u5355\u72ec\u4e0b\u8f7d\uff0c\u6216\u6309\u300c\u5168\u90e8\u4e0b\u8f7d\u300d\u4e00\u6b21\u5b58\u5b8c\u3002\u624b\u673a\u4e0a\u957f\u6309\u56fe\u7247\u4e5f\u80fd\u4fdd\u5b58\u3002</div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#__psClose').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    /* A browser throttles a burst of downloads and silently drops the tail, so they go one at a time. */
+    ov.querySelector('#__psAll').onclick=()=>{
+      const as=[...ov.querySelectorAll('a[data-i]')];
+      as.forEach((a,i)=>setTimeout(()=>a.click(),i*500));
+      this._toast('\u6b63\u5728\u4fdd\u5b58 '+as.length+' \u5f20\u2026');
+    };
+  }
   _showPngPreview(url,name,n){
     const old=document.getElementById('__pngPrev');if(old)old.remove();
     const ov=document.createElement('div');ov.id='__pngPrev';
@@ -2775,14 +2805,17 @@ class Component extends DCLogic {
   /* Where the men are, month by month.  A team's headcount for a level is already recorded per
      level; which months it is there comes from the slab dates of the zones it holds, so nothing
      extra has to be typed.  Any cell can still be overwritten by hand when reality differs. */
-  /* Manpower planning starts at Nov'26 — anything earlier is history and reads as 0.  Change
-     _mpFrom to move the start. */
+  /* The manpower window opens at Jul'26 — work was already running before Nov'26 and had to be
+     planned and reported on.  Change _mpFrom to move the start. */
   /* The agreed RC manpower plan, loaded once so everyone starts from the same figures.  It is
      written only if it has never been applied on this account; after that the table is yours. */
   _seedManpower(){
     if(this._appCfg&&this._appCfg.manpowerSeed1)return;
     if(!this.rwsIsAdmin||!this.rwsIsAdmin())return;
-    const M=this._mpMonths();if(M.length<7)return;
+    /* The agreed figures below are the seven months from Nov'26 on, so they are written against
+       those months by name — widening the window must not shift them onto earlier months. */
+    const _all=this._mpMonths(),_i0=_all.indexOf("Nov'26");
+    const M=_i0>=0?_all.slice(_i0):_all;if(M.length<7)return;
     const SEED=[
       ["NB","B2",[120,120,120,120,100,100,100]],
       ["NB","B1",[60,40,40,40,50,50,50]],
@@ -2816,7 +2849,7 @@ class Component extends DCLogic {
   /* The manpower months follow the admin's month cutoff, exactly as every other month list does:
      a user who can only see up to January must not be shown the figures for the months after it. */
   _mpMonths(){const M=(this.visMonths()||this.ACT_MONTHS||[]).filter(m=>m!=="Before Apr'26");
-    const i=M.indexOf(this._mpFrom||"Nov'26");return i>0?M.slice(i):M;}
+    const i=M.indexOf(this._mpFrom||"Jul'26");return i>0?M.slice(i):M;}
   _mpOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerMonth=this._appCfg.manpowerMonth||{};}
   _mpKey(cat,lv,m){return cat+'||'+lv+'||'+m;}
   /* "Nov'26" -> a plain year*12+month number, so month labels and ISO dates can be compared. */
@@ -3495,7 +3528,7 @@ class Component extends DCLogic {
                 crit:this.showCrit,dts:this.showDates,dly:this.showDelay,cw:this.showCoreWalls,
                 lf:this.showLifts,ovl:{...this.showOvl},clean:this._cleanMap,
                 reo:this._resExportOnly,rem:this._resExportMonth};
-    this._toast('正在生成 '+lvAll.length+' 张大图…');
+    this._toast('正在生成 '+lvAll.length+' 张大图（每层一张）…');
     const shots=[];
     try{
       for(const lv of lvAll){
@@ -3528,26 +3561,27 @@ class Component extends DCLogic {
       this.render();
     }
     if(!shots.length){this._toast('Nothing rendered.');return;}
-    const PAD=Math.round(40*SCALE),HEAD=Math.round(64*SCALE),GAP=Math.round(26*SCALE);
+    const PAD=Math.round(36*SCALE),HEAD=Math.round(64*SCALE);
     const cw=W*SCALE;
-    let H=PAD;shots.forEach(s=>{H+=HEAD+Math.round(s.cv.height*(cw/s.cv.width))+GAP;});
-    H=H-GAP+PAD;
-    const cv=document.createElement('canvas');cv.width=cw+PAD*2;cv.height=H;
-    const g=cv.getContext('2d');
-    g.fillStyle='#ffffff';g.fillRect(0,0,cv.width,cv.height);
-    let y=PAD;
-    shots.forEach(s=>{
-      const h=Math.round(s.cv.height*(cw/s.cv.width));
-      g.fillStyle='#18232a';g.font='800 '+Math.round(34*SCALE)+'px "Segoe UI",Arial,sans-serif';
-      g.textBaseline='top';g.fillText(s.lv,PAD,y+Math.round(8*SCALE));
-      if(mon){g.fillStyle='#6b7a86';g.font='600 '+Math.round(22*SCALE)+'px "Segoe UI",Arial,sans-serif';
-        g.fillText(mon,PAD+g.measureText(s.lv).width+Math.round(24*SCALE),y+Math.round(16*SCALE));}
-      y+=HEAD;
-      g.drawImage(s.cv,PAD,y,cw,h);
-      y+=h+GAP;
-    });
     const stamp=this.todayISOStr?this.todayISOStr():'';
-    this._showPngPreview(cv.toDataURL('image/png'),'RWS_P1_levels_'+(mon||'').replace(/\W+/g,'')+'_'+stamp+'.png',shots.length);
+    const tag=(mon||'').replace(/\W+/g,'');
+    /* One picture per level, each on its own sheet.  A single tall strip cannot be
+       dropped into a slide or printed on its own, which is all these are used for. */
+    const outs=shots.map(s=>{
+      const h=Math.round(s.cv.height*(cw/s.cv.width));
+      const c2=document.createElement('canvas');c2.width=cw+PAD*2;c2.height=HEAD+h+PAD;
+      const g=c2.getContext('2d');
+      g.fillStyle='#ffffff';g.fillRect(0,0,c2.width,c2.height);
+      g.fillStyle='#18232a';g.font='800 '+Math.round(34*SCALE)+'px "Segoe UI",Arial,sans-serif';
+      g.textBaseline='top';g.fillText(s.lv,PAD,Math.round(10*SCALE));
+      const _lw=g.measureText(s.lv).width;
+      if(mon){g.fillStyle='#6b7a86';g.font='600 '+Math.round(22*SCALE)+'px "Segoe UI",Arial,sans-serif';
+        g.fillText(mon,PAD+_lw+Math.round(24*SCALE),Math.round(18*SCALE));}
+      g.drawImage(s.cv,PAD,HEAD,cw,h);
+      return {lv:s.lv,url:c2.toDataURL('image/png'),
+              name:'RWS_P1_'+String(s.lv).replace(/\W+/g,'')+(tag?'_'+tag:'')+(stamp?'_'+stamp:'')+'.png'};
+    });
+    this._showPngSet(outs,(mon||'大图'));
   }
   openBigMapExport(){
     if(!this.rwsCanResource()){this.rwsDeny('Not allowed.');return;}
@@ -3561,7 +3595,7 @@ class Component extends DCLogic {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
         <b>导出大图</b><button class="hbtn" id="bmX">关闭</button></div>
       <div style="padding:14px 16px">
-        <div style="font-size:12.5px;color:var(--dim);margin-bottom:12px">每层一张，上下排开，不挤在一行。宽度和倍数越大越清晰，文件也越大。</div>
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:12px">每层单独一张，分开下载，不是一张长图。宽度和倍数越大越清晰，文件也越大。</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;font-size:13px;margin-bottom:12px">
           <label>月份 <select id="bmMon" class="hbtn">${M.map(m=>`<option value="${esc(m)}"${m===cur?' selected':''}>${esc(m)}</option>`).join('')}</select></label>
           <label>宽度 <select id="bmW" class="hbtn">${[1600,2000,2400,3000,3600].map(w=>`<option value="${w}"${w===2400?' selected':''}>${w}px</option>`).join('')}</select></label>
@@ -3579,7 +3613,7 @@ class Component extends DCLogic {
     ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
     const est=()=>{const w=+ov.querySelector('#bmW').value,s=+ov.querySelector('#bmS').value;
       const n=[...ov.querySelectorAll('.bmLv')].filter(x=>x.checked).length;
-      ov.querySelector('#bmMsg').textContent=n?('输出约 '+(w*s)+' px 宽 · '+n+' 层，一张长图'):'至少选一个楼层。';};
+      ov.querySelector('#bmMsg').textContent=n?('输出 '+n+' 张，每张约 '+(w*s)+' px 宽'):'至少选一个楼层。';};
     ov.querySelectorAll('#bmW,#bmS,.bmLv').forEach(x=>x.onchange=est);est();
     ov.querySelector('#bmGo').onclick=()=>{
       const levels=[...ov.querySelectorAll('.bmLv')].filter(x=>x.checked).map(x=>x.value);
