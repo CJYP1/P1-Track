@@ -528,16 +528,47 @@ class Component extends DCLogic {
   visLevels(){const O=this.DATA.order;if(this.rwsIsAdmin())return O;const i=O.indexOf(this.userLevelCutoff());return i>=0?O.slice(0,i+1):O;}
   setUserLevelCutoff(lv){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change this.');return;}if(this.DATA.order.indexOf(lv)<0)return;this._appCfg=this._appCfg||{};this._appCfg.userLevelCutoff=lv;try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','userLevelCutoff',lv,null,null);this.buildRail();this.render();}
   /* 按楼层隐藏柱子(admin 地图点选, 云端同步) —— 该层不显示这些柱(地图点 + 清单都不显示) */
+  /* Hiding a column is easy to do by accident and, until now, impossible to
+     undo once the list was cleared. Every change stacks the previous state, so
+     the last few can always be put back. Kept in settings, so it syncs. */
+  _hidePush(){
+    const cfg=this._appCfg=this._appCfg||{};
+    const cur=JSON.parse(JSON.stringify(cfg.hideCols||{}));
+    const st=cfg.hideColsUndo=Array.isArray(cfg.hideColsUndo)?cfg.hideColsUndo:[];
+    const last=st.length?st[st.length-1]:null;
+    if(last&&JSON.stringify(last.v)===JSON.stringify(cur))return;
+    st.push({t:new Date().toISOString(),v:cur});
+    while(st.length>20)st.shift();
+  }
+  _hideUndoCount(){const st=(this._appCfg&&this._appCfg.hideColsUndo)||[];
+    let n=0;st.forEach(x=>{n+=Object.keys(x.v||{}).reduce((m,k)=>m+((x.v[k]||[]).length),0);});return st.length;}
+  _hideUndo(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change hidden columns.');return 0;}
+    const cfg=this._appCfg=this._appCfg||{};
+    const st=Array.isArray(cfg.hideColsUndo)?cfg.hideColsUndo:[];
+    if(!st.length)return 0;
+    const prev=st.pop();
+    cfg.hideCols=prev.v||{};
+    const n=Object.keys(cfg.hideCols).reduce((m,k)=>m+((cfg.hideCols[k]||[]).length),0);
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(cfg));}catch(e){}
+    if(typeof rwsSyncKV==='function'){rwsSyncKV('settings','hideCols',cfg.hideCols,null,null);
+      rwsSyncKV('settings','hideColsUndo',st,null,null);}
+    try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();}catch(e){}
+    this.render();
+    return n;
+  }
   _colHidden(lv,id){const h=(this._appCfg&&this._appCfg.hideCols&&this._appCfg.hideCols[lv])||[];return h.indexOf(id)>=0;}
   /* Un-hide a column on any level. toggleHideCol only ever works on the level
      being looked at, which is no use from a list that spans all of them. */
   _unhideCol(lv,id){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can unhide columns.');return;}
     const hc=(this._appCfg&&this._appCfg.hideCols)||null;if(!hc||!hc[lv])return;
+    this._hidePush();
     hc[lv]=hc[lv].filter(x=>x!==id);
     if(!hc[lv].length)delete hc[lv];
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
-    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','hideCols',hc,null,null);
+    if(typeof rwsSyncKV==='function'){rwsSyncKV('settings','hideCols',hc,null,null);
+      rwsSyncKV('settings','hideColsUndo',this._appCfg.hideColsUndo||[],null,null);}
     try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();}catch(e){}
     this.render();
   }
@@ -551,7 +582,7 @@ class Component extends DCLogic {
     out.sort((a,b)=>(this.DATA.order||[]).indexOf(a.lv)-(this.DATA.order||[]).indexOf(b.lv)||String(a.id).localeCompare(String(b.id)));
     return out;
   }
-  toggleHideCol(id){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can hide columns.');return;}this._appCfg=this._appCfg||{};const hc=this._appCfg.hideCols=this._appCfg.hideCols||{};const lv=this.curLevel;const arr=hc[lv]=hc[lv]||[];const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);else arr.push(id);if(!arr.length)delete hc[lv];try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','hideCols',this._appCfg.hideCols||{},null,null);this.render();}
+  toggleHideCol(id){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can hide columns.');return;}this._appCfg=this._appCfg||{};this._hidePush();const hc=this._appCfg.hideCols=this._appCfg.hideCols||{};const lv=this.curLevel;const arr=hc[lv]=hc[lv]||[];const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);else arr.push(id);if(!arr.length)delete hc[lv];try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function'){rwsSyncKV('settings','hideCols',this._appCfg.hideCols||{},null,null);rwsSyncKV('settings','hideColsUndo',this._appCfg.hideColsUndo||[],null,null);}this.render();}
   toggleHideColMode(){if(!this.rwsIsAdmin())return;this._hidingCol=!this._hidingCol;if(this._placingCol&&this._hidingCol)this._placingCol=false;this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   actDefaultMonthVis(){const dm=this.actDefaultMonth(),VM=this.visMonths();return VM.indexOf(dm)>=0?dm:VM[VM.length-1];}
   actTotal(lv,zmk,a,def){if(a==='ls'||a==='act_corewall'){const refs=this._activityElemRefs(lv,zmk,a);if(refs.length)return refs.length;}const v=(this._actTotal||{})[lv+'||'+zmk+'||'+a];return v==null?def:v;}
@@ -5829,7 +5860,7 @@ class Component extends DCLogic {
       :'<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--dim)">No placed columns here.</td></tr>';
     const HR=this._hiddenColRows();
     const hiddenBlock=`<div style="${HR.length?'background:color-mix(in srgb,#c2412d 8%,transparent);border:1px solid color-mix(in srgb,#c2412d 30%,transparent);border-radius:9px;padding:10px 12px;margin:0 0 14px':'margin:0 0 10px'}">
-      <b style="font-size:13px">Hidden columns${HR.length?' \u00b7 '+HR.length:''}</b>
+      <b style="font-size:13px">Hidden columns${HR.length?' \u00b7 '+HR.length:''}</b>${this._hideUndoCount()?`<button class="hbtn" id="pcUndo" type="button" style="float:right">\u21ba Undo last change (${this._hideUndoCount()} kept)</button>`:''}
       <div style="font-size:12px;color:var(--dim);padding:5px 0 8px">Hidden with <b>\u2298 \u9690\u85cf\u67f1\u5b50</b>. Nobody sees these on the map or in a Zone's column list, on any account \u2014 this is the only place they can be found again.</div>
       ${HR.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>${['Level','Column','Zone','Source',''].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:5px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
@@ -5867,6 +5898,9 @@ class Component extends DCLogic {
       this._confirmModal('Remove column "'+(c.id||'')+'"? It disappears from every level it reaches.',()=>{
         arr.splice(i,1);if(!arr.length)delete this._colAdd[src];
         this.savePlacedCols();this.render();this.openPlacedColList();});});
+    {const u=ov.querySelector('#pcUndo');if(u)u.onclick=()=>{const n=this._hideUndo();
+      this._toast(n?('Restored '+n+' hidden column'+(n===1?'':'s')+'.'):'Nothing was hidden in that step.');
+      this.openPlacedColList();};}
     ov.querySelectorAll('.pcUnhide').forEach(b=>b.onclick=()=>{
       const tr=b.closest('tr');this._unhideCol(tr.dataset.hlv,tr.dataset.hid);this.openPlacedColList();});
     ov.querySelectorAll('.pcThru').forEach(b=>b.onchange=()=>{
