@@ -85,6 +85,9 @@ class Component extends DCLogic {
     try{this._catAdd=JSON.parse(localStorage.getItem('rws_cat_add')||'[]');}catch(e){this._catAdd=[];}
     try{this._elemAdd=JSON.parse(localStorage.getItem('rws_elem_add')||'{}');}catch(e){this._elemAdd={};}
     try{this._colAdd=JSON.parse(localStorage.getItem('rws_col_add')||'{}');}catch(e){this._colAdd={};}   // 管理员在地图上放置的柱子(Marine 等)
+    /* Placed columns used to live only in the browser that placed them, so no
+       other account ever saw them. They ride the synced settings now. */
+    this._adoptPlacedCols();
     try{this._appCfg=JSON.parse(localStorage.getItem('rws_app_cfg')||'{}');}catch(e){this._appCfg={};}   // 全局设置(云端同步): 用户可见月份截止 userMonthCutoff 等
     try{this._manpower=JSON.parse(localStorage.getItem('rws_manpower')||'{}');}catch(e){this._manpower={};}   // 每区人数(云端同步), 键 lv||zmk
     try{this._underlay=JSON.parse(localStorage.getItem('rws_underlay')||'{}');}catch(e){this._underlay={};}   // 描图底图(本地, 不同步): 每层一张图 {src,x,y,w,h,rot,op}
@@ -248,6 +251,10 @@ class Component extends DCLogic {
       });
       if(dirty)this._elemAdd[k]=out;
     });
+    let cdirty=false;
+    Object.keys(this._colAdd||{}).forEach(lv=>(this._colAdd[lv]||[]).forEach(c=>{
+      if(c&&c.id&&/[.\u3002]+$/.test(String(c.id))){c.id=this._dotFixId(c.id);cdirty=true;}}));
+    if(cdirty)this.savePlacedCols();
     if(dirty){this.saveCustom();this.saveElem&&this.saveElem();}
   }
   _migrateLW8(){
@@ -1436,7 +1443,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
@@ -1530,7 +1537,7 @@ class Component extends DCLogic {
       if(own('col_month')){this._colMonth={...(B.colMonth||{}),...(state.col_month||{})};try{localStorage.setItem('rws_col_month',JSON.stringify(this._colMonth));}catch(e){}}
       if(own('act_cmt')){this._actCmt={...(state.act_cmt||{})};this.saveActCmt();}
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
-      if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null,_localRes=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_localRes,this._appCfg.resourcePlans);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
+      if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null,_localRes=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_localRes,this._appCfg.resourcePlans);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}try{this._adoptPlacedCols();}catch(_e){}}
       try{this._migrateLW8();}catch(_e){}   /* cloud settings can carry the old LW8 name back */
       try{const _m=this.mergeSlabDemolish();if(_m)this.buildMetrics();}catch(_e){console.error('slab-demolish merge',_e);}
       this._reconcileZoneStairs();
@@ -1557,6 +1564,7 @@ class Component extends DCLogic {
          data under the old one. */
       try{this._migrateLW8&&this._migrateLW8();}catch(_e){console.error('rename migrate',_e);}
       try{this._migrateDotIds&&this._migrateDotIds();}catch(_e){console.error('dot migrate',_e);}
+      try{const _n=this._wipeReportOverrides&&this._wipeReportOverrides();if(_n)this._toast('Cleared '+_n+' typed Report figure'+(_n===1?'':'s')+' \u2014 the Area Report is live only now.');}catch(_e){console.error('report wipe',_e);}
       this.applyUpdates(); this.buildRail(); this.buildTimeline(); this.render(); this.refreshUpdBadge();
       /* The Construction Schedule is its own page: without this it kept showing whatever was on it
          when it was opened, while everything else had already moved on. */
@@ -2267,8 +2275,38 @@ class Component extends DCLogic {
     EB:{label:'EB Report', title:'Existing Basement Superstructure', scope:'Existing Basement · working levels with live Activity data',levels:['B2','B1','B1M','L1','L2','L3','L4','L5']},
     MA:{label:'MA Report', title:'Marine Superstructure', scope:'Marine · working levels with live Activity data',levels:['B2','B1','B1M','L1','L2','L3','L4','L5']} }; }
   _reportEditKey(cat,r){return [cat,(r.levels&&r.levels[0])||'',r.aid||'',r.filter||''].join('||');}
-  _reportEditedValues(cat,r,A,P,liveTotal){const key=this._reportEditKey(cat,r),cfg=this._appCfg||{},all={...(cfg.reportOverrides||{}),...(cfg['reportOverrides:'+cat]||{})},rawHas=Object.prototype.hasOwnProperty.call(all,key),o=all[key]||{},round=v=>Math.max(0,Math.round(Number(v)||0)),clean=v=>Math.max(0,Number(v)||0),same=(a,b)=>Math.abs(clean(a)-clean(b))<0.0001,baseKnown=['basePlanned','baseDone','baseTotal'].every(k=>Number.isFinite(Number(o[k]))),baseSame=baseKnown&&same(o.basePlanned,P.planned)&&same(o.baseDone,A.done)&&same(o.baseTotal,liveTotal),/* A typed figure stays typed.  It used to be dropped as soon as the underlying numbers moved,
-   which made a correction vanish silently; now it is kept and only flagged as stale. */has=rawHas,stale=rawHas&&baseKnown&&!baseSame,num=(v,d)=>Number.isFinite(Number(v))?round(v):round(d),total=has?num(o.total,liveTotal):round(liveTotal),done=Math.min(total,has?num(o.done,A.done):clean(A.done)),planned=Math.min(total,has?num(o.planned,P.planned):clean(P.planned));return {key,has,stale,A:{...A,done,total,pct:this._reportPct(done,total)},P:{...P,planned,total}};}
+  /* The Area Report is live only. Typed figures used to sit on top of the live
+     numbers and drift out of step with them, so nothing is read from
+     reportOverrides any more — the stored values are left in settings, unused,
+     rather than deleted, in case the old figures are ever wanted back. */
+  _reportEditedValues(cat,r,A,P,liveTotal){
+    const key=this._reportEditKey(cat,r),round=v=>Math.max(0,Math.round(Number(v)||0)),clean=v=>Math.max(0,Number(v)||0);
+    const total=round(liveTotal),done=Math.min(total,clean(A.done)),planned=Math.min(total,clean(P.planned));
+    return {key,has:false,stale:false,A:{...A,done,total,pct:this._reportPct(done,total)},P:{...P,planned,total}};
+  }
+  /* The Area Report is live only now, so the typed figures are cleared out of
+     settings and out of the cloud rather than sitting there unused. One copy is
+     kept under reportOverridesArchive in case the old numbers are ever wanted;
+     nothing reads it. Runs once, for an admin, then marks itself done. */
+  _wipeReportOverrides(force){
+    const cfg=this._appCfg=this._appCfg||{};
+    if(!force&&cfg.reportOverridesWiped)return 0;
+    if(!(this.rwsIsAdmin&&this.rwsIsAdmin()))return 0;
+    const cats=['NB','EB','MA'],keys=['reportOverrides'].concat(cats.map(c=>'reportOverrides:'+c));
+    let n=0;const arch={};
+    keys.forEach(k=>{const v=cfg[k];if(v&&typeof v==='object'){const c=Object.keys(v).length;if(c){arch[k]=v;n+=c;}}});
+    if(n&&!cfg.reportOverridesArchive)cfg.reportOverridesArchive=arch;
+    keys.forEach(k=>{delete cfg[k];});
+    cfg.reportOverridesWiped=true;
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(cfg));}catch(e){}
+    if(typeof rwsSyncKV==='function'){
+      try{cats.forEach(c=>{Promise.resolve(rwsSyncKV('settings','reportOverrides:'+c,{},c,null)).catch(()=>{});});
+          Promise.resolve(rwsSyncKV('settings','reportOverrides',{},null,null)).catch(()=>{});
+          if(n)Promise.resolve(rwsSyncKV('settings','reportOverridesArchive',cfg.reportOverridesArchive,null,null)).catch(()=>{});
+          Promise.resolve(rwsSyncKV('settings','reportOverridesWiped',true,null,null)).catch(()=>{});}catch(e){}
+    }
+    return n;
+  }
   _reportCats(){ const u=this._rwsUser; if(!u)return []; const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[]; const who=String(u.username||u.display_name||'').trim().toUpperCase(); if(u.role==='admin'||a.indexOf('RWS')>=0||who==='RWS')return ['NB','EB','MA']; return ['NB','EB','MA'].filter(c=>a.indexOf(c)>=0); }
   rwsCanEditReport(cat){const u=this._rwsUser;if(!u)return false;if(u.role==='admin')return true;const a=Array.isArray(u.allowed_scopes)?u.allowed_scopes:[];return a.indexOf('REPEDIT')>=0&&a.indexOf(cat)>=0;}
   _reportCmtCtx(cat,r){const lv=(r.levels&&r.levels[0])||'',base=(((this.DATA.levels[lv]||{}).zones)||[]).filter(z=>(z.cat||'NB')===cat),z=base.find(x=>this._reportAidApplies(lv,x,r.aid))||base[0],zmk=z?(z.mk||z.lid):'',aid='__report_'+cat+'_'+lv+'_'+r.aid+(r.filter?'_'+r.filter:'');return {cat,lv,zmk,aid,label:r.a,reportAid:r.aid,key:lv+'||'+zmk+'||'+aid};}
@@ -4124,6 +4162,112 @@ class Component extends DCLogic {
       +Math.round(Math.max.apply(null,base))+' · plan '+Math.round(Math.max.apply(null,sc))+'</text>';
     svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.innerHTML=g;
   }
+  /* ===================== Number check (admin) =====================
+     Every count in the app comes from one of three places, and when they
+     disagree the screen you happen to be looking at decides which number you
+     see. This lists all three side by side so the odd one out is obvious:
+       Register  — the drawing take-off on the zone (z.counts)
+       Activity  — the figure the Activity card and the Report use (actTotal,
+                   which a typed override replaces)
+       Elements  — how many marks are actually in the checklist, including the
+                   ones added by hand                                        */
+  _ncRows(){
+    const ACTS=[['col','columns','Column'],['pile','pilecap','Pilecap'],['mbeam','mainbeam','Steel Main Beam'],
+                ['cbeam','steelbeam','Cast Steel Main Beam'],['ls',null,'Core/Lift/Stair Wall']];
+    const out=[];
+    (this.DATA.order||[]).forEach(lv=>{
+      const L=this.DATA.levels[lv];if(!L)return;
+      (L.zones||[]).forEach(z=>{
+        const zmk=z.mk||z.lid,c=z.counts||{};
+        ACTS.forEach(([aid,ckey,label])=>{
+          const reg=ckey?Number(c[ckey]||0):Number(this.lsAll(c)||0);
+          const tot=Number(this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid))||0);
+          const els=(this._activityElemRefs(lv,zmk,aid)||[]).length;
+          if(!reg&&!tot&&!els)return;
+          out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',aid,label,reg,tot,els,
+                    ok:(reg===tot&&reg===els)});
+        });
+      });
+    });
+    return out;
+  }
+  openNumberCheck(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can open the number check.');return;}
+    const old=document.getElementById('__numChk');if(old)old.remove();
+    this._ncOnlyBad=(this._ncOnlyBad==null)?true:this._ncOnlyBad;
+    this._ncLv=this._ncLv||'all';this._ncCat=this._ncCat||'all';
+    const ov=document.createElement('div');
+    ov.id='__numChk';
+    ov.style.cssText='position:fixed;inset:0;z-index:99996;background:var(--bg);color:var(--ink);overflow:auto;padding:18px 16px 60px';
+    ov.innerHTML='<div id="ncRoot" style="max-width:1120px;margin:0 auto"></div>';
+    document.body.appendChild(ov);
+    this._ncRender();
+  }
+  _ncRender(){
+    const root=document.getElementById('ncRoot');if(!root)return;
+    const esc=s=>this.esc(s),all=this._ncRows();
+    const bad=all.filter(r=>!r.ok);
+    let rows=all;
+    if(this._ncOnlyBad)rows=bad;
+    if(this._ncLv!=='all')rows=rows.filter(r=>r.lv===this._ncLv);
+    if(this._ncCat!=='all')rows=rows.filter(r=>r.cat===this._ncCat);
+    const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(t||v)+'</option>';
+    const TH=(t,r)=>'<th style="text-align:'+(r?'right':'left')+';font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>';
+    const TD=(v,al)=>'<td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:'+(al||'right')+';font-variant-numeric:tabular-nums">'+v+'</td>';
+    /* Per level, how far the Activity figure sits from the drawing take-off. */
+    const byLv={};all.forEach(r=>{const k=r.lv;byLv[k]=byLv[k]||{reg:0,tot:0,els:0,bad:0};
+      byLv[k].reg+=r.reg;byLv[k].tot+=r.tot;byLv[k].els+=r.els;if(!r.ok)byLv[k].bad++;});
+    let h='';
+    h+='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:14px">'
+      +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1 · admin</div>'
+      +'<div style="font-size:26px;font-weight:800;line-height:1.15">Number check</div></div>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      +'<button class="hbtn" id="ncCsv">⬇ CSV</button><button class="hbtn" id="ncClose">✕ Close</button></div></div>';
+    h+='<div style="font-size:13px;color:var(--dim);margin-bottom:12px;max-width:80ch">Three counts for the same thing. <b>Register</b> is the drawing take-off stored on the zone. <b>Activity</b> is what the Activity card and the Report use — a typed total replaces it. <b>Elements</b> is how many marks are in the checklist, including any added by hand. Where they disagree, the screen decides which number you see; this is where to look first when a figure feels wrong.</div>';
+    h+='<div style="overflow-x:auto;margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+      +TH('Level')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Rows that disagree',1)+'</tr></thead><tbody>';
+    (this.DATA.order||[]).forEach(lv=>{const v=byLv[lv];if(!v)return;
+      h+='<tr>'+TD('<b>'+esc(lv)+'</b>','left')+TD(v.reg.toLocaleString())+TD(v.tot.toLocaleString())+TD(v.els.toLocaleString())
+        +TD(v.bad?'<b style="color:#c2412d">'+v.bad+'</b>':'<span style="color:#2e7d4f">0</span>')+'</tr>';});
+    h+='</tbody></table></div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px;margin-bottom:10px">'
+      +'<label><input type="checkbox" id="ncBad"'+(this._ncOnlyBad?' checked':'')+'> only rows that disagree</label>'
+      +'<select id="ncLv" class="hbtn">'+opt('all',this._ncLv,'All levels')+(this.DATA.order||[]).map(x=>opt(x,this._ncLv)).join('')+'</select>'
+      +'<select id="ncCat" class="hbtn">'+opt('all',this._ncCat,'All areas')+['NB','EB','MA'].map(x=>opt(x,this._ncCat)).join('')+'</select>'
+      +'<span style="color:var(--dim)">'+rows.length+' of '+all.length+' rows · '+bad.length+' disagree</span></div>';
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+      +TH('Level')+TH('Zone')+TH('Area')+TH('Activity')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Difference',1)+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="9" style="padding:26px;text-align:center;color:var(--dim)">Nothing disagrees here.</td></tr>';
+    rows.forEach(r=>{
+      const d=r.tot-r.reg,de=r.els-r.reg;
+      const col=v=>v===0?'<span style="color:var(--dim)">0</span>':'<b style="color:'+(v>0?'#c2412d':'#b7791f')+'">'+(v>0?'+':'')+v+'</b>';
+      h+='<tr'+(r.ok?'':' style="background:color-mix(in srgb,#c2412d 7%,transparent)"')+'>'
+        +TD('<b style="font-family:ui-monospace,monospace">'+esc(r.lv)+'</b>','left')
+        +TD(esc(r.zone),'left')+TD(esc(r.cat),'left')+TD(esc(r.label),'left')
+        +TD(r.reg)+TD(r.tot)+TD(r.els)
+        +TD('act '+col(d)+' · el '+col(de))
+        +TD('<button class="hbtn ncGo" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'">Open</button>','right')
+        +'</tr>';});
+    h+='</tbody></table></div>';
+    root.innerHTML=h;
+    root.querySelector('#ncClose').onclick=()=>{const o=document.getElementById('__numChk');if(o)o.remove();};
+    root.querySelector('#ncBad').onchange=e=>{this._ncOnlyBad=e.target.checked;this._ncRender();};
+    root.querySelector('#ncLv').onchange=e=>{this._ncLv=e.target.value;this._ncRender();};
+    root.querySelector('#ncCat').onchange=e=>{this._ncCat=e.target.value;this._ncRender();};
+    root.querySelector('#ncCsv').onclick=()=>this._ncCsv(all);
+    root.querySelectorAll('.ncGo').forEach(b=>b.onclick=()=>{
+      const o=document.getElementById('__numChk');if(o)o.remove();
+      this.gotoZone(b.dataset.lv,b.dataset.zmk);});
+  }
+  _ncCsv(rows){
+    const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    const lines=[['Level','Zone','Area','Activity','Register','Activity total','Element list','Activity-Register','Elements-Register'].map(q).join(',')];
+    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.reg,r.tot,r.els,r.tot-r.reg,r.els-r.reg].map(q).join(',')));
+    const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='RWS_P1_number_check.csv';document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);
+  }
   openDelayAdmin(){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit Delay days.');return;}const old=document.getElementById('__delayAdmin');if(old)old.remove();
     /* Delay days are a purely manual figure: whatever is typed here is what the map shows.
        Nothing is derived from the programme baseline or from live progress any more. */
@@ -4285,7 +4429,7 @@ class Component extends DCLogic {
     if(!cats.length){ ov.innerHTML=`<div style="max-width:640px;margin:0 auto"><div style="display:flex;justify-content:flex-end"><button class="hbtn" id="laClose">Close ✕</button></div><div style="text-align:center;color:var(--dim);margin-top:60px;font-size:15px">你的账号没有可查看的 Report。</div></div>`; ov.style.display='block'; const c0=ov.querySelector('#laClose'); if(c0)c0.onclick=close; return; }
     if(this._reportCombined){this._renderCombinedReport(ov,cats,close);return;}
     if(!this._reportCat||cats.indexOf(this._reportCat)<0)this._reportCat=cats[0];
-    const cat=this._reportCat, def=defs[cat],admin=this.rwsIsAdmin(),canReportEdit=this.rwsCanEditReport(cat),editing=canReportEdit&&!!this._reportEditing;
+    const cat=this._reportCat, def=defs[cat],admin=this.rwsIsAdmin(),canReportEdit=false,editing=false;   /* live only \u2014 the Report is no longer editable */
     /* Report 只显示整数；原始计划/完成数量仍保留在数据源中。 */
     const fmtN=n=>String(Math.round(Number(n)||0));
     const makeRows=(reportRows)=>reportRows.map(r=>{ const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=A.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const actSub=liveA.pour?`${A.pct}% pouring · ${fmtN(den)} item${Math.round(den)===1?'':'s'}`:`(${fmtN(A.done)}/${fmtN(den)}${unit})`,planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—',inp='width:70px;padding:5px 6px;border:1px solid #cbaeb4;border-radius:5px;text-align:center;font:700 12px Segoe UI;background:#fff;color:#2b1114';
@@ -4949,7 +5093,7 @@ class Component extends DCLogic {
     p.style.display='flex';
     const _nHid=((this._appCfg&&this._appCfg.hideCols&&this._appCfg.hideCols[this.curLevel])||[]).length;
     const _adminOpen=this._editToolsOpen||this._placingCol||this._hidingCol||this._drawingCore||this._drawingLift||this._drawingAcc||this._underlayAdjust;
-    const _editToolsStr=this.rwsIsAdmin()?`<span class="szchip ${this._placingCol?'on':''}" data-k="__place" style="${this._placingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._placingCol?'● 放置中·点地图':'＋ 放置柱子'}</span><span class="szchip ${this._hidingCol?'on':''}" data-k="__hidecol" style="${this._hidingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._hidingCol?'● 点柱子隐藏/恢复':'⊘ 隐藏柱子'}${_nHid?' ('+_nHid+')':''}</span>${(this.placedCols(this.curLevel).length||Object.keys(this._colAdd||{}).length)?`<span class="szchip" data-k="__expcol">⬇ 导出柱子</span>`:''}${this._drawingCore?`<span class="szchip on" data-k="__corefin" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 完成 (${(this._coreBuf||[]).length})</span><span class="szchip" data-k="__coreundo">↶ 撤销</span><span class="szchip" data-k="__corecancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawcore">▱ 画 Core Wall</span>`}${this._drawingLift?`<span class="szchip on" style="border-color:#1d4ed8;color:#1d4ed8;background:rgba(29,78,216,.12)">画 Staircase: 点3下(一条边+宽度)</span><span class="szchip" data-k="__liftcancel">取消</span>`:`<span class="szchip" data-k="__drawlift">▭ 画 Staircase(可斜)</span>`}${this._drawingAcc?`<span class="szchip on" data-k="__accfin" style="border-color:#1e3a8a;color:#1e3a8a;background:rgba(30,58,138,.12)">✓ 完成 Access (${(this._accBuf||[]).length}点)</span><span class="szchip" data-k="__accundo">↶ 撤销</span><span class="szchip" data-k="__acccancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawacc">➵ 画 Access(箭头线)</span>`}${(()=>{const _u=this._curUnderlay();return !_u?`<span class="szchip" data-k="__ulload">🖼 载入底图</span>`:(this._underlayAdjust?`<span class="szchip on" data-k="__uladj" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 底图完成</span><span style="font-size:9px;color:var(--faint);align-self:center">滚轮缩放·Shift只缩宽·Alt只缩高·拖动移动</span>${this._ulAligning?`<span class="szchip on" style="border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)">对齐中 (${(this._ulAlignPts||[]).length}/4)</span><span class="szchip" data-k="__ulaligncancel">取消对齐</span>`:`<span class="szchip" data-k="__ulalign" style="border-color:#5b6bd6;color:#5b6bd6">🎯 两点对齐</span>`}<span class="szchip" data-k="__ulop-">透−</span><span class="szchip" data-k="__ulop+">透+</span><span class="szchip" data-k="__ulrot-">转−</span><span class="szchip" data-k="__ulrot+">转+</span><span class="szchip" data-k="__ulrm">移除底图</span>`:`<span class="szchip" data-k="__uladj">🖼 底图·调整</span>`);})()}`:'';
+    const _editToolsStr=this.rwsIsAdmin()?`<span class="szchip ${this._placingCol?'on':''}" data-k="__place" style="${this._placingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._placingCol?'● 放置中·点地图':'＋ 放置柱子'}</span><span class="szchip ${this._hidingCol?'on':''}" data-k="__hidecol" style="${this._hidingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._hidingCol?'● 点柱子隐藏/恢复':'⊘ 隐藏柱子'}${_nHid?' ('+_nHid+')':''}</span>${(this.placedCols(this.curLevel).length||Object.keys(this._colAdd||{}).length)?`<span class="szchip" data-k="__listcol" title="List every column you placed on this level and remove or rename it by name">≡ 柱子清单</span><span class="szchip" data-k="__expcol">⬇ 导出柱子</span>`:''}${this._drawingCore?`<span class="szchip on" data-k="__corefin" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 完成 (${(this._coreBuf||[]).length})</span><span class="szchip" data-k="__coreundo">↶ 撤销</span><span class="szchip" data-k="__corecancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawcore">▱ 画 Core Wall</span>`}${this._drawingLift?`<span class="szchip on" style="border-color:#1d4ed8;color:#1d4ed8;background:rgba(29,78,216,.12)">画 Staircase: 点3下(一条边+宽度)</span><span class="szchip" data-k="__liftcancel">取消</span>`:`<span class="szchip" data-k="__drawlift">▭ 画 Staircase(可斜)</span>`}${this._drawingAcc?`<span class="szchip on" data-k="__accfin" style="border-color:#1e3a8a;color:#1e3a8a;background:rgba(30,58,138,.12)">✓ 完成 Access (${(this._accBuf||[]).length}点)</span><span class="szchip" data-k="__accundo">↶ 撤销</span><span class="szchip" data-k="__acccancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawacc">➵ 画 Access(箭头线)</span>`}${(()=>{const _u=this._curUnderlay();return !_u?`<span class="szchip" data-k="__ulload">🖼 载入底图</span>`:(this._underlayAdjust?`<span class="szchip on" data-k="__uladj" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 底图完成</span><span style="font-size:9px;color:var(--faint);align-self:center">滚轮缩放·Shift只缩宽·Alt只缩高·拖动移动</span>${this._ulAligning?`<span class="szchip on" style="border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)">对齐中 (${(this._ulAlignPts||[]).length}/4)</span><span class="szchip" data-k="__ulaligncancel">取消对齐</span>`:`<span class="szchip" data-k="__ulalign" style="border-color:#5b6bd6;color:#5b6bd6">🎯 两点对齐</span>`}<span class="szchip" data-k="__ulop-">透−</span><span class="szchip" data-k="__ulop+">透+</span><span class="szchip" data-k="__ulrot-">转−</span><span class="szchip" data-k="__ulrot+">转+</span><span class="szchip" data-k="__ulrm">移除底图</span>`:`<span class="szchip" data-k="__uladj">🖼 底图·调整</span>`);})()}`:'';
     const _editBtn=this.rwsIsAdmin()?`<span style="width:1px;height:16px;background:var(--line);margin:0 4px"></span><span class="szchip ${_adminOpen?'on':''}" data-k="__edittoggle" style="${_adminOpen?'border-color:#5b6bd6;color:#5b6bd6;background:rgba(91,107,214,.12)':''}">✎ Edit${_adminOpen?' ✕':''}</span>`:'';
     const _adminTools=_editBtn+(_adminOpen?_editToolsStr:'');
     p.innerHTML=(_hasMarine?`<span class="szttl">Marine sub-zones</span><span class="szchip ${this.showSubZC?'on':''}" data-k="ZC">Top slab</span><span class="szchip ${this.showSubC?'on':''}" data-k="C">Bottom slab</span><span class="szchip ${this.showSubP?'on':''}" data-k="P">Podium</span>`:`<span class="szttl">Edit · ${this.esc(this._lvName?this._lvName(this.curLevel):this.curLevel)}</span>`)+_adminTools;
@@ -4979,6 +5123,7 @@ class Component extends DCLogic {
       if(k==='__ulrot+'){this._ulAdjust('rot+');return;}
       if(k==='__ulalign'){this.startUlAlign();return;}
       if(k==='__ulaligncancel'){this._ulAlignCancel();return;}
+      if(k==='__listcol'){this.openPlacedColList();return;}
       if(k==='__expcol'){this.exportPlacedCols();return;}
       /* 三个 Marine 视图互斥；地图、KPI、进度和月度清单始终使用同一范围。 */
       if(k==='ZC'){this.showSubZC=true;this.showSubC=false;this.showSubP=false;}
@@ -5214,7 +5359,26 @@ class Component extends DCLogic {
     if(dirty)this._savePlacedColsRaw();   /* raw: reconcile calls us, so never recurse into it */
     return out;
   }
-  _savePlacedColsRaw(){try{localStorage.setItem('rws_col_add',JSON.stringify(this._colAdd||{}));}catch(e){}}
+  _savePlacedColsRaw(){
+    try{localStorage.setItem('rws_col_add',JSON.stringify(this._colAdd||{}));}catch(e){}
+    this._appCfg=this._appCfg||{};
+    this._appCfg.placedCols=this._colAdd||{};
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(this.rwsIsAdmin&&this.rwsIsAdmin()&&typeof rwsSyncKV==='function')
+      rwsSyncKV('settings','placedCols',this._colAdd||{},null,null);
+  }
+  /* Take whatever the cloud settings carry; a browser that has its own local
+     copy and nothing in the cloud pushes its copy up instead of losing it. */
+  _adoptPlacedCols(){
+    const cloud=this._appCfg&&this._appCfg.placedCols;
+    const localN=Object.keys(this._colAdd||{}).reduce((n,k)=>n+((this._colAdd[k]||[]).length),0);
+    if(cloud&&typeof cloud==='object'){
+      const cloudN=Object.keys(cloud).reduce((n,k)=>n+((cloud[k]||[]).length),0);
+      if(cloudN||!localN){this._colAdd=JSON.parse(JSON.stringify(cloud));
+        try{localStorage.setItem('rws_col_add',JSON.stringify(this._colAdd));}catch(e){}return;}
+    }
+    if(localN)this._savePlacedColsRaw();
+  }
   savePlacedCols(){this._savePlacedColsRaw();
     /* The Zone column lists are rebuilt from COLUMNS + placed columns, so they have to be
        refreshed whenever a placed column is added, renamed or removed. */
@@ -5490,6 +5654,16 @@ class Component extends DCLogic {
     // 点到已放置的柱子附近 → 删除(撤销误点); r≈1200 图纸单位
     const near=arr.findIndex(c=>Math.hypot(c.x-dx,c.y-dy)<1400);
     if(near>=0){arr.splice(near,1);this.savePlacedCols();this.render();return;}
+    /* A column placed lower down and carried up to this level lives in that
+       level's list, so clicking it here has to delete it there. */
+    let hitLv=null,hitI=-1;
+    Object.keys(this._colAdd||{}).forEach(src=>{
+      if(src===lv||hitLv)return;
+      const i=(this._colAdd[src]||[]).findIndex(c=>c.thru!==false&&Math.hypot(c.x-dx,c.y-dy)<1400);
+      if(i>=0){hitLv=src;hitI=i;}});
+    if(hitLv){const nm=(this._colAdd[hitLv][hitI]||{}).id||'';
+      this._colAdd[hitLv].splice(hitI,1);this.savePlacedCols();this.render();
+      this._toast('Removed "'+nm+'" \u2014 it was placed on '+hitLv+' and carried up to here.');return;}
     // 找所在分区(优先 Marine, 否则任意包含该点的区)
     let zoneLabel='';const zs=L.zones||[];
     let z=zs.find(z=>z.cat==='MA'&&z.ring&&this.ptIn(z.ring,dx,dy))||zs.find(z=>z.ring&&this.ptIn(z.ring,dx,dy));
@@ -5500,6 +5674,58 @@ class Component extends DCLogic {
     arr.push(col);this.savePlacedCols();this.render();
     // 让你自己填柱号(默认 defId, 直接确定=用默认)
     if(this._inputModal)this._inputModal({title:'柱号 / Column mark',label:'这根柱子的编号('+(zoneLabel||'?')+')',placeholder:defId,ok:'确定',onOk:(v)=>{v=(v||'').trim();if(v){col.id=v;this.savePlacedCols();this.render();}}});
+  }
+  /* Clicking the map to remove a placed column only works if you hit within a
+     couple of metres of it, which is hopeless where two sit on top of each
+     other. This lists every one on the level and deletes by name. */
+  openPlacedColList(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can manage placed columns.');return;}
+    const old=document.getElementById('__pcList');if(old)old.remove();
+    const lv=this.curLevel,rows=[];
+    (this._colAdd&&this._colAdd[lv]||[]).forEach((c,i)=>rows.push({src:lv,i,c,here:true}));
+    const ord=this._floorOrd(lv);
+    Object.keys(this._colAdd||{}).forEach(src=>{
+      if(src===lv)return;const so=this._floorOrd(src);
+      if(so==null||ord==null||so>=ord)return;
+      (this._colAdd[src]||[]).forEach((c,i)=>{if(c.thru===false)return;
+        if(!this._colZoneAt(lv,c,6000))return;
+        rows.push({src,i,c,here:false});});});
+    const esc=s=>this.esc(s);
+    const body=rows.length?rows.map(r=>`<tr data-src="${esc(r.src)}" data-i="${r.i}">
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>${esc(r.c.id||'')}</b></td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line)">${esc(r.c.zone||'—')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--dim)">${r.here?'placed here':'from '+esc(r.src)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:right">
+          <button class="hbtn pcRen" type="button">Rename</button>
+          <button class="hbtn pcDel" type="button" style="color:var(--crit)">Remove</button></td></tr>`).join('')
+      :'<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--dim)">No placed columns on this level.</td></tr>';
+    const ov=document.createElement('div');
+    ov.id='__pcList';
+    ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:640px;width:100%;max-height:82vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
+        <b>Placed columns · ${esc(lv)}</b><button class="hbtn" id="pcClose">Close</button></div>
+      <div style="padding:6px 10px 14px">
+        <div style="font-size:12px;color:var(--dim);padding:6px 6px 10px">Columns you added by clicking the map. Removing one here also removes it from every level it was carried up to. Everyone sees these once they sync.</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr>${['Column','Zone','Origin',''].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
+          <tbody>${body}</tbody></table></div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#pcClose').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    ov.querySelectorAll('.pcDel').forEach(b=>b.onclick=()=>{
+      const tr=b.closest('tr'),src=tr.dataset.src,i=Number(tr.dataset.i);
+      const arr=this._colAdd[src]||[],c=arr[i];if(!c)return;
+      this._confirmModal('Remove column "'+(c.id||'')+'"? It disappears from every level it reaches.',()=>{
+        arr.splice(i,1);if(!arr.length)delete this._colAdd[src];
+        this.savePlacedCols();this.render();this.openPlacedColList();});});
+    ov.querySelectorAll('.pcRen').forEach(b=>b.onclick=()=>{
+      const tr=b.closest('tr'),src=tr.dataset.src,i=Number(tr.dataset.i);
+      const c=(this._colAdd[src]||[])[i];if(!c)return;
+      this._inputModal({title:'Column mark',label:'New mark for "'+(c.id||'')+'"',placeholder:c.id||'',ok:'Save',
+        onOk:v=>{v=(v||'').trim();if(!v)return;
+          if(/[.。]+$/.test(v)){const f=this._dotFixId(v);this._toast('A trailing dot is invisible next to the same number without one — saved as "'+f+'".');v=f;}
+          c.id=v;this.savePlacedCols();this.render();this.openPlacedColList();}});});
   }
   exportPlacedCols(){
     const rows=[['楼层','分区','柱号','x','y','尺寸','关键路径']];
@@ -6389,6 +6615,7 @@ class Component extends DCLogic {
     {const _d=this.root.querySelector('#toggleDelayTop');if(_d)_d.addEventListener('click',()=>this._toggleFocus('delay'));}
     {const _da=this.root.querySelector('#openDelayAdmin');if(_da)_da.addEventListener('click',()=>this.openDelayAdmin());}
     {const _zpb=this.root.querySelector('#openZoneProg');if(_zpb)_zpb.addEventListener('click',()=>this.openZoneProgramme());}
+    {const _nc=this.root.querySelector('#openNumChk');if(_nc)_nc.addEventListener('click',()=>this.openNumberCheck());}
     {const _si=this.root.querySelector('#openSchedImport');if(_si)_si.addEventListener('click',()=>this.openScheduleImport());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
     {const _hm=this.root.querySelector('#headerMore');if(_hm){_hm.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>setTimeout(()=>_hm.removeAttribute('open'),0)));document.addEventListener('click',e=>{if(_hm.open&&!e.target.closest('#headerMore'))_hm.removeAttribute('open');});}}
@@ -6564,7 +6791,7 @@ class Component extends DCLogic {
     return false;}
   async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
-    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);}try{this._migrateLW8();}catch(_e){}
+    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);try{this._adoptPlacedCols();}catch(_e){}}try{this._migrateLW8();}catch(_e){}
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
     this._critOv={...(st.crit||{})};this._critPlanSet=null;this.applyCritOv&&this.applyCritOv();
     this._zpOv={...(st.slab_qty||{})};this.zpApplyOv&&this.zpApplyOv();
