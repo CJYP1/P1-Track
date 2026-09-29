@@ -3037,7 +3037,7 @@ class Component extends DCLogic {
        has to read at a glance against the team colours around it. */
     const _t=this.fmt(v),_f=this._resExportOnly?7200:5200,_w=Math.max(_f*1.5,String(_t).length*_f*0.66+_f*0.55),_h=_f*1.3,_y=y+1900;
     return `<g style="pointer-events:none">`
-      +`<rect x="${(x-_w/2).toFixed(0)}" y="${_y.toFixed(0)}" width="${_w.toFixed(0)}" height="${_h.toFixed(0)}" rx="${(_h*0.32).toFixed(0)}" fill="#15803d" stroke="#ffffff" stroke-width="700"/>`
+      +`<rect x="${(x-_w/2).toFixed(0)}" y="${_y.toFixed(0)}" width="${_w.toFixed(0)}" height="${_h.toFixed(0)}" rx="${(_h*0.32).toFixed(0)}" fill="#15803d" stroke="#ffffff" stroke-width="360" stroke-linejoin="round"/>`
       +`<text x="${x.toFixed(0)}" y="${(_y+_h*0.76).toFixed(0)}" font-size="${_f}" fill="#ffffff" text-anchor="middle" style="font-weight:950">${_t}</text>`
       +`</g>`;
   }
@@ -3501,7 +3501,10 @@ class Component extends DCLogic {
         this._resExportOnly=true;this._resExportMonth=mon||'';
         this._cleanMap=clean;
         this.showColumns=false;this.showAccess=false;this.showDates=false;this.showDelay=false;
-        this.showCoreWalls=!clean;this.showLifts=!clean;this.showCrit=!clean;
+        /* Core-wall and lift gangs are counted separately and their figures are
+           printed on the shapes, so these stay on in both styles — without them
+           that headcount simply vanishes from the picture. */
+        this.showCoreWalls=true;this.showLifts=true;this.showCrit=!clean;
         this.showSubZC=true;this.showSubC=true;this.showSubP=true;
         /* Podium outline, L5 transfer slab and Podium CIS stay on in both
            styles — they are how a reader tells one floor from another. */
@@ -5693,6 +5696,23 @@ class Component extends DCLogic {
         const v=this._mzTeamMen(e2.t,this.curLevel,_ovMon);
         _ovAdj[k2]=(v==null)?0:v;if(v)_ovFb[k2]=true;});
       const _lblPos=[];
+      /* One halo for every figure on the map: thin, round-joined and behind the
+         glyph. The old one was almost a third of the type size, which read as a
+         white box around the number. */
+      const _halo=(f,mul)=>`paint-order:stroke;stroke:#fff;stroke-width:${(f*(mul||0.11)).toFixed(0)}px;stroke-linejoin:round;stroke-linecap:round`;
+      /* Nothing may sit on top of anything else: a label pushes itself away from
+         every figure already placed, trying below, above, then to the sides. */
+      const _place=(x,y,w,h)=>{
+        const hit=(px,py)=>_lblPos.some(q=>Math.abs(q.x-px)<((q.w||w)+w)*0.5&&Math.abs(q.y-py)<((q.h||h)+h)*0.5);
+        if(!hit(x,y)){_lblPos.push({x,y,w,h});return {x,y};}
+        const step=h*1.12;
+        for(let i=1;i<=14;i++){
+          const cand=[[x,y+step*i],[x,y-step*i],[x+w*0.9*i,y],[x-w*0.9*i,y],
+                      [x+w*0.75*i,y+step*i],[x-w*0.75*i,y+step*i]];
+          for(const c of cand){if(!hit(c[0],c[1])){_lblPos.push({x:c[0],y:c[1],w,h});return {x:c[0],y:c[1]};}}
+        }
+        _lblPos.push({x,y,w,h});return {x,y};
+      };
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k];let ps=e.pts||[];if(!ps.length)return;
         /* Put the figure on ground the team is working THIS month.  Anchoring it on an idle zone is
            what made the map look like it had men standing where there was no work. */
@@ -5703,20 +5723,18 @@ class Component extends DCLogic {
            ground rather than drifting into empty space, then drop it clear of the order badge. */
         let a=ps[0],ad=Infinity;ps.forEach(q=>{const d=Math.hypot(q.x-cx0,q.y-cy0);if(d<ad){ad=d;a=q;}});
         let x=a.x,y=a.y+(a.r||0)+_bs*1.05;
-        /* Marine's Podium zones sit almost on top of one another, so several teams would print
-           their figures in the same spot.  Nudge a label down until it clears the ones already
-           placed — a number that overlaps another number is worse than no number. */
-        {let guard=0;
-         while(guard++<12&&_lblPos.some(q=>Math.abs(q.x-x)<_bs*1.9&&Math.abs(q.y-y)<_bs*1.35))y+=_bs*1.45;
-         _lblPos.push({x,y});}
+        /* Marine's Podium zones sit almost on top of one another, so several
+           teams would print in the same spot. The figure and its team name are
+           one block, kept clear of every label already placed. */
+        {const _p=_place(x,y,_bs*2.6,_bs*1.75);x=_p.x;y=_p.y;}
         const v=this._resourceTeamValues(e.t,this.curLevel),cv=this._resourceCoreValues(e.t,this.curLevel),
               w=(_ovAdj[k]!=null?_ovAdj[k]:((Number(v.workers)||0)+(Number(cv.workers)||0))),c=this._darken(e.t.color||'#3157d5',0.42);
         /* A team with no work in the month being looked at gets no label at all — a bare 0 on the
            map only invites the question of whether something was forgotten. */
         if(_ovMon&&_ovAdj[k]===0)return;
         _topDates+=`<g style="pointer-events:none">`
-          +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:950;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.28).toFixed(0)}px">${this.fmt(w)}</text>`
-          +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:900;letter-spacing:0.04em;paint-order:stroke;stroke:#fff;stroke-width:${(_bs*0.16).toFixed(0)}px">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
+          +`<text x="${x.toFixed(0)}" y="${y.toFixed(0)}" text-anchor="middle" font-size="${_bs.toFixed(0)}px" fill="${c}" style="font-weight:900;${_halo(_bs,0.10)}">${this.fmt(w)}</text>`
+          +`<text x="${x.toFixed(0)}" y="${(y+_bs*0.54).toFixed(0)}" text-anchor="middle" font-size="${(_bs*0.46).toFixed(0)}px" fill="${c}" style="font-weight:800;letter-spacing:0.04em;${_halo(_bs*0.46,0.13)}">${this.esc(String(e.t.name||'').toUpperCase())}</text>`
           +`</g>`;});
     }
     s+=_topDates;   /* 日期文字最后画 → 最上层, 不被柱子/overlay 遮住 */
