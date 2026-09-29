@@ -5827,33 +5827,35 @@ class Component extends DCLogic {
           <button class="hbtn pcRen" type="button">Rename</button>
           <button class="hbtn pcDel" type="button" style="color:var(--crit)">Remove</button></td></tr>`).join('')
       :'<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--dim)">No placed columns here.</td></tr>';
+    const HR=this._hiddenColRows();
+    const hiddenBlock=`<div style="${HR.length?'background:color-mix(in srgb,#c2412d 8%,transparent);border:1px solid color-mix(in srgb,#c2412d 30%,transparent);border-radius:9px;padding:10px 12px;margin:0 0 14px':'margin:0 0 10px'}">
+      <b style="font-size:13px">Hidden columns${HR.length?' \u00b7 '+HR.length:''}</b>
+      <div style="font-size:12px;color:var(--dim);padding:5px 0 8px">Hidden with <b>\u2298 \u9690\u85cf\u67f1\u5b50</b>. Nobody sees these on the map or in a Zone's column list, on any account \u2014 this is the only place they can be found again.</div>
+      ${HR.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr>${['Level','Column','Zone','Source',''].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:5px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
+        <tbody>${HR.map(r=>`<tr data-hlv="${esc(r.lv)}" data-hid="${esc(r.id)}">
+          <td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>${esc(r.lv)}</b></td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>${esc(r.id)}</b></td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--line)">${esc(r.zone||'\u2014')}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--dim)">${esc(r.src)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn pcUnhide" type="button">Unhide</button></td></tr>`).join('')}</tbody></table>`
+        :'<div style="color:var(--dim);font-size:13px">No column is hidden.</div>'}
+    </div>`;
     const ov=document.createElement('div');
     ov.id='__pcList';
     ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:640px;width:100%;max-height:82vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
-        <b>Placed columns</b><span style="display:flex;gap:8px;align-items:center">
+        <b>Columns${HR.length?` \u00b7 <span style="color:#c2412d">${HR.length} hidden</span>`:''}</b><span style="display:flex;gap:8px;align-items:center">
           <select id="pcLv" class="hbtn">${['__all'].concat(this.DATA.order||[]).map(x=>`<option value="${esc(x)}"${x===lv?' selected':''}>${x==='__all'?'All levels':esc(x)}</option>`).join('')}</select>
           <button class="hbtn" id="pcClose">Close</button></span></div>
-      <div style="padding:6px 10px 14px">
-        <div style="font-size:12px;color:var(--dim);padding:6px 6px 10px">Columns you added by clicking the map. A placed column runs up through the structure by default, showing on every level above the one it was placed on \u2014 untick <b>carries up</b> for one that stops where it is. Removing one here removes it everywhere. Everyone sees these once they sync.</div>
+      <div style="padding:10px 12px 14px">
+        ${hiddenBlock}
+        <b style="font-size:13px">Placed columns</b>
+        <div style="font-size:12px;color:var(--dim);padding:5px 0 10px">Columns you added by clicking the map. A placed column runs up through the structure by default, showing on every level above the one it was placed on \u2014 untick <b>carries up</b> for one that stops where it is. Removing one here removes it everywhere. Everyone sees these once they sync.</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead><tr>${['Column','Zone','Origin','Above','' ].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
           <tbody>${body}</tbody></table>
-        ${(()=>{const hr=this._hiddenColRows();
-          return `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px">
-            <b style="font-size:13px">Hidden columns</b>
-            <div style="font-size:12px;color:var(--dim);padding:5px 0 8px">Columns hidden with <b>\u2298 \u9690\u85cf\u67f1\u5b50</b>. Nobody sees these on the map or in a Zone's column list, on any account.</div>
-            ${hr.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
-              <thead><tr>${['Level','Column','Zone','Source',''].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
-              <tbody>${hr.map(r=>`<tr data-hlv="${esc(r.lv)}" data-hid="${esc(r.id)}">
-                <td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>${esc(r.lv)}</b></td>
-                <td style="padding:6px 8px;border-bottom:1px solid var(--line)"><b>${esc(r.id)}</b></td>
-                <td style="padding:6px 8px;border-bottom:1px solid var(--line)">${esc(r.zone||'\u2014')}</td>
-                <td style="padding:6px 8px;border-bottom:1px solid var(--line);color:var(--dim)">${esc(r.src)}</td>
-                <td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn pcUnhide" type="button">Unhide</button></td></tr>`).join('')}</tbody></table>`
-              :'<div style="color:var(--dim);font-size:13px;padding:6px 0">No column is hidden.</div>'}
-          </div>`;})()}
         </div></div>`;
     document.body.appendChild(ov);
     ov.querySelector('#pcClose').onclick=()=>ov.remove();
