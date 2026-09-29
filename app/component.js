@@ -3825,13 +3825,50 @@ class Component extends DCLogic {
   /* Baseline crew. The zone figures you type are per zone per month, not per
      activity, so an activity takes the zone's figure for the month it starts
      in; where nothing is typed it falls back to a rough trade size. */
+  /* Trades per activity: how much of a crew is carpenter, the rest steel-fixer.
+     Excavation is counted in machine sets rather than men. */
+  _zpTrade(id){
+    const cr={slab:0.3,slab_pile:0.3,slab_top:0.3,pile:0.3,col:0.4,ls:0.55,act_corewall:0.55,
+              act_wall:0.5,rc:0.4,temp_stair:0.5,pcbeam:0.4,act_cyclical:0.4};
+    if(id==='exc'||id==='earth')return {set:true,unit:'sets',per:4,cr:null};
+    return {set:false,unit:'men',per:1,cr:cr[id]!=null?cr[id]:null};
+  }
+  /* Baseline crew, from the zone manpower actually typed. The figures are per
+     zone per month, so an activity takes the month it starts in; failing that
+     any month it spans; failing that the month the table is showing. Only when
+     nothing at all has been typed does a trade-size default stand in — and the
+     table says which of the three it used, so a figure that looks wrong can be
+     traced back. */
   _zpCrew0(lv,zmk,a){
     const fb={exc:8,earth:8,demo:10,demo_wall:10,piling:8,pile:14,slab:18,slab_pile:18,slab_top:16,col:10,
               ls:14,act_corewall:14,mbeam:8,cbeam:8,act_wall:10,rc:12,pcbeam:8,temp_stair:6,act_cyclical:8};
-    let n=null;
-    try{const m=this.dateToActMonth(this._zpFmtISO(a.bs));if(m)n=this._mzVal(lv,zmk,m);}catch(e){}
-    if(n==null||!(n>0))n=fb[a.id]||10;
-    return Math.max(2,Math.round(n));
+    const t=this._zpTrade(a.id);
+    const men=(n)=>t.set?Math.max(1,Math.round(n/t.per)):Math.max(2,Math.round(n));
+    let n=null,src='';
+    try{
+      const m0=this.dateToActMonth(this._zpFmtISO(a.bs));
+      if(m0){const v=this._mzVal(lv,zmk,m0);if(v>0){n=v;src='typed for '+m0;}}
+      if(n==null){
+        const MS=this._mpMonths?this._mpMonths():[];
+        for(let i=0;i<MS.length;i++){
+          const b=this._zpMonthRange?null:null;
+          const v=this._mzVal(lv,zmk,MS[i]);
+          if(v>0&&this._zpMonthInSpan(MS[i],a)){n=v;src='typed for '+MS[i];break;}
+        }
+      }
+      if(n==null){const m2=this._mzMonth&&this._mzMonth();if(m2){const v=this._mzVal(lv,zmk,m2);if(v>0){n=v;src='typed for '+m2;}}}
+    }catch(e){}
+    if(n==null||!(n>0)){n=fb[a.id]||10;src='trade default';}
+    a.crewSrc=src;
+    return men(n);
+  }
+  _zpMonthInSpan(label,a){
+    const m=String(label||'').match(/^([A-Za-z]{3})'(\d{2})$/);if(!m)return false;
+    const nm={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12}[m[1]];
+    if(!nm)return false;
+    const v=(2000+(+m[2]))*12+nm;
+    const sv=a.bs.getFullYear()*12+a.bs.getMonth()+1, ev=a.be.getFullYear()*12+a.be.getMonth()+1;
+    return v>=sv&&v<=ev;
   }
   _zpActs(lv,zmk){
     const L=this.DATA.levels[lv];if(!L)return [];
@@ -3851,18 +3888,20 @@ class Component extends DCLogic {
     out.sort((x,y)=>x.bs-y.bs||x.be-y.be);
     out.forEach((a,i)=>{
       a.lag=i===0?0:Math.max(1,this._zpDiff(a.bs,out[i-1].be));
+      a.tr=this._zpTrade(a.id);
       a.n0=this._zpCrew0(lv,zmk,a);
-      a.nMax=Math.max(a.n0+2,Math.round(a.n0*2));
+      a.nMax=Math.max(a.n0+(a.tr.set?1:2),Math.round(a.n0*2));
       a.rec=Math.round(a.n0*1.4);
       a.minD=this._zpMinDur(a.id,a.bd);
       a.pct=a.qty>0?Math.min(1,a.done/a.qty):0;});
     return out;
   }
   _zpRemDur(a){return Math.max(1,Math.ceil(a.bd*Math.max(0,1-a.pct)));}
-  _zpSched(A,useCrew,startD,alpha){
+  _zpSched(A,useCrew,startD,alpha,predEnd){
     const out=[];let prev=null;
     A.forEach((a,i)=>{
-      const s=i===0?(startD>a.bs?startD:a.bs):this._zpAdd(prev,a.lag);
+      let s=i===0?(startD>a.bs?startD:a.bs):this._zpAdd(prev,a.lag);
+      if(i===0&&predEnd){const g=this._zpAdd(predEnd,1);if(g>s)s=g;}
       let d=this._zpRemDur(a);
       if(useCrew&&a.n>a.n0)d=Math.max(a.minD,Math.min(d,Math.ceil(d/Math.pow(a.n/a.n0,alpha))));
       const e=this._zpAdd(s,d-1);
@@ -3899,6 +3938,21 @@ class Component extends DCLogic {
     rows.sort((a,b)=>(this._floorOrd(b.lv)||0)-(this._floorOrd(a.lv)||0));
     return rows;
   }
+  /* The zone directly overhead, and its slab. Under top-down the slab above has
+     to be cast before this zone can be dug, and that link is not in act_date —
+     it is a site decision, so it is a switch rather than an assumption. */
+  _zpPred(lv,zmk,stack){
+    const here=this._floorOrd(lv);
+    const above=(stack||[]).filter(r=>this._floorOrd(r.lv)>here);
+    if(!above.length)return null;
+    const a1=above[above.length-1];
+    const slab=(a1.acts||[]).find(x=>x.id==='slab'||x.id==='slab_pile'||x.id==='slab_top');
+    if(!slab)return null;
+    const rem=this._zpRemDur(slab),TODAY=this._zpD(this.todayISOStr());
+    const s=slab.bs>TODAY?slab.bs:this._zpAdd(TODAY,1);
+    return {lv:a1.lv,zone:a1.label,ov:a1.ov,act:slab,bs:slab.bs,be:slab.be,rem,
+            fcS:s,fcE:this._zpAdd(s,rem-1),pct:slab.pct};
+  }
   openZoneProgramme(lv,zmk){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can open Zone Programme.');return;}
     const old=document.getElementById('__zoneProg');if(old)old.remove();
@@ -3931,7 +3985,10 @@ class Component extends DCLogic {
       a.n=Math.max(a.n0,Math.min(a.nMax,n));});
     const TODAY=this._zpD(this.todayISOStr());
     const startD=this._zpD(st.start)||this._zpAdd(TODAY,1);
-    const S0=this._zpSched(A,false,startD,st.alpha),S1=this._zpSched(A,true,startD,st.alpha);
+    const stack=this._zpStack(lv,zmk);
+    const pred=A.length?this._zpPred(lv,zmk,stack):null;
+    const predEnd=(st.pred&&pred)?pred.fcE:null;
+    const S0=this._zpSched(A,false,startD,st.alpha,predEnd),S1=this._zpSched(A,true,startD,st.alpha,predEnd);
     const LAST=A.length-1,baseFin=A.length?A[LAST].be:null;
     const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t||v)+'</option>';
     const CARD='background:var(--panel,#fff);border:1px solid var(--line,#dde);border-radius:8px;padding:14px;margin-bottom:14px';
@@ -3951,7 +4008,8 @@ class Component extends DCLogic {
       root.querySelector('#zpClose').onclick=()=>this._zpClose();
       this._zpBindPickers();return;}
     const f0=S0[LAST].e,f1=S1[LAST].e,d0=this._zpDiff(f0,baseFin),d1=this._zpDiff(f1,baseFin);
-    let md0=0,md1=0;A.forEach((a,i)=>{md0+=a.n0*this._zpRemDur(a);md1+=a.n*S1[i].d;});
+    let md0=0,md1=0;A.forEach((a,i)=>{const k=(a.tr&&a.tr.set)?a.tr.per:1;
+      md0+=a.n0*k*this._zpRemDur(a);md1+=a.n*k*S1[i].d;});
     const RED='color:#c2412d',GRN='color:#2e7d4f';
     const kpi=(l,v,s,cls)=>'<div style="padding:10px 14px;border-left:1px solid var(--line,#dde);flex:1 1 160px">'
       +'<div style="font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim,#667)">'+l+'</div>'
@@ -3974,8 +4032,16 @@ class Component extends DCLogic {
         +(a.pct>0?' · <b style="color:#2e7d4f">'+Math.round(a.pct*100)+'% done</b>':'')+'</div></div>').join('')
       +'</div></div>';
     h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">Baseline · forecast · catch-up</div>'
-      +'<div style="font-size:12.5px;margin:8px 0 10px">Restart the first activity on '
+      +'<div style="font-size:12.5px;margin:8px 0 6px">Restart the first activity on '
       +'<input type="date" id="zpStart" value="'+esc(st.start)+'" style="font:inherit;padding:3px 6px;border:1px solid var(--line,#dde);border-radius:4px;background:var(--panel,#fff);color:inherit"></div>'
+      +(pred?('<label style="display:flex;gap:7px;align-items:flex-start;font-size:12.5px;margin:0 0 8px;cursor:pointer">'
+        +'<input type="checkbox" id="zpPred"'+(st.pred?' checked':'')+' style="margin-top:3px">'
+        +'<span>'+esc(A[0].label)+' must wait for the slab above \u2014 '+esc(pred.lv)+' '+esc(pred.zone)+' ('+pred.ov+'% overlap), '
+        +Math.round(pred.pct*100)+'% done, baseline '+this._zpFmt(pred.bs)+' \u2192 '+this._zpFmt(pred.be)
+        +'. On this forecast it finishes <b>'+this._zpFmt(pred.fcE)+'</b>.'
+        +'<span style="color:var(--dim,#667)"> Top-down only \u2014 act_date has no such link, so this is a site decision.</span></span></label>'):'')
+      +((d0<=0&&!st.pred)?('<div style="font-size:12px;color:var(--dim,#667);margin:0 0 8px">'
+        +esc(A[0].label)+' is not due to start until '+this._zpFmt(A[0].bs)+', which is after the restart date above, so the forecast sits on the baseline and there is no slip to recover yet. Move the date past '+this._zpFmt(A[0].bs)+', or switch on the slab above, to see it move.</div>'):'')
       +'<div style="overflow-x:auto"><svg id="zpGantt"></svg></div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim,#667);margin-top:8px">'
       +'<span><svg width="24" height="8" style="vertical-align:middle"><rect width="24" height="6" y="1" rx="1" fill="#8E9BA1"/></svg> baseline</span>'
@@ -4002,14 +4068,21 @@ class Component extends DCLogic {
       h+='<tr>'
         +TD('<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+a.c+';margin-right:7px"></span><b>'+esc(a.label)+'</b>'
            +'<div style="font-size:11px;color:var(--dim,#667);margin-left:16px">'+(a.qty?left.toLocaleString()+' '+esc(a.unit)+' left of '+a.qty.toLocaleString():'no quantity')+'</div>','left')
-        +TD('<input type="range" data-zpcrew="'+esc(a.id)+'" min="'+a.n0+'" max="'+a.nMax+'" step="1" value="'+a.n+'" style="width:118px;vertical-align:middle"> <b>'+a.n+'</b>'
-           +'<div style="font-size:11px;color:var(--dim,#667)">base '+a.n0+' · cap '+a.nMax+'</div>','left')
-        +TD(dn>0?'<b style="color:#2e7d4f">+'+dn+'</b>':'<span style="color:var(--dim,#667)">0</span>')
+        +TD('<input type="range" data-zpcrew="'+esc(a.id)+'" min="'+a.n0+'" max="'+a.nMax+'" step="1" value="'+a.n+'" style="width:118px;vertical-align:middle"> <b>'+a.n+' '+esc(a.tr.unit)+'</b>'
+           +'<div style="font-size:11px;color:var(--dim,#667)">base '+a.n0
+             +(a.tr.cr?' ('+Math.round(a.n0*a.tr.cr)+'C / '+(a.n0-Math.round(a.n0*a.tr.cr))+'R)':'')
+             +' · cap '+a.nMax+'<br>'+esc(a.crewSrc||'')+'</div>','left')
+        +TD(dn>0?('<b style="color:#2e7d4f">+'+dn+' '+esc(a.tr.unit)+'</b>'
+             +(a.tr.set?'<div style="font-size:11px;color:var(--dim,#667)">\u2248 +'+(dn*a.tr.per)+' men</div>'
+               :(a.tr.cr?(()=>{const c0=Math.round(a.n0*a.tr.cr),c1=Math.round(a.n*a.tr.cr);
+                   return '<div style="font-size:11px;color:var(--dim,#667)">carpenter +'+(c1-c0)+' · steel +'+(dn-(c1-c0))+'</div>';})():'')))
+           :'<span style="color:var(--dim,#667)">0</span>')
         +TD(left>0?(fm(r0)+' → <b>'+fm(r1)+'</b><div style="font-size:11px;color:var(--dim,#667)">'+esc(a.unit)+'/day</div>'):'—')
         +TD(left>0?(fm(r0/a.n0)+' → '+fm(r1/a.n)+'<div style="font-size:11px;color:var(--dim,#667)">'+esc(a.unit)+'/man·day</div>'):'—')
         +TD(rem+' → <b>'+d+'</b> d'+(d===a.minD&&a.n>a.n0?'<div style="font-size:11px;color:#b7791f">at the floor</div>':'<div style="font-size:11px;color:var(--dim,#667)">floor '+a.minD+' d</div>'))
         +TD(rem-d>0?'<b style="color:#2e7d4f">−'+(rem-d)+' d</b>':'<span style="color:var(--dim,#667)">0</span>')
-        +TD((a.n0*rem).toLocaleString()+' → '+(a.n*d).toLocaleString())
+        +TD((a.n0*rem).toLocaleString()+' → '+(a.n*d).toLocaleString()
+            +'<div style="font-size:11px;color:var(--dim,#667)">'+(a.tr.set?'machine shifts':'man-days')+'</div>')
         +'</tr>';});
     h+='</tbody><tfoot><tr style="font-weight:700"><td colspan="2" style="padding:7px 8px">Total</td>'
       +'<td style="padding:7px 8px;text-align:right;color:#2e7d4f">+'+addTot+'</td><td colspan="3"></td>'
@@ -4026,7 +4099,6 @@ class Component extends DCLogic {
       +'<div style="display:flex;gap:16px;font-size:12px;color:var(--dim,#667);margin-top:6px">'
       +'<span><svg width="12" height="10" style="vertical-align:middle"><rect width="12" height="10" rx="2" fill="#8E9BA1"/></svg> baseline</span>'
       +'<span><svg width="12" height="10" style="vertical-align:middle"><rect width="12" height="10" rx="2" fill="#2F6F7E"/></svg> catch-up</span></div></div></div>';
-    const stack=this._zpStack(lv,zmk);
     h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">What sits above and below</div>'
       +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:10px">Zones on the other levels whose outline overlaps this one, found from the drawing coordinates. Higher levels first.</div>';
     if(!stack.length)h+='<div style="color:var(--dim,#667);font-size:13px">No zone on another level overlaps this outline.</div>';
@@ -4078,6 +4150,7 @@ class Component extends DCLogic {
     root.querySelector('#zpClose').onclick=()=>this._zpClose();
     const sd=root.querySelector('#zpStart');if(sd)sd.onchange=e=>{st.start=e.target.value;this._zpRender();};
     const al=root.querySelector('#zpAlpha');if(al)al.onchange=e=>{st.alpha=Number(e.target.value)||0.7;this._zpRender();};
+    const pd=root.querySelector('#zpPred');if(pd)pd.onchange=e=>{st.pred=e.target.checked;this._zpRender();};
     root.querySelectorAll('[data-zppre]').forEach(b=>b.onclick=()=>{
       const p=b.dataset.zppre;st.crew={};
       A.forEach(a=>{st.crew[a.id]=p==='base'?a.n0:(p==='max'?a.nMax:a.rec);});
@@ -4178,7 +4251,8 @@ class Component extends DCLogic {
     const at=(rows,crew)=>weeks.map(ws=>{let t=0;
       for(let k=0;k<7;k++){const d=this._zpAdd(ws,k);A.forEach((a,i)=>{const r=rows[i];if(d>=r.s&&d<=r.e)t+=crew(a);});}
       return t/7;});
-    const base=at(A.map(a=>({s:a.bs,e:a.be})),a=>a.n0),sc=at(S1,a=>a.n);
+    const per=a=>(a.tr&&a.tr.set)?a.tr.per:1;
+    const base=at(A.map(a=>({s:a.bs,e:a.be})),a=>a.n0*per(a)),sc=at(S1,a=>a.n*per(a));
     const max=Math.max(10,Math.max.apply(null,base),Math.max.apply(null,sc))*1.15;
     const x=i=>L+i*(W-L-R)/weeks.length,bw=(W-L-R)/weeks.length,y=v=>T+(1-v/max)*(H-B-T);
     const C=this._zpCss('--dim')||'#667',LN=this._zpCss('--line')||'#dde';
