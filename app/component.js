@@ -307,6 +307,7 @@ class Component extends DCLogic {
           z.cols.push({id:c.id,sz:c.sz||'',c:!!c.crit,placed:true});});
       zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
     });
+    try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
   }
   _stairTarget(lv,w){
     const L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];if(!L||!w||!w.pts||!w.pts.length)return null;
@@ -2319,7 +2320,10 @@ class Component extends DCLogic {
      the full scope.  Flooring incomplete percentages prevents 99.5%+ from
      being presented as complete (for example B1 slab 17,359 / 17,378). */
   _reportPct(done,total){done=Math.max(0,Number(done)||0);total=Math.max(0,Number(total)||0);if(!total)return 0;if(done>=total)return 100;return Math.min(99,Math.floor(done/total*100));}
-  _reportStructureAid(aid){return ['exc','piling','slab_pile','pile','col','ls','mbeam','cbeam','slab','slab_top','act_corewall','act_wall','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
+  /* Cast steel main beams are kept out of the Area Report: the row duplicated
+     the steel beam scope and was read as extra work. Activity cards, the map
+     and the element register still carry them. */
+  _reportStructureAid(aid){return ['exc','piling','slab_pile','pile','col','ls','mbeam','slab','slab_top','act_corewall','act_wall','rc','pcbeam','temp_stair','act_cyclical'].indexOf(aid)>=0;}
   /* Confirmed L1 New Basement structural register totals.  These are scoped
      totals (not the whole L1 drawing): Podium-owned columns such as C41/C53/
      C60/C66 are excluded from NB. */
@@ -4367,17 +4371,80 @@ class Component extends DCLogic {
      back, and keeps the ones marked N out of every count — map, zone list,
      Report and Number check alike. The drop list lives in settings, so it
      syncs and nothing in the drawing data is destroyed. */
+  /* An element's status key carries the zone it sits in, so moving one between
+     zones by editing the drawing data would strand every tick and cast date
+     recorded against it. Moves are held as an override instead, applied after
+     the column rebuild, and the status and date travel with the element. */
+  _elemMoves(){const c=this._appCfg=this._appCfg||{};return c.elemMove=c.elemMove||{};}
+  _elemMoveKey(lv,type,id){return lv+'||'+type+'||'+this._colKey(id);}
+  _migrateElemKey(oldKey,newKey){
+    if(oldKey===newKey)return;
+    if(this.elem&&this.elem[oldKey]!=null){if(this.elem[newKey]==null)this.elem[newKey]=this.elem[oldKey];delete this.elem[oldKey];
+      if(typeof rwsSyncElementStatus==='function'){try{rwsSyncElementStatus(newKey,this.elem[newKey]);rwsSyncElementStatus(oldKey,'todo');}catch(e){}}}
+    if(this._elemDate&&this._elemDate[oldKey]!=null){const d=this._elemDate[oldKey];
+      if(this._elemDate[newKey]==null)this._elemDate[newKey]=d;delete this._elemDate[oldKey];
+      if(typeof rwsSyncKV==='function'){const p=newKey.split('||');try{rwsSyncKV('elem_date',newKey,d,p[0],p[1]);rwsSyncKV('elem_date',oldKey,null,null,null);}catch(e){}}}
+  }
+  _applyElemMoves(){
+    const mv=this._elemMoves();if(!Object.keys(mv).length)return;
+    let touched=false;
+    (this.DATA.order||[]).forEach(lv=>{
+      const L=this.DATA.levels[lv];if(!L)return;
+      const zones=L.zones||[];
+      this._regTypes().forEach(([type,arr])=>{
+        zones.forEach(z=>{
+          const list=z[arr];if(!Array.isArray(list))return;
+          for(let i=list.length-1;i>=0;i--){
+            const it=list[i],id=(typeof it==='string')?it:it.id;
+            const target=mv[this._elemMoveKey(lv,type,id)];
+            if(!target||target===(z.label||''))continue;
+            const tz=zones.find(x=>(x.label||'')===target);if(!tz)continue;
+            const oldKey=this.ekey(lv,z,type,id);
+            list.splice(i,1);
+            tz[arr]=tz[arr]||[];
+            if(!tz[arr].some(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(id)))tz[arr].push(it);
+            this._migrateElemKey(oldKey,this.ekey(lv,tz,type,id));
+            touched=true;
+          }
+        });
+      });
+      zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
+    });
+    if(touched){this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();}
+  }
+  _setElemMove(lv,type,id,zoneLabel){
+    const mv=this._elemMoves(),k=this._elemMoveKey(lv,type,id);
+    if(zoneLabel)mv[k]=zoneLabel;else delete mv[k];
+  }
+  _saveElemMoves(){
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemMove',this._elemMoves(),null,null);
+  }
   _regTypes(){return [['col','cols','Column'],['pile','piles','Pilecap'],['beam','beams','Steel Main Beam'],
                       ['lift','lifts','Lift'],['stair','stairs','Stair'],['core','cores','Core Wall']];}
   _elemDrop(){const c=this._appCfg=this._appCfg||{};return c.elemDrop=c.elemDrop||{};}
   _elemDropped(lv,zmk,type,id){
+    /* A hidden column used to vanish from the map and the Zone list while the
+       level tile and the Report kept counting it, so hiding one never moved the
+       number it was hidden to correct. Hidden and dropped are the same thing to
+       every count now. */
+    if(type==='col'&&this._colHidden&&this._colHidden(lv,id))return true;
     const a=this._elemDrop()[lv+'||'+zmk+'||'+type];
     if(!a||!a.length)return false;
     const k=this._colKey(id);
     return a.some(x=>this._colKey(x)===k);
   }
+  /* Dropped and hidden elements are listed as well, with Keep = N. They are out
+     of every count, but they have to stay visible here or there would be no way
+     to put one back. */
   _regRows(){
-    const out=[];
+    const out=[],seen=new Set();
+    const add=(lv,z,zmk,type,label,id)=>{
+      const key=this.ekey(lv,z,type,id);
+      if(seen.has(key))return;seen.add(key);
+      out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',type,label,id,key,
+                keep:this._elemDropped(lv,zmk,type,id)?'N':'Y',
+                st:this.elemStatus(key),date:this.elemDate(key)||''});};
     (this.DATA.order||[]).forEach(lv=>{
       const L=this.DATA.levels[lv];if(!L)return;
       (L.zones||[]).forEach(z=>{
@@ -4385,14 +4452,28 @@ class Component extends DCLogic {
         this._regTypes().forEach(([type,arr,label])=>{
           (z[arr]||[]).forEach(x=>{
             const id=(typeof x==='string')?x:x.id;
-            out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',type,label,id,
-                      keep:this._elemDropped(lv,zmk,type,id)?'N':'Y'});});});});});
+            add(lv,z,zmk,type,label,id);});
+          /* Dropped and hidden ones have already left z.cols, so they are added
+             back from the drop list itself — otherwise a wrong N could never be
+             undone. */
+          const dl=this._elemDrop()[lv+'||'+zmk+'||'+type]||[];
+          dl.forEach(id=>add(lv,z,zmk,type,label,id));
+          /* Hidden columns are held per level, not per zone, so each one is put
+             back on the zone its coordinates fall in. */
+          if(type==='col'){
+            const hc=(this._appCfg&&this._appCfg.hideCols&&this._appCfg.hideCols[lv])||[];
+            if(hc.length){const CO=(this.COLUMNS&&this.COLUMNS[lv])||[];
+              hc.forEach(id=>{const c=CO.find(x=>this._colKey(x.id)===this._colKey(id));
+                const lab=c?this._colZoneAt(lv,c,6000):'';
+                if(lab===(z.label||''))add(lv,z,zmk,type,label,id);});}
+          }
+        });});});
     return out;
   }
   _regCsv(){
     const rows=this._regRows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-    const lines=[['楼层 Level','分区 Zone','区域 Area','构件 Type','编号 Mark','保留 Keep (Y/N)'].map(q).join(',')];
-    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.keep].map(q).join(',')));
+    const lines=[['楼层 Level','分区 Zone','区域 Area','构件 Type','编号 Mark','保留 Keep (Y/N)','状态 Status','完成日期 Date'].map(q).join(',')];
+    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.keep,r.st,r.date].map(q).join(',')));
     const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='RWS_P1_element_register.csv';document.body.appendChild(a);a.click();
@@ -4405,14 +4486,16 @@ class Component extends DCLogic {
     if(rows.length<2)return {err:'The file has no rows under the header.'};
     const head=rows[0].map(h=>String(h).trim());
     const find=(...n)=>{for(const x of n){const i=head.findIndex(h=>h===x||h.indexOf(x)===0);if(i>=0)return i;}return -1;};
-    const iLv=find('楼层','Level'),iZ=find('分区','Zone'),iT=find('构件','Type'),iId=find('编号','Mark'),iK=find('保留','Keep');
+    const iLv=find('楼层','Level'),iZ=find('分区','Zone'),iT=find('构件','Type'),iId=find('编号','Mark'),iK=find('保留','Keep'),
+          iS=find('状态','Status'),iD=find('完成日期','Date');
     if(iLv<0||iT<0||iId<0||iK<0)return {err:'Missing a column. The header needs 楼层, 分区, 构件, 编号 and 保留 — export once and edit that file.'};
     /* Index the live register so a row can be matched back to its zone even if
        the Zone cell was edited or the sheet reordered. */
     const idx={};this._regRows().forEach(r=>{
       (idx[r.lv+'|'+r.label+'|'+this._colKey(r.id)]=idx[r.lv+'|'+r.label+'|'+this._colKey(r.id)]||[]).push(r);
       (idx[r.lv+'|'+r.label+'|'+this._colKey(r.id)+'|'+r.zone]=[r]);});
-    const drop={},bad=[];let kept=0,dropped=0,unknown=0;
+    const drop={},bad=[];let kept=0,dropped=0,unknown=0,stCh=0,dtCh=0,moved=0;
+    const STAT={'DONE':'done','WIP':'wip','TODO':'todo','':'','完成':'done','进行中':'wip','未开始':'todo','未做':'todo'};
     rows.slice(1).forEach((r,n)=>{
       const lv=String(r[iLv]||'').trim(),lab=String(r[iT]||'').trim(),id=String(r[iId]||'').trim();
       const keep=String(r[iK]||'').trim().toUpperCase();
@@ -4422,17 +4505,44 @@ class Component extends DCLogic {
       const zn=iZ>=0?String(r[iZ]||'').trim():'';
       const hit=idx[lv+'|'+lab+'|'+this._colKey(id)+'|'+zn]||idx[lv+'|'+lab+'|'+this._colKey(id)];
       if(!hit||!hit.length){unknown++;return;}
+      /* A changed Zone cell moves the element, carrying its status and date. */
+      if(zn&&hit.length===1&&zn!==hit[0].zone){
+        const tz=((this.DATA.levels[lv]||{}).zones||[]).some(z2=>(z2.label||'')===zn);
+        if(!tz)bad.push('row '+(n+2)+': no zone "'+zn+'" on '+lv);
+        else{this._setElemMove(lv,hit[0].type,id,zn);moved++;}
+      }
       hit.forEach(h=>{
         if(keep==='N'){const k=h.lv+'||'+h.zmk+'||'+h.type;(drop[k]=drop[k]||[]).push(h.id);dropped++;}
-        else kept++;});
+        else kept++;
+        /* Status and date come back in too, so the sheet is a two-way check. */
+        if(iS>=0){
+          const raw=String(r[iS]||'').trim().toUpperCase(),st=STAT[raw];
+          if(st===undefined){bad.push('row '+(n+2)+': status must be done, wip or todo');return;}
+          if(st&&st!==this.elemStatus(h.key)){
+            if(st==='todo')delete this.elem[h.key];else this.elem[h.key]=st;
+            if(typeof rwsSyncElementStatus==='function')rwsSyncElementStatus(h.key,st);
+            stCh++;
+            if(iD<0)this._syncElemDate(h.key,st);
+          }
+        }
+        if(iD>=0){
+          const d=String(r[iD]||'').trim();
+          const iso=/^\d{4}-\d{2}-\d{2}$/.test(d)?d:(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/.test(d)
+            ?d.replace(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/,(m,a,b,c)=>c+'-'+String(b).padStart(2,'0')+'-'+String(a).padStart(2,'0')):'');
+          if(d&&!iso)bad.push('row '+(n+2)+': date must be YYYY-MM-DD');
+          else if(iso!==(this.elemDate(h.key)||'')){this.setElemDate(h.key,iso);dtCh++;}
+        }});
     });
     this._appCfg=this._appCfg||{};
     this._appCfg.elemDrop=drop;
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',drop,null,null);
+    if(moved)this._saveElemMoves();
     try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();}catch(e){}
     this.buildMetrics&&this.buildMetrics();this.render();
-    return {kept,dropped,unknown,bad,zones:Object.keys(drop).length};
+    this.saveElem&&this.saveElem();
+    this.commitElem&&this.commitElem();
+    return {kept,dropped,unknown,bad,stCh,dtCh,moved,zones:Object.keys(drop).length};
   }
   openRegisterImport(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
@@ -4445,7 +4555,7 @@ class Component extends DCLogic {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
         <b>Element register</b><button class="hbtn" id="regX">Close</button></div>
       <div style="padding:14px 16px">
-        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Export every column, pile cap, beam, lift, stair and core the app knows about, set <b>保留 Keep</b> to <b>N</b> on anything that should not count, and bring the sheet back. Dropped elements disappear from the map, the Zone lists, the Report and Number check. The drawing data is never changed — the list of what to ignore lives in settings and syncs to everyone.</div>
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Export every column, pile cap, beam, lift, stair and core the app knows about, set <b>保留 Keep</b> to <b>N</b> on anything that should not count, and bring the sheet back. <b>状态 Status</b> (done / wip / todo) and <b>完成日期 Date</b> come out live and go back in, so the same sheet is how you check progress and how you correct it. Dropped elements disappear from the map, the Zone lists, the Report and Number check. The drawing data is never changed — the list of what to ignore lives in settings and syncs to everyone.</div>
         ${n?`<div style="font-size:12.5px;color:#b7791f;margin-bottom:10px">${n} element${n===1?'':'s'} currently dropped. Importing replaces that list; import a sheet with every Keep set to Y to clear it.</div>`:''}
         <div style="display:flex;gap:8px;margin-bottom:10px"><button class="hbtn primary" id="regDl">⬇ Export register</button></div>
         <input type="file" id="regFile" accept=".csv,text/csv" style="margin-bottom:10px">
@@ -4464,7 +4574,8 @@ class Component extends DCLogic {
       this._confirmModal('Apply this sheet? Anything marked N stops counting everywhere.',()=>{
         const r=this._regImport(ta.value);if(!r)return;
         if(r.err){msg.innerHTML='<span style="color:var(--crit)">'+this.esc(r.err)+'</span>';return;}
-        msg.innerHTML='<span style="color:#2e7d4f">'+r.kept+' kept · '+r.dropped+' dropped across '+r.zones+' lists.</span>'
+        msg.innerHTML='<span style="color:#2e7d4f">'+r.kept+' kept · '+r.dropped+' dropped across '+r.zones+' lists'
+          +(r.moved?' · '+r.moved+' moved zone':'')+(r.stCh?' · '+r.stCh+' status changed':'')+(r.dtCh?' · '+r.dtCh+' date changed':'')+'.</span>'
           +(r.unknown?'<div style="color:var(--dim);margin-top:5px">'+r.unknown+' row(s) matched nothing in the register and were ignored.</div>':'')
           +(r.bad.length?'<div style="color:var(--crit);margin-top:5px">Skipped '+r.bad.length+': '+this.esc(r.bad.slice(0,3).join('; '))+'</div>':'');
         if(document.getElementById('ncRoot'))this._ncRender();});};
