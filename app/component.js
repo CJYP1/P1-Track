@@ -3503,8 +3503,9 @@ class Component extends DCLogic {
         this.showColumns=false;this.showAccess=false;this.showDates=false;this.showDelay=false;
         this.showCoreWalls=!clean;this.showLifts=!clean;this.showCrit=!clean;
         this.showSubZC=true;this.showSubC=true;this.showSubP=true;
-        this.showOvl=clean?{...this.showOvl,transfer:false,podcis:false,podium:false}
-                          :{...this.showOvl,transfer:true,podcis:true,podium:true};
+        /* Podium outline, L5 transfer slab and Podium CIS stay on in both
+           styles — they are how a reader tells one floor from another. */
+        this.showOvl={...this.showOvl,transfer:true,podcis:true,podium:true};
         if(mon)this._planMonth=mon;
         try{this.vb={...this.base};}catch(e){}
         this.render();
@@ -5412,7 +5413,6 @@ class Component extends DCLogic {
     let _topDates='';   /* 所有浇筑/计划日期文字收集到这里, 最后画 → 永远在最上层, 不被柱子/overlay 盖住 */
     let _stairHitHtml='';   /* 楼梯独立点击层最后绘制，避免被 Column、Zone 边界或日期层挡住 */
     ['podcis','podium','transfer'].forEach(k=>{
-      if(this._cleanOn())return;
       if(!this.showOvl[k])return;const o=this.OVL[k];
       (this.DATA.overlays[k]||[]).forEach(seg=>{
         const p=seg.pts.map(pt=>{const q=this.proj(pt,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
