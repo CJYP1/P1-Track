@@ -1035,6 +1035,92 @@ class Component extends DCLogic {
   saveActUpd(){try{localStorage.setItem('rws_act_upd',JSON.stringify(this._actUpd||{}));}catch(e){}}
   _updUser(){const u=this._rwsUser||{};return u.display_name||u.displayName||u.username||u.name||'someone';}
   _markUpd(lv,zmk,aid){if(window.__RWS_LOCKED_VIEW)return;const k=lv+'||'+zmk+'||'+aid;const val={u:this._updUser(),t:Date.now()};this._actUpd=this._actUpd||{};this._actUpd[k]=val;this.saveActUpd();if(typeof rwsSyncKV==='function')rwsSyncKV('act_upd',k,val,lv,zmk);}
+  /* ---------- What changed today ----------
+     Two things carry a timestamp: an activity edit (_actUpd: total, monthly plan, monthly done)
+     and a zone-level site update (this.updates).  Element ticks do not, so they cannot be listed
+     here and the panel says so rather than quietly leaving them out. */
+  _dayStart(d){const x=d?new Date(d):new Date();x.setHours(0,0,0,0);return x.getTime();}
+  _updRows(fromTs,toTs){
+    const out=[],lvOrd=lv=>{const i=(this.DATA.order||[]).indexOf(lv);return i<0?99:i;};
+    const zLabel=(lv,zmk)=>{const z=((this.DATA.levels[lv]||{}).zones||[]).find(x=>(x.mk||x.lid)===zmk);
+      return z?(z.label||zmk):zmk;};
+    const aLabel=aid=>{const a=(this._actMeta()||[]).find(x=>x.id===aid);return a?a.label:aid;};
+    Object.keys(this._actUpd||{}).forEach(k=>{
+      const v=this._actUpd[k];if(!v||!v.t)return;
+      if(v.t<fromTs||(toTs!=null&&v.t>=toTs))return;
+      const q=k.split('||');if(q.length<3)return;
+      const lv=q[0],zmk=q[1],aid=q[2];
+      /* What the figures say right now, so the entry is readable without opening the zone. */
+      let plan=0,done=0;(this.ACT_MONTHS||[]).forEach(m=>{
+        const pv=this.actPlan(lv,zmk,aid,m),dv=this.actDoneMonth(lv,zmk,aid,m);
+        if(pv)plan+=(+pv||0);if(dv)done+=(+dv||0);});
+      const tot=this.actTotal(lv,zmk,aid,null);
+      out.push({kind:'act',t:v.t,who:v.u||'?',lv,zmk,zone:zLabel(lv,zmk),act:aLabel(aid),aid,
+                unit:this._actUnit(aid),total:tot,plan,done});});
+    Object.keys(this.updates||{}).forEach(mk=>{
+      (this.updates[mk]||[]).forEach(e=>{
+        if(!e||!e.ts)return;if(e.ts<fromTs||(toTs!=null&&e.ts>=toTs))return;
+        const lv=String(mk).split('|')[0];
+        const bits=[];
+        if(e.status)bits.push(String(e.status));
+        if(e.pct!=null&&e.pct!=='')bits.push(this.fmt(e.pct)+'%');
+        if(e.crew)bits.push(String(e.crew));
+        const body=[e.text||e.note||e.msg||'',bits.join(' \u00b7 ')].filter(Boolean).join('  \u2014  ');
+        out.push({kind:'note',t:e.ts,who:e.by||e.user||'\u5de5\u5730\u66f4\u65b0',lv,zmk:mk,
+                  zone:zLabel(lv,mk),text:body});});});
+    out.sort((a,b)=>b.t-a.t||lvOrd(a.lv)-lvOrd(b.lv));
+    return out;
+  }
+  openTodayUpdates(days){
+    const D=Math.max(0,Number(days==null?(this._updDays||0):days)||0);
+    this._updDays=D;
+    const from=this._dayStart()-D*86400000;
+    const rows=this._updRows(from,null);
+    const esc=v=>this.esc(String(v==null?'':v));
+    const hhmm=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+    const dayLab=t=>{const d=new Date(t),n=new Date();
+      const same=d.toDateString()===n.toDateString();
+      if(same)return '\u4eca\u5929';
+      return (d.getMonth()+1)+'/'+d.getDate();};
+    const byWho={};rows.forEach(r=>{(byWho[r.who]=byWho[r.who]||[]).push(r);});
+    const whos=Object.keys(byWho).sort((a,b)=>byWho[b].length-byWho[a].length);
+    const num=v=>(v==null||v==='')?'':this.fmt(v);
+    const line=r=>r.kind==='note'
+      ? `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+           <span style="font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums">${dayLab(r.t)} ${hhmm(r.t)}</span>
+           <b style="margin-left:8px">${esc(r.lv)} \u00b7 ${esc(r.zone)}</b>
+           <span style="margin-left:8px;font-size:11px;color:var(--accent,#3b5bdb);font-weight:700">\u5de5\u5730\u66f4\u65b0</span>
+           <div style="font-size:12px;margin-top:2px">${esc(r.text)}</div></div>`
+      : `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+           <span style="font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums">${dayLab(r.t)} ${hhmm(r.t)}</span>
+           <b style="margin-left:8px">${esc(r.lv)} \u00b7 ${esc(r.zone)}</b>
+           <span style="margin-left:8px">${esc(r.act)}</span>
+           <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
+             \u603b\u91cf ${num(r.total)||'\u2014'} \u00b7 \u8ba1\u5212 ${num(r.plan)||'\u2014'} \u00b7 \u5b8c\u6210 ${num(r.done)||'\u2014'} ${esc(r.unit||'')}</div></div>`;
+    const old=document.getElementById('__updToday');if(old)old.remove();
+    const ov=document.createElement('div');ov.id='__updToday';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
+    const rangeLab=D===0?'\u4eca\u5929':('\u6700\u8fd1 '+(D+1)+' \u5929');
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink,var(--txt));border-radius:12px;max-width:660px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
+        <b>\u{1f195} \u66f4\u65b0 \u00b7 ${rangeLab}</b>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${[0,2,6].map(d=>`<button class="hbtn ${d===D?'primary':''}" data-d="${d}" style="padding:4px 9px;font-size:11.5px">${d===0?'\u4eca\u5929':(d+1)+'\u5929'}</button>`).join('')}
+          <button class="hbtn" id="__utX">\u5173\u95ed</button></div></div>
+      <div style="padding:12px 16px;overflow:auto">
+        ${rows.length?`<div style="font-size:12px;color:var(--dim);margin-bottom:10px">${rows.length} \u6761 \u00b7 ${whos.length} \u4eba</div>`
+          +whos.map(w=>`<div style="margin-bottom:14px">
+             <div style="font-weight:800;font-size:12.5px;margin-bottom:3px">${esc(w)} <span style="font-weight:500;color:var(--dim)">\u00b7 ${byWho[w].length}</span></div>
+             ${byWho[w].map(line).join('')}</div>`).join('')
+          :`<div style="color:var(--dim);font-size:13px;padding:18px 0;text-align:center">${D===0?'\u4eca\u5929\u8fd8\u6ca1\u6709\u66f4\u65b0\u3002':'\u8fd9\u6bb5\u65f6\u95f4\u6ca1\u6709\u66f4\u65b0\u3002'}</div>`}
+        <div style="font-size:11px;color:var(--faint,var(--dim));border-top:1px solid var(--line);padding-top:8px;margin-top:4px">
+          \u53ea\u80fd\u5217\u51fa\u5e26\u65f6\u95f4\u6233\u7684\u6539\u52a8\uff1a\u6d3b\u52a8\u7684\u603b\u91cf / \u6708\u5ea6\u8ba1\u5212 / \u6708\u5ea6\u5b8c\u6210\uff0c\u4ee5\u53ca\u5de5\u5730\u66f4\u65b0\u3002\u6784\u4ef6\u6253\u52fe\u6ca1\u6709\u8bb0\u65f6\u95f4\uff0c\u6240\u4ee5\u4e0d\u5728\u8fd9\u91cc\u3002</div>
+      </div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#__utX').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    ov.querySelectorAll('button[data-d]').forEach(b=>b.onclick=()=>{ov.remove();this.openTodayUpdates(+b.dataset.d);});
+  }
   _updBadge(lv,zmk,aid){const o=(this._actUpd||{})[lv+'||'+zmk+'||'+aid];if(!o||!o.t)return '';const ageDays=(Date.now()-o.t)/86400000;if(ageDays>14)return '';const who=this.esc(o.u||'?');const when=new Date(o.t).toLocaleString();return `<span class="act-upd" title="Updated by ${who} \u00b7 ${when}" style="margin-left:6px;font-size:8.5px;font-weight:800;letter-spacing:.4px;color:#fff;background:var(--accent,#3b5bdb);border-radius:4px;padding:1px 5px;vertical-align:1px;white-space:nowrap">UPDATED</span>`;}
   isEdited(store,k){return !!(this._editedKeys||{})[store+'||'+k];}
   markEdited(store,k){this._editedKeys=this._editedKeys||{};const kk=store+'||'+k;this._editedKeys[kk]=true;this.saveEdited();if(typeof rwsSyncKV==='function')rwsSyncKV('edited',kk,true,null,null);}
@@ -1364,7 +1450,7 @@ class Component extends DCLogic {
   updateCount(){return Object.values(this.updates).reduce((n,a)=>n+a.length,0);}
   addUpdate(mk,e){if(!mk)return;
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin accounts can add a zone-level site update.');return;}
-    (this.updates[mk]=this.updates[mk]||[]).push({...e,ts:Date.now()});this.saveUpdatesStore();this.applyUpdates();
+    (this.updates[mk]=this.updates[mk]||[]).push({by:this._updUser(),...e,ts:Date.now()});this.saveUpdatesStore();this.applyUpdates();
     this.buildRail();this.buildTimeline();this.render();
     const z=this.DATA.levels[this.curLevel].zones.find(x=>x.mk===mk);if(z){this.selectZone(z);this.paintSel();this.paintTimelineSel();}
     this.refreshUpdBadge();if(this.root.querySelector('#modal').classList.contains('open'))this.openTable();
@@ -1510,7 +1596,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList','#openElemReg'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList','#openElemReg','#openTodayUpd'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
@@ -7798,6 +7884,7 @@ class Component extends DCLogic {
     {const _zpb=this.root.querySelector('#openZoneProg');if(_zpb)_zpb.addEventListener('click',()=>this.openZoneProgramme());}
     {const _nc=this.root.querySelector('#openNumChk');if(_nc)_nc.addEventListener('click',()=>this.openNumberCheck());}
     {const _rg=this.root.querySelector('#openElemReg');if(_rg)_rg.addEventListener('click',()=>this.openRegisterGrid());}
+    {const _tu=this.root.querySelector('#openTodayUpd');if(_tu)_tu.addEventListener('click',()=>this.openTodayUpdates(0));}
     {const _cl=this.root.querySelector('#openColList');if(_cl)_cl.addEventListener('click',()=>{this._pcLv='__all';this.openPlacedColList();});}
     {const _si=this.root.querySelector('#openSchedImport');if(_si)_si.addEventListener('click',()=>this.openScheduleImport());}
     {const _r=this.root.querySelector('#toggleRpVsAc');if(_r)_r.addEventListener('click',()=>this._toggleFocus('rp'));}
