@@ -133,7 +133,10 @@ class Component extends DCLogic {
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
     if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
     if(aid==='slab_pile')return false;   /* merged into 'slab' everywhere */
-    switch(aid){case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
+    switch(aid){case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':return cat==='EB'&&(lv==='B2'||lv==='B1'||lv==='L1');case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
+  /* Demolition also runs on the L1 slab over the existing basement: the programme carries it on
+     nine EB zones there (SLAB B-2.1 \u2026 B-3.5) and the level was simply missing from the list
+     above, so those figures could never appear anywhere in the app. */
   mval(z,k){if(k==='area')return z.area||0;if(k==='liftstairAll')return this.lsAll(z.counts);return z.counts[k]||0;}
   fmt(n){return (n||0).toLocaleString('en-US');}
   esc(s){return (s+'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
