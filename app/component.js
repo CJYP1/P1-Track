@@ -1199,7 +1199,8 @@ class Component extends DCLogic {
           <option value="beamslab">Beams + slab (32%)</option>
           <option value="wallcol">Walls + columns + core (25%)</option>
         </select></div>
-      <div style="display:flex;justify-content:flex-end;gap:8px">
+      <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">
+        <button id="__aa_merge" class="hbtn" style="padding:7px 10px;margin-right:auto;font-size:11.5px" title="\u628a\u624b\u52a8\u65b0\u5efa\u7684\u540c\u540d\u6d3b\u52a8\u5e76\u56de\u5185\u7f6e\u7684 Slab Demolition">\u29c9 \u5408\u5e76\u91cd\u540d\u6d3b\u52a8</button>
         <button id="__aa_cancel" class="hbtn" style="padding:7px 14px">Cancel</button>
         <button id="__aa_ok" class="hbtn" style="padding:7px 16px;background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700">Add</button>
       </div></div>`;
@@ -1208,6 +1209,7 @@ class Component extends DCLogic {
     const close=()=>ov.remove();
     ov.addEventListener('click',e=>{if(e.target===ov)close();});
     ov.querySelector('#__aa_cancel').addEventListener('click',close);
+    {const _mg=ov.querySelector('#__aa_merge');if(_mg)_mg.addEventListener('click',()=>{close();this.runSlabDemoMerge();});}
     const submit=()=>{
       const name=(nm.value||'').trim();if(!name){nm.style.borderColor='var(--crit)';nm.focus();return;}
       const qraw=ov.querySelector('#__aa_qty').value.trim();
@@ -1920,7 +1922,7 @@ class Component extends DCLogic {
 
   /* ---- Monthly-plan overview: which zones have planned work in a given month ---- */
   _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',pcbeam:'m²',act_cyclical:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',temp_stair:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
-  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolished Wall'},{id:'demo',label:'Demolished Slab'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
+  _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolished Wall'},{id:'demo',label:'Slab Demolition'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
   planMonth(){if(!this._planMonth||this.visMonths().indexOf(this._planMonth)<0)this._planMonth=this.actDefaultMonthVis();return this._planMonth;}
   zonePlanItems(lv,z,m){const zmk=z.mk||z.lid,mi=this.ACT_MONTHS.indexOf(m),out=[];this._actMeta().forEach(a=>{if(this.actHidden(lv,zmk,a.id))return;const p=this.actPlan(lv,zmk,a.id,m);if(p!=null&&p>0){const d=this.actDoneMonth(lv,zmk,a.id,m)||0,cg=mi>=0?this.actCarry(lv,zmk,a.id,mi):null;out.push({label:a.label,qty:p,unit:a.unit,done:d,owed:cg?Math.max(0,cg.balance):Math.max(0,p-d),achieved:cg?cg.balance<=0:d>=p});}});return out;}
   zoneHasPlan(lv,z,m){return this.zonePlanItems(lv,z,m).length>0;}
@@ -2102,12 +2104,28 @@ class Component extends DCLogic {
      simply yields the other); the zone total, the dates and the visibility flag are only taken when
      'demo' has nothing of its own, so an existing figure is never inflated.  The pre-merge state is
      kept in _appCfg.slabDemoMergeBackup so the whole thing can be undone. */
+  /* Any hand-added activity whose name means the same thing as the built-in 'demo', whichever
+     way round it was typed — "Demolished Slab", "Slab Demolition", "slab demo". */
   _slabDemoSrcIds(){
     const norm=v=>String(v==null?'':v).toLowerCase().replace(/[^a-z]/g,'');
     return (this._actDefs||[]).map(d=>d&&d.id).filter(id=>{
       if(!id||id==='demo'||id==='demo_wall')return false;
       const d=(this._actDefs||[]).find(x=>x.id===id)||{},n=norm(d.label)+' '+norm(id);
-      return /slab/.test(n)&&/demol/.test(n)&&!/wall/.test(n);});
+      return /slab/.test(n)&&/demo/.test(n)&&!/wall/.test(n);});   /* "Slab Demo" counts too */
+  }
+  /* The merge above runs once per duplicate and then remembers it, so a duplicate created later
+     would never be picked up.  This runs it again on demand and says what it found. */
+  runSlabDemoMerge(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can merge activities.');return;}
+    const ids=this._slabDemoSrcIds();
+    if(!ids.length){this._toast&&this._toast('\u6ca1\u6709\u91cd\u540d\u7684\u201cSlab Demolition\u201d\u6d3b\u52a8\uff0c\u65e0\u9700\u5408\u5e76\u3002');return;}
+    const names=ids.map(id=>{const d=(this._actDefs||[]).find(x=>x.id===id)||{};return (d.label||id);});
+    this._confirmModal('\u627e\u5230 '+ids.length+' \u4e2a\u91cd\u540d\u6d3b\u52a8\uff1a\n'+names.join('\n')
+      +'\n\n\u628a\u5b83\u4eec\u7684\u6708\u5ea6\u8ba1\u5212/\u5b8c\u6210\u91cf\u5e76\u5165\u5185\u7f6e\u7684 Slab Demolition\uff1f',()=>{
+      const r=this.mergeSlabDemolish(true);
+      if(!r)this._toast&&this._toast('\u6ca1\u6709\u53ef\u5408\u5e76\u7684\u6570\u636e\u3002');
+      else this.buildMetrics&&this.buildMetrics();
+    });
   }
   mergeSlabDemolish(force){
     if(!this.rwsIsAdmin())return null;
@@ -2176,7 +2194,7 @@ class Component extends DCLogic {
     this.saveAct&&this.saveAct();this.saveDates&&this.saveDates();this.saveActCmt&&this.saveActCmt();
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','slabDemoMerged',true,null,null);
-    this._toast&&this._toast('Merged '+srcIds.join(', ')+' into Demolished Slab ✓ ('+moved.plan+' plan, '+moved.done+' done cells)');
+    this._toast&&this._toast('Merged '+srcIds.join(', ')+' into Slab Demolition ✓ ('+moved.plan+' plan, '+moved.done+' done cells)');
     return {srcIds,moved};
   }
   /* Text drawn on top of a Zone painted in the Team's colour needs to be a darker shade of that
@@ -7007,7 +7025,7 @@ class Component extends DCLogic {
       {id:'exc',label:'Excavation',unit:'m³',total:this.excTotal(lv,z)},
       {id:'piling',label:'Piling',unit:'nos',total:this.actTotal(lv,zmk,'piling',this.actAutoTotal(lv,zmk,'piling'))},
       {id:'demo_wall',label:'Demolished Wall',unit:'m³',total:this.actTotal(lv,zmk,'demo_wall',this.actAutoTotal(lv,zmk,'demo_wall'))},
-      {id:'demo',label:'Demolished Slab',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
+      {id:'demo',label:'Slab Demolition',unit:'m³',total:this.actTotal(lv,zmk,'demo',this.actAutoTotal(lv,zmk,'demo'))},
       /* 'Slab + Pilecap' is gone as an activity of its own: B2 keeps the pile caps inside its
          Slab row, every level above only ever had Slab. */
       /* 数量一律来自 CSV 各月计划量求和(可手改覆盖);没放计划量就留空 — 不再借用图纸台账数/区域面积 */

@@ -192,45 +192,45 @@ B1,B1|F022,ls,Core/Lift/Stair Wall,Mar'27,0,,2027-02-24,2027-05-18
 B1,B1|F022,ls,Core/Lift/Stair Wall,Apr'27,0,,2027-02-24,2027-05-18
 B1,B1|F022,ls,Core/Lift/Stair Wall,May'27,0,,2027-02-24,2027-05-18
 B1,B1|EB1S1,demo_wall,Demolition Wall,Jul'26,470,,2026-07-01,2026-07-07
-B1,B1|EB1S2.1,demo,Demolition Slab,May'26,278,,2026-05-21,2026-06-03
-B1,B1|EB1S2.1,demo,Demolition Slab,Jun'26,76,,2026-05-21,2026-06-03
-B1,B1|EB1S2.1,demo,Demolition Slab,Jun'26,195,,2026-06-04,2026-09-09
-B1,B1|EB1S2.1,demo,Demolition Slab,Jul'26,224,,2026-06-04,2026-09-09
-B1,B1|EB1S2.1,demo,Demolition Slab,Aug'26,223,,2026-06-04,2026-09-09
-B1,B1|EB1S2.1,demo,Demolition Slab,Sep'26,65,,2026-06-04,2026-09-09
+B1,B1|EB1S2.1,demo,Slab Demolition,May'26,278,,2026-05-21,2026-06-03
+B1,B1|EB1S2.1,demo,Slab Demolition,Jun'26,76,,2026-05-21,2026-06-03
+B1,B1|EB1S2.1,demo,Slab Demolition,Jun'26,195,,2026-06-04,2026-09-09
+B1,B1|EB1S2.1,demo,Slab Demolition,Jul'26,224,,2026-06-04,2026-09-09
+B1,B1|EB1S2.1,demo,Slab Demolition,Aug'26,223,,2026-06-04,2026-09-09
+B1,B1|EB1S2.1,demo,Slab Demolition,Sep'26,65,,2026-06-04,2026-09-09
 B1,B1|EB1S2.1,slab,Slab,Jul'26,1061,,2026-07-01,2026-07-20
 B1,B1|EB1S2.1,col,Column,Jul'26,2,,2026-07-21,2026-07-29
 B1,B1|EB1S2.1,ls,Core/Lift/Stair Wall,Jul'26,1,,2026-07-29,2026-09-08
 B1,B1|EB1S2.1,ls,Core/Lift/Stair Wall,Aug'26,0,,2026-07-29,2026-09-08
 B1,B1|EB1S2.1,ls,Core/Lift/Stair Wall,Sep'26,0,,2026-07-29,2026-09-08
 B1,B1|EB1S2.1,demo_wall,Demolition Wall,Jul'26,233,,2026-07-08,2026-07-13
-B1,B1|EB1S2.2,demo,Demolition Slab,Jun'26,614,,2026-06-04,2026-06-12
+B1,B1|EB1S2.2,demo,Slab Demolition,Jun'26,614,,2026-06-04,2026-06-12
 B1,B1|EB1S2.2,slab,Slab,Jul'26,614,,2026-07-01,2026-07-20
 B1,B1|EB1S2.2,col,Column,Jul'26,4,,2026-07-21,2026-07-29
 B1,B1|EB1S2.2,demo_wall,Demolition Wall,Jul'26,202,,2026-07-14,2026-07-19
-B1,B1|EB1S2.3,demo,Demolition Slab,Jun'26,780,,2026-06-15,2026-06-23
+B1,B1|EB1S2.3,demo,Slab Demolition,Jun'26,780,,2026-06-15,2026-06-23
 B1,B1|EB1S2.3,slab,Slab,Jul'26,780,,2026-07-10,2026-07-23
 B1,B1|EB1S2.3,col,Column,Jul'26,4,,2026-07-22,2026-07-30
 B1,B1|EB1S2.3,demo_wall,Demolition Wall,Jul'26,256,,2026-07-20,2026-07-25
-B1,B1|EB1S2.4,demo,Demolition Slab,Jun'26,466,,2026-06-24,2026-07-02
-B1,B1|EB1S2.4,demo,Demolition Slab,Jul'26,133,,2026-06-24,2026-07-02
+B1,B1|EB1S2.4,demo,Slab Demolition,Jun'26,466,,2026-06-24,2026-07-02
+B1,B1|EB1S2.4,demo,Slab Demolition,Jul'26,133,,2026-06-24,2026-07-02
 B1,B1|EB1S2.4,slab,Slab,Jul'26,54,,2026-07-31,2026-08-10
 B1,B1|EB1S2.4,slab,Slab,Aug'26,545,,2026-07-31,2026-08-10
 B1,B1|EB1S2.4,col,Column,Aug'26,5,,2026-08-11,2026-08-19
 B1,B1|EB1S2.4,demo_wall,Demolition Wall,Jul'26,393,,2026-07-26,2026-07-31
-B1,B1|EB1S5,demo,Demolition Slab,Jul'26,380,,2026-07-03,2026-07-22
+B1,B1|EB1S5,demo,Slab Demolition,Jul'26,380,,2026-07-03,2026-07-22
 B1,B1|EB1S5,slab,Slab,Aug'26,380,,2026-08-12,2026-08-31
 B1,B1|EB1S5,col,Column,Sep'26,2,,2026-09-01,2026-09-09
 B1,B1|EB1S6,slab,Slab,Aug'26,578,,2026-08-21,2026-09-09
 B1,B1|EB1S6,slab,Slab,Sep'26,473,,2026-08-21,2026-09-09
 B1,B1|EB1S6,col,Column,Sep'26,7,,2026-09-10,2026-09-18
-B1,B1|EB1S6,demo,Demolition Slab,Feb'27,1051,,2027-02-01,2027-02-21
+B1,B1|EB1S6,demo,Slab Demolition,Feb'27,1051,,2027-02-01,2027-02-21
 B1,B1|EB1S7,slab,Slab,Sep'26,85,,2026-09-29,2026-10-16
 B1,B1|EB1S7,slab,Slab,Oct'26,678,,2026-09-29,2026-10-16
 B1,B1|EB1S7,col,Column,Oct'26,5,,2026-10-19,2026-10-27
-B1,B1|EB1S7,demo,Demolition Slab,Feb'27,198,,2027-02-22,2027-03-11
-B1,B1|EB1S7,demo,Demolition Slab,Mar'27,311,,2027-02-22,2027-03-11
-B1,B1|EB1S7,demo,Demolition Slab,Apr'27,254,,2027-04-01,2027-04-20
+B1,B1|EB1S7,demo,Slab Demolition,Feb'27,198,,2027-02-22,2027-03-11
+B1,B1|EB1S7,demo,Slab Demolition,Mar'27,311,,2027-02-22,2027-03-11
+B1,B1|EB1S7,demo,Slab Demolition,Apr'27,254,,2027-04-01,2027-04-20
 B1,B1|EB1S7,ls,Core/Lift/Stair Wall,,1,,2026-11-20,2026-10-25
 B1,B1|EB1S8,slab,Slab,Sep'26,131,,2026-09-29,2026-10-16
 B1,B1|EB1S8,slab,Slab,Oct'26,1050,,2026-09-29,2026-10-16
@@ -240,4 +240,4 @@ B1,B1|EB1S8,ls,Core/Lift/Stair Wall,Nov'26,,,2026-09-29,2026-11-09
 B1,B1|EB1S8,col,Column,Oct'26,3,,2026-10-19,2026-10-27
 B1,B1|EB1S8,col,Column,Oct'26,1,,2026-10-28,2026-11-16
 B1,B1|EB1S8,col,Column,Nov'26,5,,2026-10-28,2026-11-16
-B1,B1|EB1S8,demo,Demolition Slab,Mar'27,1181,,2027-03-12,2027-03-31
+B1,B1|EB1S8,demo,Slab Demolition,Mar'27,1181,,2027-03-12,2027-03-31
