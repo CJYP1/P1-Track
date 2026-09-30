@@ -5429,6 +5429,19 @@ class Component extends DCLogic {
   /* ---------- SVG render ---------- */
   render(){
     this._awIdx=null;   /* recomputed once per render, from whatever the data now says */
+    /* Every label placer pushes text away from its neighbours; without a bound it can push it
+       clean off the window.  These say where a block of text is still on screen, in the current
+       view, and where to put one that would otherwise leave it. */
+    this._vbPad=()=>{const v=this.vb||this.base||{x:0,y:0,w:1,h:1};return v;};
+    this._fitsView=(x,y,w,h)=>{const v=this._vbPad();
+      return (x-w*0.5)>=v.x&&(x+w*0.5)<=(v.x+v.w)&&(y-h*0.8)>=v.y&&(y+h*0.8)<=(v.y+v.h);};
+    this._clampView=(x,y,w,h)=>{const v=this._vbPad();
+      const lo=v.x+w*0.5,hi=v.x+v.w-w*0.5,to=v.y+h*0.8,bo=v.y+v.h-h*0.8;
+      return {x:hi>lo?Math.min(Math.max(x,lo),hi):(v.x+v.w*0.5),
+              y:bo>to?Math.min(Math.max(y,to),bo):(v.y+v.h*0.5)};};
+    /* Anchored on something that is not on screen at all: its label belongs off screen too. */
+    this._anchorOff=(x,y)=>{const v=this._vbPad(),m=Math.max(v.w,v.h)*0.02;
+      return x<v.x-m||x>v.x+v.w+m||y<v.y-m||y>v.y+v.h+m;};
     const L=this.DATA.levels[this.curLevel],H=L.h,W=L.w;
     const _focusOnly=!!(this.showDelay||this.showRpVsAc);
     this._syncFocusButtons();
@@ -5662,8 +5675,16 @@ class Component extends DCLogic {
       const _mDatePlaced=[];
       const _placeMDate=(x,y,label,fs)=>{const w=Math.max(fs*2.5,String(label||'').length*fs*0.61),h=fs*1.18;
         const offs=[[0,0]];for(let r=1;r<=6;r++){const dy=h*1.12*r;offs.push([0,dy],[0,-dy],[w*0.58,dy*0.48],[-w*0.58,dy*0.48],[w*0.58,-dy*0.48],[-w*0.58,-dy*0.48]);}
-        let p=null;for(const o of offs){const c={x:x+o[0],y:y+o[1],w,h};if(!_mDatePlaced.some(b=>Math.abs(c.x-b.x)*2<(c.w+b.w)*1.04&&Math.abs(c.y-b.y)*2<(c.h+b.h)*1.08)){p=c;break;}}
-        if(!p){let n=7,c;do{c={x,y:y+n++*h*1.12,w,h};}while(_mDatePlaced.some(b=>Math.abs(c.x-b.x)*2<(c.w+b.w)*1.04&&Math.abs(c.y-b.y)*2<(c.h+b.h)*1.08));p=c;}_mDatePlaced.push(p);return p;};
+        const clash=c=>_mDatePlaced.some(b=>Math.abs(c.x-b.x)*2<(c.w+b.w)*1.04&&Math.abs(c.y-b.y)*2<(c.h+b.h)*1.08);
+        let p=null;for(const o of offs){const c={x:x+o[0],y:y+o[1],w,h};
+          if(!clash(c)&&this._fitsView(c.x,c.y,w,h)){p=c;break;}}
+        /* The old fallback walked downwards until it found a gap, with nothing to stop it: on a
+           crowded level it walked the text straight off the bottom of the window.  It is bounded
+           now, and anything that would leave the view is simply pulled back inside it. */
+        if(!p){for(let n=7;n<=26;n++){const c={x,y:y+n*h*1.12,w,h};
+          if(!clash(c)&&this._fitsView(c.x,c.y,w,h)){p=c;break;}}}
+        if(!p){const q=this._clampView(x,y,w,h);p={x:q.x,y:q.y,w,h};}
+        _mDatePlaced.push(p);return p;};
       const _dr=(arr,cls,col,dash,show,useProg)=>{if(!show||!arr)return;arr.forEach((e,i)=>{
       const _pqs=e.pts.map(pp=>this.proj(pp,H));
       const pts=_pqs.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ');
@@ -5791,18 +5812,25 @@ class Component extends DCLogic {
       /* Nothing may sit on top of anything else: a label pushes itself away from
          every figure already placed, trying below, above, then to the sides. */
       const _place=(x,y,w,h)=>{
+        /* Whatever this label belongs to is off screen, so the label is too — pinning it to the
+           edge would only pile strangers' names along the border. */
+        if(this._anchorOff(x,y))return null;
         const hit=(px,py)=>_lblPos.some(q=>Math.abs(q.x-px)<((q.w||w)+w)*0.5&&Math.abs(q.y-py)<((q.h||h)+h)*0.5);
-        if(!hit(x,y))return _lblPos.push({x,y,w,h})&&{x,y};
+        const ok=(px,py)=>this._fitsView(px,py,w,h)&&!hit(px,py);
+        const c0=this._clampView(x,y,w,h);
+        if(ok(c0.x,c0.y))return _lblPos.push({x:c0.x,y:c0.y,w,h})&&c0;
         /* A ring search: nearest free spot first, so a label never travels further
            from its own zone than it has to. Small steps, because the obstacles
-           (badges, pills) are small compared with a label block. */
+           (badges, pills) are small compared with a label block.  A candidate that
+           would leave the window is not a candidate. */
         const sx=w*0.42,sy=h*0.42;
         for(let i=1;i<=22;i++){
-          const cand=[];
-          for(let a=0;a<12;a++){const th=a*Math.PI/6;cand.push([x+Math.cos(th)*sx*i,y+Math.sin(th)*sy*i]);}
-          for(const c of cand){if(!hit(c[0],c[1]))return _lblPos.push({x:c[0],y:c[1],w,h})&&{x:c[0],y:c[1]};}
+          for(let a=0;a<12;a++){const th=a*Math.PI/6,
+            cx=c0.x+Math.cos(th)*sx*i,cy=c0.y+Math.sin(th)*sy*i;
+            if(ok(cx,cy))return _lblPos.push({x:cx,y:cy,w,h})&&{x:cx,y:cy};}
         }
-        _lblPos.push({x,y,w,h});return {x,y};
+        /* Nowhere free and on screen: overlapping is still better than gone. */
+        _lblPos.push({x:c0.x,y:c0.y,w,h});return c0;
       };
       Object.keys(_resTeams).forEach(k=>{const e=_resTeams[k];let ps=e.pts||[];if(!ps.length)return;
         /* Put the figure on ground the team is working THIS month.  Anchoring it on an idle zone is
@@ -5823,7 +5851,9 @@ class Component extends DCLogic {
         /* The block is as wide as the widest of its two lines really is — the team
            name, not the figure, is what used to run over its neighbours. */
         {const _nm=String(e.t.name||'').toUpperCase(),_nw=Math.max(_bs*1.6,_nm.length*_bs*0.46*0.64),
-               _p=_place(x,y,_nw*1.05,_bs*1.9);x=_p.x;y=_p.y;}
+               _p=_place(x,y,_nw*1.05,_bs*1.9);
+         if(!_p)return;                                  /* its zones are off screen */
+         x=_p.x;y=_p.y;}
         /* A team with no work in the month being looked at gets no label at all — a bare 0 on the
            map only invites the question of whether something was forgotten. */
         _topDates+=`<g style="pointer-events:none">`
