@@ -307,6 +307,10 @@ class Component extends DCLogic {
   }
   /* 对账: 地图数据(COLUMNS)与柱清单共用同一个 Zone 归属。每层先移除全部旧挂载，
      再按当前地图柱心边界重新加入，避免旧清单多算、漏算或跨 Zone 重复。 */
+  /* Runs on boot, after every edit, and after every cloud pull.  The pull used to skip it, so an
+     element another admin added or moved in the register only reached this screen after a reload
+     — and on a fresh device only after the second one, because the boot pass ran on the stale
+     local copy before the cloud settings arrived. */
   _reconcileZoneCols(){
     if(!this.COLUMNS||!this.DATA)return;
     /* Marine's podium ledger is the ownership source for every mapped L1
@@ -1714,7 +1718,7 @@ class Component extends DCLogic {
       if(own('col_month')){this._colMonth={...(B.colMonth||{}),...(state.col_month||{})};try{localStorage.setItem('rws_col_month',JSON.stringify(this._colMonth));}catch(e){}}
       if(own('act_cmt')){this._actCmt={...(state.act_cmt||{})};this.saveActCmt();}
       if(own('act_upd')){this._actUpd={...(state.act_upd||{})};this.saveActUpd();}
-      if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null,_localRes=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_localRes,this._appCfg.resourcePlans);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}try{this._adoptPlacedCols();}catch(_e){}}
+      if(own('settings')){const _localDelay=(this._appCfg&&this._appCfg.zoneDelay)||null,_localRes=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(state.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_localDelay,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_localRes,this._appCfg.resourcePlans);try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}try{this._adoptPlacedCols();}catch(_e){}try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();}catch(_e2){console.error('reconcile after pull',_e2);}}
       try{this._migrateLW8();}catch(_e){}   /* cloud settings can carry the old LW8 name back */
       try{const _m=this.mergeSlabDemolish();if(_m)this.buildMetrics();}catch(_e){console.error('slab-demolish merge',_e);}
       this._reconcileZoneStairs();
@@ -8135,7 +8139,7 @@ class Component extends DCLogic {
     return false;}
   async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
-    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);try{this._adoptPlacedCols();}catch(_e){}}try{this._migrateLW8();}catch(_e){}
+    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);try{this._adoptPlacedCols();}catch(_e){}try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();}catch(_e2){console.error('reconcile after pull',_e2);}}try{this._migrateLW8();}catch(_e){}
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
     this._critOv={...(st.crit||{})};this._critPlanSet=null;this.applyCritOv&&this.applyCritOv();
     this._zpOv={...(st.slab_qty||{})};this.zpApplyOv&&this.zpApplyOv();
