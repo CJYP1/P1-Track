@@ -2482,6 +2482,18 @@ class Component extends DCLogic {
      drift apart, which is how a Report row could read 166 where the register
      held 216, or move on its own when a column changed zone. */
   _reportElemTotal(levels,aid,cat,filter){
+    /* Core walls and staircases are counted from the map, not from the named lists: a shape drawn
+       on a zone is one item, and the lifts sitting inside a core wall are reference only — they
+       belong to the core wall's progress and must not be counted a second time here. */
+    if(aid==='ls'){
+      let n=0,any=false;
+      (levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{
+        if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;
+        const d=this._lsDrawn(lv,z.mk||z.lid);
+        if(d!=null){any=true;n+=d;}}));
+      if(any)return n>0?n:null;
+      /* Nothing traced on these levels yet — fall through to the lists below. */
+    }
     if(!this._elemAct(aid))return null;
     const seen=new Set();let n=0;
     (levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{
@@ -6745,11 +6757,33 @@ class Component extends DCLogic {
     this._pickLinkModal(lv,zmk,zoneLabel,(it)=>{w.link={lv,zmk,type:it.type,id:it.id};w.id=it.id;saveFn();},()=>{if(this._inputModal)this._inputModal({title:'名称 / name',label:'编号',placeholder:w.id||'',ok:'保存',onOk:(v)=>{w.id=(v||'').trim()||w.id;delete w.link;saveFn();}});});}
   _shapeMenu(kind,idx,srcLv){const lv=srcLv||this.curLevel;const arr=this._shapeArr(kind,lv);const w=arr[idx];if(!w)return;const old=document.getElementById('__shapeMenu');if(old)old.remove();const ov=document.createElement('div');ov.id='__shapeMenu';ov.style.cssText='position:fixed;inset:0;background:rgba(15,20,30,.4);z-index:2147483601;display:flex;align-items:center;justify-content:center';
     const _nlk=this._shapeLinks(w,lv).length;
-    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(300px,90vw);box-shadow:0 18px 50px rgba(0,0,0,.35)"><div style="font-weight:800;font-size:13px;margin-bottom:4px">${this.esc(this._shapeLabel(w))} · ${kind==='core'?'Core Wall':'Staircase'}</div><div style="font-size:10.5px;color:var(--faint);margin-bottom:12px">${_nlk?('按名字匹配到 '+_nlk+' 项数据'):'名字没对上数据 — 改成正确编号即可自动匹配'}</div><div style="display:flex;flex-direction:column;gap:8px"><button class="hbtn" id="__sm_ren" style="padding:8px">改名 / rename</button><button class="hbtn" id="__sm_del" style="padding:8px;color:var(--crit)">删除</button><button class="hbtn" id="__sm_cancel" style="padding:8px">取消</button></div></div>`;
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(300px,90vw);box-shadow:0 18px 50px rgba(0,0,0,.35)"><div style="font-weight:800;font-size:13px;margin-bottom:4px">${this.esc(this._shapeLabel(w))} · ${kind==='core'?'Core Wall':'Staircase'}</div><div style="font-size:10.5px;color:var(--faint);margin-bottom:12px">${_nlk?('按名字匹配到 '+_nlk+' 项数据'):'名字没对上数据 — 改成正确编号即可自动匹配'}</div><div style="display:flex;flex-direction:column;gap:8px"><button class="hbtn" id="__sm_conv" style="padding:8px 12px">\u21c4 \u8f6c\u6210 ${kind==='core'?'Lift / Staircase':'Core Wall'}</button><button class="hbtn" id="__sm_ren" style="padding:8px">改名 / rename</button><button class="hbtn" id="__sm_del" style="padding:8px;color:var(--crit)">删除</button><button class="hbtn" id="__sm_cancel" style="padding:8px">取消</button></div></div>`;
     document.body.appendChild(ov);const close=()=>ov.remove();ov.addEventListener('click',e=>{if(e.target===ov)close();});
     ov.querySelector('#__sm_cancel').addEventListener('click',close);
     ov.querySelector('#__sm_ren').addEventListener('click',()=>{close();if(this._inputModal)this._inputModal({title:'改名 / rename',label:'编号(按名字自动匹配数据)',placeholder:w.id||'',ok:'保存',onOk:(v)=>{w.id=(v||'').trim()||w.id;delete w.link;delete w.links;if(kind==='core')this._saveCoreWalls();else this._saveLifts();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});});
-    ov.querySelector('#__sm_del').addEventListener('click',()=>{close();if(kind==='core')this._delCoreWall(lv,idx);else this._delLift(lv,idx);});}
+    ov.querySelector('#__sm_del').addEventListener('click',()=>{close();if(kind==='core')this._delCoreWall(lv,idx);else this._delLift(lv,idx);});
+    {const _cv=ov.querySelector('#__sm_conv');if(_cv)_cv.addEventListener('click',()=>{close();this._convertShape(kind,idx,lv);});}}
+  /* A shape drawn as a core wall that is really a lift shaft (or the other way round) is moved
+     between the two lists rather than deleted and traced again: the outline, the name and the
+     floor links come across untouched, so whatever was counted against it stays counted. */
+  _convertShape(kind,idx,srcLv){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change this.');return;}
+    const lv=srcLv||this.curLevel;
+    const from=this._shapeArr(kind,lv),w=from&&from[idx];
+    if(!w)return;
+    const to=(kind==='core')?'lift':'core',toName=(to==='core')?'Core Wall':'Lift / Staircase';
+    this._confirmModal('\u628a '+this.esc(this._shapeLabel(w))+' \u8f6c\u6210 '+toName+'\uff1f\n\u8f6e\u5ed3\u3001\u540d\u79f0\u548c\u697c\u5c42\u5173\u8054\u90fd\u4e0d\u53d8\u3002',()=>{
+      const cur=this._shapeArr(kind,lv);const i=cur.indexOf(w);if(i<0)return;
+      cur.splice(i,1);
+      this._appCfg=this._appCfg||{};
+      const m=(to==='core')?'coreWalls':'lifts';
+      this._appCfg[m]=this._appCfg[m]||{};
+      (this._appCfg[m][lv]=this._appCfg[m][lv]||[]).push(w);
+      this._saveCoreWalls();this._saveLifts();
+      this.render();this.refreshSubzPanel&&this.refreshSubzPanel();
+      this._toast&&this._toast(this._shapeLabel(w)+' \u2192 '+toName+' \u2713');
+    });
+  }
   _focusSideElement(lv,zmk,type,id){const key=lv+'||'+zmk+'||'+type+'||'+id,sb=this.root.querySelector('#sidebody');if(!sb)return;const det=sb.querySelector('details.sec[data-sec="'+type+'"]');if(det)det.open=true;let chip=sb.querySelector(`.elchip[data-key="${(window.CSS&&CSS.escape)?CSS.escape(key):key}"]`);
     /* Reconciliation can move a staircase from a legacy owner zone into the
        live geometric owner while the row keeps an older composite key.  If
