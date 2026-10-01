@@ -5036,7 +5036,23 @@ class Component extends DCLogic {
       +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'全部区域')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
       +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','全部分区')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
       +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="筛选 mark / zone" style="'+IN+';width:170px">'
-      +'<span style="color:var(--dim)">显示 '+rows.length+(matched.length>rows.length?' / 共 '+matched.length:'')+' · 计入 '+kept+' · 已完成 '+done+'</span>'
+      +(()=>{
+        /* The same column is recorded once on every level it runs through, so a count of rows is
+           a count of pours, not of columns.  Both numbers are printed side by side, because
+           reading one as the other is what made a scrape of the page come back with a thousand. */
+        /* Counted over everything the filter matched, not the page of rows being drawn. */
+        const base=(matched&&matched.length)?matched:rows;
+        const marks=new Set();base.forEach(r=>marks.add(String(r.id||'').trim().toUpperCase()));
+        const dup=base.length-marks.size;
+        return '<span style="color:var(--dim)">\u663e\u793a '+rows.length
+          +(matched.length>rows.length?' / \u5171 '+matched.length:'')
+          +' \u00b7 \u8ba1\u5165 '+kept+' \u00b7 \u5df2\u5b8c\u6210 '+done
+          +(dup>0?' \u00b7 <b style="color:var(--txt)">\u4e0d\u540c\u7f16\u53f7 '+marks.size+'</b>':'')
+          +'</span>'
+          +(dup>0?'<span title="\u4e00\u6839\u8d2f\u901a\u67f1\u5728\u5b83\u7a7f\u8fc7\u7684\u6bcf\u5c42\u5404\u8bb0\u4e00\u6761\uff1a'+base.length
+            +' \u6761 = \u65bd\u5de5\u6b21\u6570\uff0c'+marks.size+' \u4e2a = \u5b9e\u7269\u6839\u6570" style="font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:1px 6px">'
+            +'\u91cd\u590d '+dup+' \u6761 \u00b7 \u8d2f\u901a\u6784\u4ef6</span>':'');
+      })()
       +(this._rgPrefixable(st)?'<button class="hbtn" id="rgPrefix" title="把这一层的编号开头改成该层的数字，例如 2VB11 → 3VB11">↺ 按楼层改编号</button>':'')
       +'<span style="flex:1"></span>'
       +(ALLLV?'<span style="color:var(--dim);font-size:12px">选一个楼层才能新增</span>'
