@@ -128,6 +128,29 @@ class Component extends DCLogic {
   hash(s){s=String(s);let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return ((h>>>0)%100000)/100000;}
   clamp(v,a,b){return Math.max(a,Math.min(b,v));}
   lsAll(c){return (c.liftcw||0)+(c.stair||0)+(c.liftstair||0);}
+  /* Core walls and staircases are counted from what is drawn on the map: two shapes on a zone
+     count two, one counts one.  A shape that merely tops out on this level is a marker, not work,
+     so it is left out.  When nothing at all is drawn on a level the figures from the drawing
+     schedule still stand, so a level nobody has traced yet does not silently read zero. */
+  _lsDrawn(lv,zmk){
+    if(!lv||!zmk||!this._appCfg)return null;
+    const keep=this.curLevel;let n=0,any=false;
+    try{
+      this.curLevel=lv;
+      ['core','lift'].forEach(kind=>{
+        (this._shapesForLevel(kind)||[]).forEach(e=>{
+          if(!e||!e.w||e.top)return;
+          any=true;
+          if(this._shapeZmk(e.w,lv)===zmk)n++;});});
+    }catch(err){return null;}
+    finally{this.curLevel=keep;}
+    return any?n:null;
+  }
+  _lsCount(z){
+    const c=(z&&z.counts)||{};
+    const d=this._lsDrawn(z&&z._lv,z&&(z.mk||z.lid));
+    return d==null?this.lsAll(c):d;
+  }
   _actApplies(aid,lv,z){const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
@@ -137,7 +160,7 @@ class Component extends DCLogic {
   /* Demolition also runs on the L1 slab over the existing basement: the programme carries it on
      nine EB zones there (SLAB B-2.1 \u2026 B-3.5) and the level was simply missing from the list
      above, so those figures could never appear anywhere in the app. */
-  mval(z,k){if(k==='area')return z.area||0;if(k==='liftstairAll')return this.lsAll(z.counts);return z.counts[k]||0;}
+  mval(z,k){if(k==='area')return z.area||0;if(k==='liftstairAll')return this._lsCount(z);return z.counts[k]||0;}
   fmt(n){return (n||0).toLocaleString('en-US');}
   esc(s){return (s+'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
   proj(p,H){return [p[0],H-p[1]];}
@@ -518,6 +541,7 @@ class Component extends DCLogic {
         const k=zk+'||'+f; z.counts[f]=(k in ov)?ov[k]:base.counts[f];
       });
       const ak=zk+'||area'; z.area=(ak in ov)?ov[ak]:base.area;
+      z._lv=lv;   /* so a count can ask the map what is drawn on this zone */
     }));
   }
   /* ---------- zone activities: per-month plan / actual (Total + Planned/Done by month) ---------- */
@@ -6353,7 +6377,7 @@ class Component extends DCLogic {
     }
     const seen={},uniq=[];this.DATA.levels[this.curLevel].zones.forEach(z=>{if(!this.zoneVisible(z))return;const k=this.zid(z);if(!seen[k]){seen[k]=1;uniq.push(z);}});
     const t={columns:0,pilecap:0,mainbeam:0,steelbeam:0,ls:0,area:0};
-    uniq.forEach(z=>{const c=z.counts;t.columns+=c.columns||0;t.pilecap+=c.pilecap||0;t.mainbeam+=c.mainbeam||0;t.steelbeam+=c.steelbeam||0;t.ls+=this.lsAll(c);t.area+=z.area||0;});
+    uniq.forEach(z=>{const c=z.counts;t.columns+=c.columns||0;t.pilecap+=c.pilecap||0;t.mainbeam+=c.mainbeam||0;t.steelbeam+=c.steelbeam||0;t.ls+=this._lsCount(z);t.area+=z.area||0;});
     /* 楼层汇总覆盖 (level-summary.csv) */
     const OVk=(window.__LEVELSUM||{})[this.curLevel]||{};
     if(this.filterCat==='all'){if(OVk.columns!=null)t.columns=OVk.columns; if(OVk.pilecap!=null)t.pilecap=OVk.pilecap;
@@ -6396,7 +6420,7 @@ class Component extends DCLogic {
     this.DATA.levels[lv].zones.forEach(z=>{const k=z.mk||('_'+z.lid);if(!seen[k]){seen[k]=1;uniq.push(z);}});
     uniq.forEach(z=>{const cat=z.cat||'NB';const c=z.counts;
       const o=cats[cat]=cats[cat]||{cat,zones:0,area:0,columns:0,pilecap:0,mainbeam:0,steelbeam:0,liftstair:0,pctSum:0,pctW:0,done:0,wip:0,todo:0};
-      o.zones++;o.area+=z.area||0;o.columns+=c.columns||0;o.pilecap+=c.pilecap||0;o.mainbeam+=c.mainbeam||0;o.steelbeam+=c.steelbeam||0;o.liftstair+=this.lsAll(c);
+      o.zones++;o.area+=z.area||0;o.columns+=c.columns||0;o.pilecap+=c.pilecap||0;o.mainbeam+=c.mainbeam||0;o.steelbeam+=c.steelbeam||0;o.liftstair+=this._lsCount(z);
       const p=z._p||{pct:0,status:'todo'};o.pctSum+=p.pct*(z.area||1);o.pctW+=(z.area||1);
       if(p.status==='done')o.done++;else if(p.status==='wip')o.wip++;else o.todo++;});
     return Object.values(cats).map(o=>({...o,pct:Math.round(o.pctSum/Math.max(1,o.pctW))}));
