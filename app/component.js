@@ -339,6 +339,72 @@ class Component extends DCLogic {
     });
     try{this._applyElemNew();}catch(e){console.error('elem new',e);}
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
+    try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
+  }
+  /* An element listed under the wrong kind — LW6 is a lift wall, but the drawing schedule
+     put it in the core-wall list.  The kind is a property of the element, not of one floor, so a
+     change applies on every level it appears on.  The drawing data is left alone; this is an
+     override like elemMove, synced and reversible. */
+  _elemRetypes(){const c=this._appCfg=this._appCfg||{};return c.elemRetype=c.elemRetype||{};}
+  _retypeKey(type,id){return type+'||'+this._colKey(id);}
+  _applyElemRetype(){
+    const R=this._elemRetypes();
+    const arrOf={core:'cores',lift:'lifts',stair:'stairs'};
+    (this.DATA.order||[]).forEach(lv=>((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{
+      /* First send back anything moved earlier whose override has since been removed or changed:
+         the lists are not rebuilt from the drawing data, so without this an undo never lands. */
+      Object.keys(arrOf).forEach(cur=>{
+        const list=z[arrOf[cur]];if(!Array.isArray(list))return;
+        for(let i=list.length-1;i>=0;i--){
+          const it=list[i];if(!it||typeof it!=='object'||!it.retyped)continue;
+          if(R[this._retypeKey(it.retyped,it.id)]===cur)continue;   /* still wanted here */
+          list.splice(i,1);
+          const back=z[arrOf[it.retyped]]=z[arrOf[it.retyped]]||[];
+          const {retyped,...rest}=it;
+          if(!back.some(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(it.id)))
+            back.push(rest.f||rest.t||rest.added?rest:rest.id);
+        }});
+    }));
+    if(!Object.keys(R).length)return;
+    (this.DATA.order||[]).forEach(lv=>((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{
+      Object.keys(arrOf).forEach(from=>{
+        const list=z[arrOf[from]];if(!Array.isArray(list))return;
+        for(let i=list.length-1;i>=0;i--){
+          const it=list[i],id=(typeof it==='string')?it:(it&&it.id);
+          const to=R[this._retypeKey(from,id)];
+          if(!to||to===from||!arrOf[to])continue;
+          list.splice(i,1);
+          const dst=z[arrOf[to]]=z[arrOf[to]]||[];
+          if(!dst.some(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(id)))
+            dst.push((typeof it==='string')?{id:it,retyped:from}:{...it,retyped:from});
+        }});}));
+  }
+  _regRetype(lv,zmk,from,id,to){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change this.');return;}
+    if(!to||to===from)return;
+    const R=this._elemRetypes();
+    /* Undoing: an element sent back to the kind it came from simply loses its override. */
+    const origin=Object.keys(R).find(k=>R[k]===from&&k.split('||').slice(1).join('||')===this._colKey(id));
+    if(origin){delete R[origin];if(origin.split('||')[0]!==to)R[origin.split('||')[0]+'||'+this._colKey(id)]=to;}
+    else R[this._retypeKey(from,id)]=to;
+    /* Ticks, cast dates and pour % are keyed by kind, so they move across with it on every
+       level, or the element would come back looking untouched. */
+    (this.DATA.order||[]).forEach(L=>((this.DATA.levels[L]||{}).zones||[]).forEach(z=>{
+      const arr=({core:'cores',lift:'lifts',stair:'stairs'})[from];
+      if(!(z[arr]||[]).some(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(id)))return;
+      this._migrateElemKey(this.ekey(L,z,from,id),this.ekey(L,z,to,id));
+      const zk=z.mk||z.lid,ok=this._elemPourKey(L,zk,'ls',from,id),nk=this._elemPourKey(L,zk,'ls',to,id);
+      if(this._manpower&&this._manpower[ok]!=null){
+        if(this._manpower[nk]==null)this._manpower[nk]=this._manpower[ok];delete this._manpower[ok];
+        if(typeof rwsSyncKV==='function'){rwsSyncKV('manpower',nk,this._manpower[nk],L,zk);rwsSyncKV('manpower',ok,null,L,zk);}}}));
+    try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower||{}));}catch(e){}
+    this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemRetype',R,null,null);
+    this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+    const nm={core:'Core Wall',lift:'Lift',stair:'Staircase'};
+    this._toast&&this._toast(id+' \u2192 '+nm[to]+' \u2713 \uff08\u6240\u6709\u697c\u5c42\uff09');
   }
   _stairTarget(lv,w){
     const L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];if(!L||!w||!w.pts||!w.pts.length)return null;
@@ -1530,7 +1596,16 @@ class Component extends DCLogic {
   _elemAct(id){return {col:{types:['col'],sec:'col',label:'columns'},pile:{types:['pile'],sec:'pile',label:'pile caps'},mbeam:{types:['beam'],sec:'beam',label:'steel main beams'},cbeam:{types:['cbeam'],sec:'cbeam',label:'cast s main beams'},ls:{types:['core','lift','stair'],sec:'lift',label:'core/lift/stair items'},act_corewall:{types:['core'],sec:'core',label:'core walls'}}[id]||null;}
   _zoneElemList(z,tp){return ({col:z.cols,pile:z.piles,beam:z.beams,cbeam:z.beams,lift:z.lifts,stair:z.stairs,core:z.cores})[tp]||[];}
   _cwGroupKeys(id){const G=(typeof window!=='undefined'&&window.CW_GROUPS)||{},out=[];for(const k in G){const g=G[k]||{},all=[k,...(g.lifts||[]),...(g.stairs||[]),...(g.cores||[])];if(all.some(x=>this._idSameGroup(x,id)))out.push(k);}return out;}
-  _lsMemberCore(z,id){if(!z)return '';const lg=new Set(this._cwGroupKeys(id));if(!lg.size)return '';for(const x of (z.cores||[])){const cid=typeof x==='string'?x:x.id;if(this._cwGroupKeys(cid).some(k=>lg.has(k)))return String(cid||'');}return '';}
+  _lsMemberCore(z,id){if(!z)return '';const lg=new Set(this._cwGroupKeys(id));if(!lg.size)return '';for(const x of (z.cores||[])){const cid=typeof x==='string'?x:x.id;if(this._cwGroupKeys(cid).some(k=>lg.has(k)))return String(cid||'');}
+    /* A wall that was moved into the lift or stair list keeps the lifts inside it: LW6 as a Lift
+       still contains P1-ML1\u2026ML4, so they stay reference-only and LW6 is counted once.  Only an
+       element that is itself a wall group (a CW_GROUPS key) can be a parent, and never of itself. */
+    const G=(typeof window!=='undefined'&&window.CW_GROUPS)||{};
+    for(const arr of ['lifts','stairs'])for(const x of (z[arr]||[])){
+      const cid=typeof x==='string'?x:x.id;if(!cid||this._idSameGroup(cid,id))continue;
+      if(!Object.keys(G).some(k=>this._idSameGroup(k,cid)))continue;
+      if(this._cwGroupKeys(cid).some(k=>lg.has(k)))return String(cid||'');}
+    return '';}
   _zoneHasElems(lv,zmk,types){const z=(this.DATA.levels[lv]?this.DATA.levels[lv].zones:[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return false;return types.some(tp=>this._zoneElemList(z,tp).length>0);}
   _activityElemRefs(lv,zmk,aid,z0){const out=[],seen=new Set(),push=(type,id,key,custom)=>{id=String(id||'').trim();if(!id||seen.has(key))return;seen.add(key);out.push({type,id,key,custom:!!custom});};let z=z0||((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
     if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:[],stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
@@ -5083,7 +5158,11 @@ class Component extends DCLogic {
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
         +(ALLLV?'<td style="padding:5px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>'+esc(r.lv)+'</b></td>':'')
-        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:150px;font-weight:700"></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:150px;font-weight:700">'
+          +((r.type==='core'||r.type==='lift'||r.type==='stair')
+            ?' <select class="rgKind" '+d+' title="\u6539\u6210\u53e6\u4e00\u7c7b\uff1a\u6240\u6709\u697c\u5c42\u4e00\u8d77\u6539\uff0c\u52fe\u3001\u6d47\u7b51\u65e5\u671f\u3001\u6d47\u7b51 % \u4e00\u8d77\u5e26\u8fc7\u53bb" style="'+IN+';width:auto;margin-left:4px">'
+              +[['core','Core Wall'],['lift','Lift'],['stair','Staircase']].map(([v,l])=>'<option value="'+v+'"'+(v===r.type?' selected':'')+'>'+l+'</option>').join('')+'</select>':'')
+          +'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
           +(ALLLV?esc(r.zone):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>')+'</td>'
@@ -5196,6 +5275,11 @@ class Component extends DCLogic {
     const at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,type:e.target.dataset.type,id:e.target.dataset.id});
     root.querySelectorAll('.rgId').forEach(i=>i.onchange=e=>{const a=at(e);this._regRename(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgZone').forEach(i=>i.onchange=e=>{const a=at(e);this._regMove(a.lv,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgKind').forEach(i=>i.onchange=e=>{const a=at(e),to=e.target.value;
+      const nm={core:'Core Wall',lift:'Lift',stair:'Staircase'};
+      this._confirmModal('\u628a '+a.id+' \u6539\u6210 '+nm[to]+'\uff1f\n\u6240\u6709\u697c\u5c42\u7684 '+a.id+' \u90fd\u4f1a\u4e00\u8d77\u6539\uff0c\u52fe\u3001\u6d47\u7b51\u65e5\u671f\u548c\u6d47\u7b51 % \u4e00\u8d77\u5e26\u8fc7\u53bb\u3002',
+        ()=>{this._regRetype(a.lv,a.zmk,a.type,a.id,to);after();},
+        ()=>{e.target.value=a.type;});});
     root.querySelectorAll('.rgKeep').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetKeep(a.lv,a.zmk,a.type,a.id,e.target.checked);after();});
     root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
