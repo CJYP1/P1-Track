@@ -5031,7 +5031,7 @@ class Component extends DCLogic {
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
       +'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
-      +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'全部楼层')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
+      +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'全部楼层（贯通构件按层重复）')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
       +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+'</select>'
       +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'全部区域')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
       +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','全部分区')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
