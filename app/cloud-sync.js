@@ -26,7 +26,12 @@ async function rwsCall(fn, args){
       const expired = msg.includes('invalid or expired');
       const rejected = msg.includes('not permitted') || msg.includes('admin only') ||
         msg.includes('bad ') || msg.includes('invalid username') || expired;
-      if (expired && fn !== 'rws_check_session') rwsHandleExpired();
+      /* Only the token you are signed in with can sign you out.  A queued edit made before you
+         signed in again still carries the old token; its rejection says nothing about the
+         session you have now, and used to throw you straight back to the sign-in screen. */
+      const cur = rwsGetSession(), sent = args && args.p_token;
+      const isCurrent = !sent || (cur && cur.token === sent);
+      if (expired && fn !== 'rws_check_session' && isCurrent) rwsHandleExpired();
       return { ok:false, error, rejected, offline:false };
     }
     return { ok:true, data };
@@ -57,6 +62,15 @@ async function rwsQueueFlush(){
     let q = rwsQueueList();
     while (q.length) {
       const item = q[0];
+      /* An edit queued while offline was stamped with the token of that moment.  If that session
+         has since expired and you signed in again, it is sent under the session you have now —
+         otherwise the server rejects it as expired and the edit is silently thrown away.  While
+         nobody is signed in the queue just waits; it is never dropped for want of a session. */
+      if (item.args && 'p_token' in item.args) {
+        const cur = rwsGetSession();
+        if (!cur || !cur.token) break;
+        item.args = { ...item.args, p_token: cur.token };
+      }
       const r = await rwsCall(item.fn, item.args); lastResult=r;
       if (r.ok) { q.shift(); rwsQueueSave(q); }
       else if (r.offline) { break; }
