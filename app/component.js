@@ -492,9 +492,9 @@ class Component extends DCLogic {
        if(z)return {lv,zmk:z.mk||z.lid,label:z.label,z};
      }}
     return null;}
-  _coreItemsFor(lv,zmk){return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]);}
+  _coreItemsFor(lv,zmk){const R=(this._appCfg&&this._appCfg.elemRetype)||{};return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]).filter(x=>{const id=typeof x==='string'?x:x.id;const to=R['core||'+this._colKey(id)];return !to||to==='core';});}
   _reconcileZoneCores(){this.__rangeCache=null;this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
-        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));}
+        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();}catch(_e){}}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -2539,7 +2539,9 @@ class Component extends DCLogic {
       if(_grp){o.done=(o.d===o.n);if(isPour){o.sum+=(pv==null?(done?100:0):pv);o.pct=o.sum/o.n;}}
       else{if(done)o.done=true;if(isPour)o.pct=Math.max(o.pct,pv==null?(done?100:0):pv);}});
     if(Object.keys(elems).length){
-      const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;return {done,total,pct:this._reportPct(done,total),pour:isPour};} }
+      const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;
+        const items=Object.keys(elems).map(k=>{const q=k.split('||');return q[2]==='coregrp'?('Core '+q[3]):((q[2]==='stair'?'Stair ':q[2]==='core'?'Core ':q[2]+' ')+q[3]);});
+        return {done,total,pct:this._reportPct(done,total),pour:isPour,items};} }
     const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal; (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(areaTotal==null){const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));if(t)total+=(+t||0);} this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)done+=(+d||0);}); }); }); done=total>0?Math.min(done,total):done;return {done,total,pct:this._reportPct(done,total)}; }
   /* A report is only 100% when its recorded done quantity has actually reached
      the full scope.  Flooring incomplete percentages prevents 99.5%+ from
@@ -2564,15 +2566,10 @@ class Component extends DCLogic {
     /* Core walls and staircases are counted from the map, not from the named lists: a shape drawn
        on a zone is one item, and the lifts sitting inside a core wall are reference only — they
        belong to the core wall's progress and must not be counted a second time here. */
-    if(aid==='ls'){
-      let n=0,any=false;
-      (levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{
-        if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;
-        const d=this._lsDrawn(lv,z.mk||z.lid);
-        if(d!=null){any=true;n+=d;}}));
-      if(any)return n>0?n:null;
-      /* Nothing traced on these levels yet — fall through to the lists below. */
-    }
+    /* Core/Lift/Stair: the scope is exactly the set the Actual column counts — core walls and
+       staircases, a core counted once with whatever it encloses, lifts and lift walls left out.
+       Counting drawn shapes here while the Actual counted that set made the two sides disagree. */
+    if(aid==='ls'){const a=this._catchupActual(levels,aid,cat,filter);return (a&&a.total>0)?a.total:null;}
     if(!this._elemAct(aid))return null;
     const seen=new Set();let n=0;
     (levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{
@@ -5559,7 +5556,7 @@ class Component extends DCLogic {
     const cat=this._reportCat, def=defs[cat],admin=this.rwsIsAdmin(),canReportEdit=false,editing=false;   /* live only \u2014 the Report is no longer editable */
     /* Report 只显示整数；原始计划/完成数量仍保留在数据源中。 */
     const fmtN=n=>String(Math.round(Number(n)||0));
-    const makeRows=(reportRows)=>reportRows.map(r=>{ const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=A.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const actSub=liveA.pour?`${A.pct}% pouring · ${fmtN(den)} item${Math.round(den)===1?'':'s'}`:`(${fmtN(A.done)}/${fmtN(den)}${unit})`,planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—',inp='width:70px;padding:5px 6px;border:1px solid #cbaeb4;border-radius:5px;text-align:center;font:700 12px Segoe UI;background:#fff;color:#2b1114';
+    const makeRows=(reportRows)=>reportRows.map(r=>{ const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=A.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const _itemsTip=(liveA.items&&liveA.items.length)?this.esc(liveA.items.slice().sort().join('\n')):'';const actSub=liveA.pour?`${A.pct}% pouring · <span style="text-decoration:underline dotted;cursor:help" title="${_itemsTip}">${fmtN(den)} item${Math.round(den)===1?'':'s'}</span>`:`(${fmtN(A.done)}/${fmtN(den)}${unit})`,planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—',inp='width:70px;padding:5px 6px;border:1px solid #cbaeb4;border-radius:5px;text-align:center;font:700 12px Segoe UI;background:#fff;color:#2b1114';
       const rc=this._reportCmtCtx(cat,r),rmeta=`data-cat="${this.esc(cat)}" data-lv="${this.esc(rc.lv)}" data-zmk="${this.esc(rc.zmk)}" data-a="${this.esc(rc.aid)}" data-raid="${this.esc(rc.reportAid)}" data-label="${this.esc(rc.label)}"`;
       /* Staircase / Core wall figures are derived from each element's pour progress, but the
          Report still has to be correctable by hand — a typed figure overrides the derived one. */
