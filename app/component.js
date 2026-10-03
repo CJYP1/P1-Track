@@ -112,9 +112,15 @@ class Component extends DCLogic {
     this.rwsBoot();
     if(this._rwsPullTimer)clearInterval(this._rwsPullTimer);
     this._rwsPullTimer=setInterval(()=>this._rwsAutoPull(),30000);   // 每 30 秒自动从云端拉取, 多人改动无需手动 F5
+    /* A tab left open in the background used to keep pulling the whole project state around the
+       clock.  It now sleeps while hidden and pulls once as soon as it is looked at again. */
+    if(!this._rwsVisBound){this._rwsVisBound=true;
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)this._rwsAutoPull(true);});}
   }
-  async _rwsAutoPull(){
+  async _rwsAutoPull(force){
     try{
+      if(document.hidden)return;                                           // 没人看的标签页不拉
+      if(!force&&this._rwsLastPull&&Date.now()-this._rwsLastPull<20000)return;
       if(typeof rwsGetSession!=='function'||!rwsGetSession())return;      // 未登录不拉
       if(typeof rwsQueueSize==='function'&&rwsQueueSize()>0)return;        // 本机有待同步改动, 先不覆盖
       const ae=document.activeElement; if(ae&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName))return;  // 不打断正在输入
@@ -1773,7 +1779,7 @@ class Component extends DCLogic {
       const s=rwsGetSession(); if(!s)return;
       /* 先把断线期间的 key-in 补传，再读取 online 权威状态，避免刚恢复网络时短暂回退。 */
       if(typeof rwsQueueSize==='function'&&rwsQueueSize()>0&&typeof rwsQueueFlush==='function')await rwsQueueFlush();
-      const state=await rwsGetState(s.token);
+      const state=await rwsGetState(s.token);this._rwsLastPull=Date.now();
       const own=k=>Object.prototype.hasOwnProperty.call(state,k),B=this._onlineBase||{};
       /* ONLINE 是唯一权威层：内置数据只补 online 尚未建立的固定计划键；浏览器旧缓存不参与覆盖。 */
       if(own('elements'))this.elem={...(state.elements||{})};
@@ -1848,7 +1854,11 @@ class Component extends DCLogic {
         if(typeof rwsQueueSize==='function'&&rwsQueueSize()>0)return;   // 有待同步的先不拉, 免得把本地未传的回退
         const ae=document.activeElement;
         if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA')&&(ae.value!==''||ae.type==='date'))return;  // 正在编辑就跳过这轮
-        const st=await rwsGetState(s.token); if(!st)return;
+        /* It downloads the same whole state as the 30-second pull, so it only runs when that pull
+           has not just happened — and never in a hidden tab.  Same freshness, a third of the traffic. */
+        if(document.hidden)return;
+        if(this._rwsLastPull&&Date.now()-this._rwsLastPull<25000)return;
+        const st=await rwsGetState(s.token); if(!st)return;this._rwsLastPull=Date.now();
         let changed=false;const own=k=>Object.prototype.hasOwnProperty.call(st,k),B=this._onlineBase||{};
         const take=(field,key,base)=>{if(!own(key))return;const v={...(base||{}),...(st[key]||{})};if(cmp(this[field],v)){this[field]=v;changed=true;}};
         take('elem','elements');take('_elemDate','elem_date');
@@ -1898,12 +1908,18 @@ class Component extends DCLogic {
   }
   async rwsCheckChangesDot(){
     if(!this.rwsIsAdmin())return;
+    /* Every record carries the whole old and new value of what was saved — a Resource plan or a
+       manpower table is written whole on every click — and this pulled 200 of them every 30
+       seconds just to count them for a red dot.  It now looks every 5 minutes, at 40 rows. */
+    if(document.hidden)return;
+    if(this._rwsDotAt&&Date.now()-this._rwsDotAt<300000)return;
+    this._rwsDotAt=Date.now();
     try{
-      const rows=await rwsAdminActivityLog(200);
+      const rows=await rwsAdminActivityLog(40);
       const seen=localStorage.getItem('rws_changes_seen')||'';
       const n=rows.filter(r=>!seen||r.created_at>seen).length;
       const dot=this.root.querySelector('#rwsChangesDot');
-      if(dot){ if(n>0){dot.textContent=n>99?'99+':n;dot.style.display='';} else dot.style.display='none'; }
+      if(dot){ if(n>0){dot.textContent=n>=40?'40+':n;dot.style.display='';} else dot.style.display='none'; }
     }catch(e){}
   }
   async rwsOpenAdmin(){
@@ -8218,7 +8234,7 @@ class Component extends DCLogic {
       if(!silent)this._toast&&this._toast('存快照失败'+((r&&r.error&&r.error.message)?(': '+r.error.message):''));}
     catch(e){if(!silent)this._toast&&this._toast('存快照失败');}
     return false;}
-  async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
+  async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;/* A weekly check does not need asking every 30 seconds: once an hour is plenty. */if(this._rwsSnapChkAt&&Date.now()-this._rwsSnapChkAt<3600000)return;this._rwsSnapChkAt=Date.now();try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
     if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);try{this._adoptPlacedCols();}catch(_e){}try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();}catch(_e2){console.error('reconcile after pull',_e2);}}try{this._migrateLW8();}catch(_e){}
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
