@@ -59,9 +59,13 @@ let _rwsFlushing = false;
 async function rwsQueueFlush(){
   if (_rwsFlushing) return; _rwsFlushing = true; let lastResult=null;
   try{
-    let q = rwsQueueList();
-    while (q.length) {
-      const item = q[0];
+    /* The queue is read fresh from storage on every round.  Holding one copy for the whole loop
+       meant an edit queued while a send was in flight was wiped when that copy was written back. */
+    const same=(a,b)=>JSON.stringify({...(a||{}),p_token:0})===JSON.stringify({...(b||{}),p_token:0});
+    let guard=0;
+    while (guard++ < 500) {
+      let q = rwsQueueList(); if (!q.length) break;
+      const item = q[0], queued = item.args;
       /* An edit queued while offline was stamped with the token of that moment.  If that session
          has since expired and you signed in again, it is sent under the session you have now —
          otherwise the server rejects it as expired and the edit is silently thrown away.  While
@@ -72,15 +76,41 @@ async function rwsQueueFlush(){
         item.args = { ...item.args, p_token: cur.token };
       }
       const r = await rwsCall(item.fn, item.args); lastResult=r;
-      if (r.ok) { q.shift(); rwsQueueSave(q); }
-      else if (r.offline) { break; }
-      else { console.warn('[rws] dropping queued edit, server rejected it:', item, r.error); q.shift(); rwsQueueSave(q); }
+      if (r.offline) { break; }
+      if (!r.ok) console.warn('[rws] dropping queued edit, server rejected it:', item, r.error);
+      /* Take out what was sent — unless it was replaced by a newer value while it was on its way,
+         in which case the newer value stays and goes on the next round. */
+      q = rwsQueueList();
+      const j = q.findIndex(x => x && x.id === item.id);
+      if (j >= 0 && same(q[j].args, queued)) { q.splice(j, 1); rwsQueueSave(q); }
     }
   } finally { _rwsFlushing = false; }
   rwsNotifyFail(lastResult); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
 }
 window.addEventListener('online', rwsQueueFlush);
 setInterval(rwsQueueFlush, 20000);
+/* Write later, once: a value saved several times in a row goes up a single time, as its latest
+   version, a few seconds after the last change.  It waits in the offline queue, so it survives a
+   reload, and the 30-second pull leaves the screen alone while it is waiting instead of putting
+   the old value back.  For settings that are saved whole on every click. */
+let _rwsDeferTimer = null;
+function rwsSyncKVDeferred(store, key, value, level, zoneMk){
+  if (rwsSnapBlocked()) return { ok:false, readonly:true };
+  const s = rwsGetSession(); if (!s) return { ok:false };
+  const args = { p_token:s.token, p_store:store, p_k:key, p_value:(value==null?null:value), p_level:level||null, p_zone_mk:zoneMk||null };
+  const q = rwsQueueList();
+  const i = q.findIndex(it => it && it.fn==='rws_set_kv' && it.args && it.args.p_store===store && it.args.p_k===key);
+  if (i >= 0) { q[i] = { ...q[i], args, ts:Date.now() }; }
+  else q.push({ id:Date.now()+'_'+Math.random().toString(36).slice(2), fn:'rws_set_kv', args, ts:Date.now() });
+  rwsQueueSave(q);
+  if (_rwsDeferTimer) clearTimeout(_rwsDeferTimer);
+  _rwsDeferTimer = setTimeout(() => { _rwsDeferTimer = null; rwsQueueFlush(); }, 3000);
+  if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
+  return { ok:true, deferred:true };
+}
+/* Leaving or hiding the page sends whatever is still waiting. */
+window.addEventListener('pagehide', () => { try{ rwsQueueFlush(); }catch(e){} });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { try{ rwsQueueFlush(); }catch(e){} } });
 /* 同步被后端拒绝(非离线)时提示一下 —— 以前是静默失败, 用户以为存了其实没进云端 */
 let _rwsLastFailMsg = '', _rwsLastFailAt = 0;
 function rwsNotifyFail(r){

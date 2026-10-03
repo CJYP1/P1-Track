@@ -828,7 +828,7 @@ class Component extends DCLogic {
   _resourceRenumber(t){const by={};
     (t.zones||[]).sort((a,b)=>(this._resourceLvOrder(a.lv)-this._resourceLvOrder(b.lv))||((Number(a.order)||999)-(Number(b.order)||999)))
       .forEach(x=>{by[x.lv]=(by[x.lv]||0)+1;x.order=by[x.lv];});}
-  _resourceSave(){const d=this._resourceData();try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','resourcePlans',d,null,null);}
+  _resourceSave(){const d=this._resourceData();try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}/* The whole plan is one value, so a burst of clicks is sent once, a few seconds after the last. */if(typeof rwsSyncKV==='function')(typeof rwsSyncKVDeferred==='function'?rwsSyncKVDeferred:rwsSyncKV)('settings','resourcePlans',d,null,null);}
   _resourceZoneLabel(lv,zmk){const L=this.DATA.levels[lv],z=L&&(L.zones||[]).find(x=>(x.mk||x.lid)===zmk);return z?z.label:String(zmk||'').replace(/^L\d+\|/,'');}
   _resourceToggleZone(lv,z){if(!this.rwsIsAdmin()||!this._resourceEditing)return;const t=this._resourceTeam();if(!t)return;t.zones=t.zones||[];const zmk=z.mk||z.lid,at=t.zones.findIndex(x=>x.lv===lv&&x.zmk===zmk);if(at>=0)t.zones.splice(at,1);else{this._resourceData().teams.forEach(q=>{q.zones=(q.zones||[]).filter(x=>!(x.lv===lv&&x.zmk===zmk));this._resourceRenumber(q);});t.zones.push({lv,zmk,order:t.zones.length+1});}this._resourceInspect={lv,zmk};this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();}
   _resourceNum(raw){const s=String(raw==null?'':raw).trim();return s===''?null:Math.max(0,Math.round((Number(s)||0)*100)/100);}
@@ -3131,7 +3131,19 @@ class Component extends DCLogic {
   }
   /* Men typed against a single zone for a single month.  This is the most direct statement of
      where people are, so wherever it exists it beats anything calculated from areas. */
-  _mzOv(){this._appCfg=this._appCfg||{};return this._appCfg.manpowerZone=this._appCfg.manpowerZone||{};}
+  /* The zone manpower table used to be saved whole \u2014 every figure for every zone, level and
+     month \u2014 each time one cell changed, and the server logged the full old and new copy of it.
+     Each cell is now its own record (manpower store, key "mz||lv||zone||month"), so a change sends
+     one small number.  The table saved whole before this stays in settings as the base and is
+     never written again; cells written since sit on top of it ("" means cleared). */
+  _mzOv(){this._appCfg=this._appCfg||{};
+    const cfg=this._appCfg,mp=this._manpower||(this._manpower={});
+    const map=cfg.manpowerZone=cfg.manpowerZone||{};
+    if(this._mzSrcCfg!==cfg||this._mzSrcMp!==mp||this._mzSrcMap!==map){
+      Object.keys(mp).forEach(k=>{if(k.indexOf('mz||')!==0)return;const key=k.slice(4),v=mp[k];
+        if(v===''||v==null)delete map[key];else map[key]=v;});
+      this._mzSrcCfg=cfg;this._mzSrcMp=mp;this._mzSrcMap=map;this._mzLastObj={...map};}
+    return map;}
   _mzKey(lv,zmk,m){return lv+'||'+zmk+'||'+m;}
   _mzVal(lv,zmk,m){const v=this._mzOv()[this._mzKey(lv,zmk,m)];
     return (v==null||v==='')?null:Math.max(0,Math.round(Number(v)||0));}
@@ -3323,8 +3335,18 @@ class Component extends DCLogic {
       const k=this._mpKey(z.cat||'NB',lv,m);out[k]=(out[k]||0)+v;})));
     return out;
   }
-  _mzSave(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
-    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerZone',this._mzOv(),null,null);}
+  _mzSave(){
+    const map=this._mzOv(),last=this._mzLastObj||{};
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV!=='function')return;
+    const send=(typeof rwsSyncKVDeferred==='function'?rwsSyncKVDeferred:rwsSyncKV);
+    const mp=this._manpower=this._manpower||{};
+    new Set([...Object.keys(last),...Object.keys(map)]).forEach(k=>{
+      const a=last[k],b=map[k];if(a===b)return;
+      const v=(b==null||b==='')?'':b,p=k.split('||');
+      mp['mz||'+k]=v;send('manpower','mz||'+k,v,p[0]||null,p[1]||null);});
+    try{localStorage.setItem('rws_manpower',JSON.stringify(mp));}catch(e){}
+    this._mzLastObj={...map};}
   /* How much work a team actually faces on a level in a month.  Floor space alone is the wrong
      measure — 1000 m2 to be poured in one month needs far more men than the same 1000 m2 spread
      over four — so each zone counts as its area divided by the months its activity runs. */
@@ -3521,13 +3543,13 @@ class Component extends DCLogic {
         const o=this._mpOv(),v=inp.value.trim();
         if(v==='')delete o[inp.dataset.k];else o[inp.dataset.k]=Math.max(0,Math.round(Number(v)||0));
         try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
-        if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerMonth',o,null,null);
+        if(typeof rwsSyncKV==='function')(typeof rwsSyncKVDeferred==='function'?rwsSyncKVDeferred:rwsSyncKV)('settings','manpowerMonth',o,null,null);
         draw();});};
     ov.querySelector('#__mpClose').onclick=()=>ov.remove();
     ov.querySelector('#__mpReset').onclick=()=>{if(!admin)return;
       if(!window.confirm('Drop every typed cell and go back to the calculated numbers?'))return;
       this._appCfg.manpowerMonth={};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
-      if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerMonth',{},null,null);draw();};
+      if(typeof rwsSyncKV==='function')(typeof rwsSyncKVDeferred==='function'?rwsSyncKVDeferred:rwsSyncKV)('settings','manpowerMonth',{},null,null);draw();};
     ov.querySelector('#__mpDropOld').onclick=()=>{if(!admin)return;
       const ts=this._resourceData().teams.filter(t=>t.resources);
       if(!ts.length){this._toast&&this._toast('No team carries an old whole-project figure.');return;}
@@ -3556,7 +3578,7 @@ class Component extends DCLogic {
           const v=Number(raw);if(!Number.isFinite(v))return;
           o2[this._mpKey(cat,lv,m)]=Math.max(0,Math.round(v));n++;});});
       try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
-      if(typeof rwsSyncKV==='function')rwsSyncKV('settings','manpowerMonth',o2,null,null);
+      if(typeof rwsSyncKV==='function')(typeof rwsSyncKVDeferred==='function'?rwsSyncKVDeferred:rwsSyncKV)('settings','manpowerMonth',o2,null,null);
       draw();
       this._toast&&this._toast('Pasted '+n+' figure'+(n===1?'':'s')+(bad.length?' \u00b7 skipped: '+bad.slice(0,3).join(', '):'')+' \u2713');};
     ov.querySelector('#__mpMon').onchange=draw;
