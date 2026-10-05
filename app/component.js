@@ -3514,6 +3514,10 @@ class Component extends DCLogic {
       const exists=((this.DATA.levels[lv]||{}).zones||[]).some(z=>(z.cat||'NB')===c)
         ||(c==='MA'&&lv==='L1'&&!!((this.SUBZONES||{}).L1||{}).P);
       if(exists||cells.some(x=>x.val||x.auto))rows.push({cat:c,label,lv,cells});}));
+    /* Core-wall / staircase gangs: one row per level, summed from the figures typed against each
+       core wall in "By zone".  Read-only here, but counted in the grand total. */
+    lvs.forEach(lv=>{const cells=M.map(m=>({m,k:'',auto:0,val:this._mzCoreMen(lv,m)||0,manual:false,zone:true,work:true,cw:true}));
+      if(cells.some(x=>x.val))rows.push({cat:'CW',label:'Core walls & staircases',lv,cells});});
     return {rows,months:M};
   }
   openManpowerMonth(){
@@ -3545,7 +3549,7 @@ class Component extends DCLogic {
       ov.querySelector('#__mpBody').innerHTML=rows.length?`<table><thead><tr><th>Area</th><th>Level</th>
         ${months.map(m=>`<th style="text-align:right">${this.esc(m)}</th>`).join('')}</tr></thead><tbody>
         ${rows.map(r=>`<tr data-cat="${r.cat}" data-lv="${r.lv}"><td>${this.esc(r.label)}</td><td><b>${this.esc(r.lv)}</b></td>
-          ${r.cells.map(c=>`<td style="text-align:right${c.work?'':';background:var(--panel2)'}" ${c.work?'':'title="Nothing starts here this month \u2014 you can still type a figure if men are on site"'}>${
+          ${r.cells.map(c=>c.cw?`<td style="text-align:right;color:#15803d;font-weight:800" title="Sum of the core walls on this level \u2014 type them in \u25a6 By zone">${c.val||'\u2014'}</td>`:`<td style="text-align:right${c.work?'':';background:var(--panel2)'}" ${c.work?'':'title="Nothing starts here this month \u2014 you can still type a figure if men are on site"'}>${
             !c.work&&!c.val&&!admin
               ? `<span style="color:var(--faint)">\u00b7</span>`
               : (admin
@@ -3554,7 +3558,10 @@ class Component extends DCLogic {
                        c.work?'border:1px solid var(--line);background:var(--panel2);color:var(--txt)'
                              :'border:1px dashed var(--line);background:transparent;color:var(--faint);opacity:.75'}">`
                 :`<span style="font-weight:${c.manual?800:400}">${c.val||'\u2014'}</span>`)}</td>`).join('')}</tr>`).join('')}
-        </tbody><tfoot><tr><td colspan="2"><b>All zones combined</b></td>
+        </tbody><tfoot>${(()=>{const cwT=months.map(m=>rows.filter(r=>r.cat==='CW').reduce((n,r)=>n+(r.cells.find(c=>c.m===m).val||0),0));
+            return cwT.some(v=>v)?`<tr><td colspan="2" style="color:var(--dim)">Zones only</td>${tot.map((v,i)=>`<td style="text-align:right;color:var(--dim)">${(v-cwT[i])||'\u2014'}</td>`).join('')}</tr>
+              <tr><td colspan="2" style="color:#15803d">Core walls &amp; staircases</td>${cwT.map(v=>`<td style="text-align:right;color:#15803d;font-weight:800">${v||'\u2014'}</td>`).join('')}</tr>`:'';})()}
+          <tr><td colspan="2"><b>Total (zones + core walls)</b></td>
           ${tot.map(v=>`<td style="text-align:right"><b>${v||'\u2014'}</b></td>`).join('')}</tr></tfoot></table>`
         :'<div style="padding:18px;color:var(--faint);font-size:12px">No team has zones with slab dates yet \u2014 import or set the dates first.</div>';
       const _un=this._mpUndated(),_nt=ov.querySelector('#__mpNote');
@@ -4160,7 +4167,7 @@ class Component extends DCLogic {
         x.font=(c.manual?'700 ':'')+'15.4px Arial';x.fillText(c.val?String(c.val):'\u2014',cx(j),y+20);});
       x.textAlign='left';y+=RH;});
     x.fillStyle='#eef1f6';x.fillRect(PAD,y,TW,34);
-    x.fillStyle='#202938';x.font='700 16px Arial';x.fillText('All zones combined',c0+8,y+22);
+    x.fillStyle='#202938';x.font='700 16px Arial';x.fillText('Total (zones + core walls)',c0+8,y+22);
     x.textAlign='right';
     months.forEach((m,i)=>{const v=rows.reduce((n,r)=>n+(r.cells.find(c=>c.m===m).val||0),0);
       x.fillText(String(v||0),cx(i),y+22);});
