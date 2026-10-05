@@ -206,6 +206,9 @@ class Component extends DCLogic {
      existing status/date records remain linked), but show the correct floor drawing mark. */
   _elemDisplayId(lv,type,id){const raw=String(id==null?'':id);if(type!=='beam'&&type!=='cbeam')return raw;const m=String(lv||'').match(/^L([345])$/i);if(!m)return raw;return raw.replace(/^2HB/i,m[1]+'H').replace(/^2VB/i,m[1]+'V');}
   _actElemSec(lv,z,aid){
+    /* 计入 unticked (or deleted) = gone from the activity's element list too. */
+    {const _zm=z.mk||z.lid,_k=(t,a)=>(a||[]).filter(x=>!(this._elemDropped&&this._elemDropped(lv,_zm,t,(typeof x==='string')?x:x.id)));
+     z={...z,cols:_k('col',z.cols),piles:_k('pile',z.piles),beams:_k('beam',z.beams),lifts:_k('lift',z.lifts),stairs:_k('stair',z.stairs),cores:_k('core',z.cores)};}
     if(aid==='col'){const _cl=(z.cols||[]).filter(x=>!this._colHidden(lv,(typeof x==='string')?x:x.id));return _cl.length? this._collSecInline(lv,z,'Column list',_cl.length,'col',_cl,this.colHtmlFor(lv,z)+this._idNote()) : '';}
     if(aid==='pile')  return (z.piles&&z.piles.length&&!this._pileHiddenForEB(lv,z.mk||z.lid))? this._collSecInline(lv,z,'Pile-cap list',z.piles.length,'pile',z.piles,this.elRows(lv,z,'pile',z.piles,x=>this.esc(x.rl||''),'none listed')) : '';
     if(aid==='mbeam') return (z.beams&&z.beams.length)? this._collSecInline(lv,z,'Steel-main-beam list',z.beams.length,'beam',z.beams,this.elRows(lv,z,'beam',z.beams,x=>this.esc(x.sz||''),'none listed')+this._idNote()) : '';
@@ -4867,7 +4870,38 @@ class Component extends DCLogic {
   _regTypes(){return [['col','cols','Column'],['pile','piles','Pilecap'],['beam','beams','Steel Main Beam'],
                       ['lift','lifts','Lift'],['stair','stairs','Stair'],['core','cores','Core Wall']];}
   _elemDrop(){const c=this._appCfg=this._appCfg||{};return c.elemDrop=c.elemDrop||{};}
+  /* Deleted for good: out of every count AND out of the register. Kept as a
+     list (not removed from the drawing data) so it survives rebuilds and can
+     be restored from the register's "已删除" button. */
+  _elemPurge(){const c=this._appCfg=this._appCfg||{};return c.elemPurge=c.elemPurge||{};}
+  _elemPurged(lv,zmk,type,id){const a=this._elemPurge()[lv+'||'+zmk+'||'+type];if(!a||!a.length)return false;const k=this._colKey(id);return a.some(x=>this._colKey(x)===k);}
+  _saveElemPurge(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemPurge',this._elemPurge(),null,null);}
+  _regPurge(lv,zmk,type,id){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can delete elements.');return;}
+    const ck=this._colKey(id),k=lv+'||'+zmk+'||'+type;
+    /* Added by hand: just take it out of the added list. */
+    const N=this._elemNew();let wasNew=false;
+    if(N[k]){const j=N[k].findIndex(x=>this._colKey(x)===ck);if(j>=0){N[k].splice(j,1);if(!N[k].length)delete N[k];wasNew=true;this._saveElemNew();}}
+    const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);
+    const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
+    if(z&&z[arrOf[type]]&&wasNew)z[arrOf[type]]=z[arrOf[type]].filter(x=>this._colKey((typeof x==='string')?x:x.id)!==ck);
+    if(!wasNew){const P=this._elemPurge();(P[k]=P[k]||[]);if(!P[k].some(x=>this._colKey(x)===ck))P[k].push(id);this._saveElemPurge();}
+    /* Its drop entry is no longer needed either way. */
+    const D=this._elemDrop();if(D[k]){D[k]=D[k].filter(x=>this._colKey(x)!==ck);if(!D[k].length)delete D[k];
+      try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+      if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',D,null,null);}
+    if(z){const key=this.ekey(lv,z,type,id);if(this.elem[key]){delete this.elem[key];if(typeof rwsSyncElementStatus==='function')rwsSyncElementStatus(key,'todo');}}
+    this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+  }
+  _regRestorePurged(lv){
+    const P=this._elemPurge();Object.keys(P).forEach(k=>{if(!lv||k.split('||')[0]===lv)delete P[k];});
+    this._saveElemPurge();this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+  }
   _elemDropped(lv,zmk,type,id){
+    if(this._elemPurged&&this._elemPurged(lv,zmk,type,id))return true;
     /* A hidden column used to vanish from the map and the Zone list while the
        level tile and the Report kept counting it, so hiding one never moved the
        number it was hidden to correct. Hidden and dropped are the same thing to
@@ -4886,6 +4920,7 @@ class Component extends DCLogic {
     const add=(lv,z,zmk,type,label,id)=>{
       const key=this.ekey(lv,z,type,id);
       if(seen.has(key))return;seen.add(key);
+      if(this._elemPurged(lv,zmk,type,id))return;
       const hid=type==='col'&&this._colHidden&&this._colHidden(lv,id);
       const drp=(this._elemDrop()[lv+'||'+zmk+'||'+type]||[]).some(x=>this._colKey(x)===this._colKey(id));
       let sz='';
@@ -5186,7 +5221,9 @@ class Component extends DCLogic {
           +'<b style="font-size:12px;white-space:nowrap">新增到</b>'
           +'<select id="rgNewZone" class="hbtn" title="新加的构件放进哪个 zone">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
           +'<input id="rgNewId" placeholder="新编号" style="'+IN+';width:130px">'
-          +'<button class="hbtn primary" id="rgAdd">+ 新增</button></span>'))+'</div>';
+          +'<button class="hbtn primary" id="rgAdd">+ 新增</button></span>'))
+      +(()=>{const P=this._elemPurge();let n=0;Object.keys(P).forEach(k=>{if(k.split('||')[0]===st.lv)n+=P[k].length;});
+        return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="恢复这一层彻底删除的构件">已删除 '+n+' · 恢复</button>':'';})()+'</div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">改一格存一格，自动同步给所有账号。<b>计入</b> 取消勾 = 这个构件不再算进任何统计（地图、Zone 清单、Report、磁贴），但图纸数据不动，随时勾回来。改 <b>分区</b> = 把它搬到那个 zone，已打的勾和浇筑日期一起搬过去。</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
       +(ALLLV?TH('楼层'):'')+TH('编号 Mark')+TH('尺寸 Size')+TH('分区 Zone')+TH('区域')+TH('计入 Keep')+TH('状态 Status')+TH('浇筑日期')+TH('')+'</tr></thead><tbody>';
@@ -5321,8 +5358,11 @@ class Component extends DCLogic {
     root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgDel').forEach(b=>b.onclick=e=>{const a=at(e);
-      this._confirmModal('把 "'+a.id+'" 从所有统计里去掉？它仍然留在表里，随时可以勾回来。',()=>{
-        this._regSetKeep(a.lv,a.zmk,a.type,a.id,false);after();});});
+      this._confirmModal('彻底删除 "'+a.id+'"（'+a.lv+'）？\n它会从表、地图清单和所有统计里消失，状态和日期一起清掉。\n删错了可以点上方「已删除」恢复。',()=>{
+        this._regPurge(a.lv,a.zmk,a.type,a.id);after();});});
+    root.querySelectorAll('.rgRestore').forEach(b=>b.onclick=e=>{const lv=e.target.dataset.lv;
+      const P=this._elemPurge(),ids=[];Object.keys(P).forEach(k=>{if(k.split('||')[0]===lv)P[k].forEach(id=>ids.push(id+' ('+k.split('||')[1]+')'));});
+      this._confirmModal('恢复 '+lv+' 已删除的 '+ids.length+' 个构件？\n'+ids.join(', '),()=>{this._regRestorePurged(lv);after();});});
     root.querySelectorAll('.ncAdd').forEach(b=>b.onclick=e=>{
       const box=e.target.closest('div').parentElement;
       const t=box.querySelector('.ncNewType'),idi=box.querySelector('.ncNewId');
