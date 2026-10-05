@@ -818,7 +818,7 @@ class Component extends DCLogic {
 
   /* Resource planning: an ordered Zone list per team, saved in shared settings.
      RESOURCE controls visibility; editing is intentionally admin-only for now. */
-  rwsCanResource(){return this.rwsIsAdmin()||this.rwsHasScope('RESOURCE')||this.rwsHasScope('PLAN');}   /* Planning accounts view the resource plan too */
+  rwsCanResource(){return this.rwsIsAdmin();}   /* Resource Planner is admin-only (view and edit); everyone else uses 👷 Manpower. RESOURCE / PLAN scopes no longer open it. */
   _resourceData(){this._appCfg=this._appCfg||{};let d=this._appCfg.resourcePlans;if(!d||typeof d!=='object')d=this._appCfg.resourcePlans={teams:[]};if(!Array.isArray(d.teams))d.teams=[];return d;}
   _resourceColours(){return ['#3157d5','#e8590c','#159957','#d63384','#7048e8','#0b7285','#c92a2a','#5c940d'];}
   _resourceTeam(){const ts=this._resourceData().teams;if(!ts.length&&this.rwsIsAdmin())ts.push({id:'team_a',name:'Team A',color:this._resourceColours()[0],zones:[]});let t=ts.find(x=>x.id===this._resourceTeamId)||ts[0]||null;if(t)this._resourceTeamId=t.id;return t;}
@@ -1107,7 +1107,7 @@ class Component extends DCLogic {
         +' to '+to.join(', ')+(r.miss.length?' \u00b7 not on target: '+r.miss.join(', '):'')+' \u2713');};
     note();
   }
-  openResourcePlanner(){if(!this.rwsCanResource()){this.rwsDeny('Resource permission is required.');return;}this._resourceMode=true;this._resourceEditing=false;this._resourceTeam();this.buildMetrics();this.render();this._renderResourcePanel();}
+  openResourcePlanner(){if(!this.rwsCanResource()){this.rwsDeny('Resource Planner is admin only — use 👷 Manpower to view manpower.');return;}this._resourceMode=true;this._resourceEditing=false;this._resourceTeam();this.buildMetrics();this.render();this._renderResourcePanel();}
   _closeResourcePlanner(){this._resourceMode=false;this._resourceEditing=false;this._resourceInspect=null;const p=this.root.querySelector('#resourcePlannerPanel');if(p)p.remove();['#kpis','#progroll','#foot'].forEach(s=>{const e=this.root.querySelector(s);if(e)e.style.display='';});this.buildMetrics();this.render();}
   _renderResourcePanel(){if(!this._resourceMode)return;const side=this.root.querySelector('#side'),title=this.root.querySelector('#sideTitle'),kpis=this.root.querySelector('#kpis'),prog=this.root.querySelector('#progroll'),foot=this.root.querySelector('#foot'),p=this.root.querySelector('#sidebody');if(!side||!p)return;const old=this.root.querySelector('#resourcePlannerPanel');if(old)old.remove();p.id='sidebody';p.dataset.resource='1';if(title)title.textContent='🧰 Resource Planning';if(kpis)kpis.style.display='none';if(prog)prog.style.display='none';if(foot)foot.style.display='none';const d=this._resourceData(),admin=this.rwsIsAdmin(),editing=admin&&!!this._resourceEditing,t=this._resourceTeam(),colors=this._resourceColours(),zs=t?(t.zones||[]).sort((a,b)=>(this._resourceLvOrder(a.lv)-this._resourceLvOrder(b.lv))||((Number(a.order)||999)-(Number(b.order)||999))):[],tot=t?this._resourceTeamValues(t,this.curLevel):{workers:0,formwork:0,concrete:0,total:0},selected=this._resourceInspect&&(this._resourceInspect.core?this._resourceCoreEntry(this._resourceInspect.lv,this._resourceInspect.id):this._resourceEntry(this._resourceInspect.lv,this._resourceInspect.zmk));
     tot.w=tot.workers;tot.f=tot.formwork;tot.c=tot.rebar;tot.t=tot.total;
@@ -3517,7 +3517,7 @@ class Component extends DCLogic {
     return {rows,months:M};
   }
   openManpowerMonth(){
-    if(!this.rwsCanResource()){this.rwsDeny('Resource permission is required.');return;}
+    if(!this.rwsCanResource()){this.rwsDeny('Resource Planner is admin only — use 👷 Manpower to view manpower.');return;}
     try{this._seedManpower();}catch(e){console.error('manpower seed',e);}
     const old=document.getElementById('__mpMonth');if(old)old.remove();
     const admin=this.rwsIsAdmin();
@@ -3620,7 +3620,7 @@ class Component extends DCLogic {
   /* Men typed zone by zone.  The area split can only ever be a guess at where people stand; this
      is the place to say it outright, and what is said here wins on the map and in the legend. */
   openZoneManpower(only){
-    if(!this.rwsCanResource()){this.rwsDeny('Resource permission is required.');return;}
+    if(!this.rwsCanResource()){this.rwsDeny('Resource Planner is admin only — use 👷 Manpower to view manpower.');return;}
     const old=document.getElementById('__mzBox');if(old)old.remove();
     const admin=this.rwsIsAdmin();
     const lvs=(this.DATA.order||[]).filter(lv=>((this.DATA.levels[lv]||{}).zones||[]).length);
