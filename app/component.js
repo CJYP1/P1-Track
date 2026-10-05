@@ -1615,7 +1615,7 @@ class Component extends DCLogic {
   _zoneHasElems(lv,zmk,types){const z=(this.DATA.levels[lv]?this.DATA.levels[lv].zones:[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return false;return types.some(tp=>this._zoneElemList(z,tp).length>0);}
   _activityElemRefs(lv,zmk,aid,z0){const out=[],seen=new Set(),push=(type,id,key,custom)=>{id=String(id||'').trim();if(!id||seen.has(key))return;seen.add(key);out.push({type,id,key,custom:!!custom});};let z=z0||((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
     if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:[],stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
-    const ea=this._elemAct(aid);if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
+    const ea=this._elemAct(aid);if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;/* Unticked 计入 in the register = out of every count.  Columns leave their zone list when dropped; beams, pile caps, lifts and stairs stay listed, so they are skipped here — otherwise the Report kept dividing by them (L2 NB steel beams: 46 instead of 43). */if(this._elemDropped&&this._elemDropped(lv,zmk,tp,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
     if(this._actUnit(aid)==='nos')Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||'),code=p[2];if(p[0]!==lv||p[1]!==zmk||this._catAct({code})!==aid)return;this.customItemsFor(lv,zmk,code).forEach(id=>push(code,id,lv+'||'+zmk+'||'+code+'||'+id,true));});return out;}
   /* Zone overall % = average of each applicable activity's cumulative done/total.
      Activities with no data at all (total<=0 and nothing done) do NOT participate. */
@@ -5182,9 +5182,11 @@ class Component extends DCLogic {
       +(this._rgPrefixable(st)?'<button class="hbtn" id="rgPrefix" title="把这一层的编号开头改成该层的数字，例如 2VB11 → 3VB11">↺ 按楼层改编号</button>':'')
       +'<span style="flex:1"></span>'
       +(ALLLV?'<span style="color:var(--dim);font-size:12px">选一个楼层才能新增</span>'
-        :('<select id="rgNewZone" class="hbtn">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
+        :('<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;border:1px dashed var(--line);border-radius:8px;padding:4px 6px">'
+          +'<b style="font-size:12px;white-space:nowrap">新增到</b>'
+          +'<select id="rgNewZone" class="hbtn" title="新加的构件放进哪个 zone">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
           +'<input id="rgNewId" placeholder="新编号" style="'+IN+';width:130px">'
-          +'<button class="hbtn primary" id="rgAdd">+ 新增</button>'))+'</div>';
+          +'<button class="hbtn primary" id="rgAdd">+ 新增</button></span>'))+'</div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">改一格存一格，自动同步给所有账号。<b>计入</b> 取消勾 = 这个构件不再算进任何统计（地图、Zone 清单、Report、磁贴），但图纸数据不动，随时勾回来。改 <b>分区</b> = 把它搬到那个 zone，已打的勾和浇筑日期一起搬过去。</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
       +(ALLLV?TH('楼层'):'')+TH('编号 Mark')+TH('尺寸 Size')+TH('分区 Zone')+TH('区域')+TH('计入 Keep')+TH('状态 Status')+TH('浇筑日期')+TH('')+'</tr></thead><tbody>';
