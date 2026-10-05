@@ -4874,7 +4874,11 @@ class Component extends DCLogic {
      list (not removed from the drawing data) so it survives rebuilds and can
      be restored from the register's "已删除" button. */
   _elemPurge(){const c=this._appCfg=this._appCfg||{};return c.elemPurge=c.elemPurge||{};}
-  _elemPurged(lv,zmk,type,id){const a=this._elemPurge()[lv+'||'+zmk+'||'+type];if(!a||!a.length)return false;const k=this._colKey(id);return a.some(x=>this._colKey(x)===k);}
+  /* 彻底清除: moved out of elemPurge into elemGone — still excluded everywhere,
+     but no longer offered for restore. */
+  _elemGone(){const c=this._appCfg=this._appCfg||{};return c.elemGone=c.elemGone||{};}
+  _elemPurged(lv,zmk,type,id){const k=this._colKey(id),key=lv+'||'+zmk+'||'+type;
+    return [this._elemPurge()[key],this._elemGone()[key]].some(a=>a&&a.length&&a.some(x=>this._colKey(x)===k));}
   _saveElemPurge(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemPurge',this._elemPurge(),null,null);}
   _regPurge(lv,zmk,type,id){
@@ -4894,6 +4898,46 @@ class Component extends DCLogic {
     if(z){const key=this.ekey(lv,z,type,id);if(this.elem[key]){delete this.elem[key];if(typeof rwsSyncElementStatus==='function')rwsSyncElementStatus(key,'todo');}}
     this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
     this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+  }
+  /* picks: [{k:'lv||zmk||type',id}] ; mode 'restore' | 'gone' */
+  _regPurgedAct(picks,mode){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
+    const P=this._elemPurge(),G=this._elemGone();
+    picks.forEach(({k,id})=>{const ck=this._colKey(id);
+      if(P[k]){P[k]=P[k].filter(x=>this._colKey(x)!==ck);if(!P[k].length)delete P[k];}
+      if(mode==='gone'){(G[k]=G[k]||[]);if(!G[k].some(x=>this._colKey(x)===ck))G[k].push(id);}});
+    this._saveElemPurge();
+    if(mode==='gone'&&typeof rwsSyncKV==='function')rwsSyncKV('settings','elemGone',G,null,null);
+    this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+  }
+  _openPurgedModal(lv,after){
+    const esc=s=>this.esc(s),P=this._elemPurge(),list=[];
+    Object.keys(P).forEach(k=>{const p=k.split('||');if(p[0]!==lv)return;(P[k]||[]).forEach(id=>list.push({k,id,zone:p[1],type:p[2]}));});
+    const old=document.getElementById('__purgeDlg');if(old)old.remove();
+    const ov=document.createElement('div');ov.id='__purgeDlg';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center';
+    const TN={col:'Column',pile:'Pilecap',beam:'Beam',lift:'Lift',stair:'Stair',core:'Core Wall'};
+    ov.innerHTML='<div style="background:var(--panel,#fff);color:var(--ink);border-radius:14px;padding:18px 20px;width:min(460px,92vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.25)">'
+      +'<div style="font-weight:700;font-size:15px;margin-bottom:4px">'+esc(lv)+' 已删除的构件 ('+list.length+')</div>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:8px">勾选后：<b>恢复</b> = 放回表里；<b>彻底清除</b> = 永久删除，不再出现在这里。</div>'
+      +'<label style="font-size:12px;margin-bottom:4px"><input type="checkbox" id="pgAll"> 全选</label>'
+      +'<div style="overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px;flex:1">'
+      +list.map((r,i)=>'<label style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line);font-size:13px"><input type="checkbox" class="pgOne" data-i="'+i+'">'
+        +'<b style="min-width:90px">'+esc(r.id&&String(r.id).trim()&&r.id!=='-'?r.id:'(空编号 '+(r.id||'')+')')+'</b><span style="color:var(--dim)">'+esc(r.zone)+' · '+esc(TN[r.type]||r.type)+'</span></label>').join('')
+      +'</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+      +'<button class="hbtn" id="pgCancel">取消</button>'
+      +'<button class="hbtn" id="pgGone" style="color:var(--crit)">彻底清除所选</button>'
+      +'<button class="hbtn primary" id="pgRestore">恢复所选</button></div></div>';
+    document.body.appendChild(ov);
+    const close=()=>ov.remove();
+    const picked=()=>[...ov.querySelectorAll('.pgOne')].filter(c=>c.checked).map(c=>list[+c.dataset.i]);
+    ov.querySelector('#pgAll').onchange=e=>ov.querySelectorAll('.pgOne').forEach(c=>c.checked=e.target.checked);
+    ov.querySelector('#pgCancel').onclick=close;ov.onclick=e=>{if(e.target===ov)close();};
+    ov.querySelector('#pgRestore').onclick=()=>{const p=picked();if(!p.length){this._toast('先勾选要恢复的构件');return;}
+      close();this._regPurgedAct(p,'restore');after&&after();};
+    ov.querySelector('#pgGone').onclick=()=>{const p=picked();if(!p.length){this._toast('先勾选要清除的构件');return;}
+      this._confirmModal('永久清除 '+p.length+' 个构件？清除后不能恢复。',()=>{close();this._regPurgedAct(p,'gone');after&&after();});};
   }
   _regRestorePurged(lv){
     const P=this._elemPurge();Object.keys(P).forEach(k=>{if(!lv||k.split('||')[0]===lv)delete P[k];});
@@ -5223,7 +5267,7 @@ class Component extends DCLogic {
           +'<input id="rgNewId" placeholder="新编号" style="'+IN+';width:130px">'
           +'<button class="hbtn primary" id="rgAdd">+ 新增</button></span>'))
       +(()=>{const P=this._elemPurge();let n=0;Object.keys(P).forEach(k=>{if(k.split('||')[0]===st.lv)n+=P[k].length;});
-        return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="恢复这一层彻底删除的构件">已删除 '+n+' · 恢复</button>':'';})()+'</div>';
+        return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="恢复或永久清除这一层删掉的构件">已删除 '+n+' · 恢复/清除</button>':'';})()+'</div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">改一格存一格，自动同步给所有账号。<b>计入</b> 取消勾 = 这个构件不再算进任何统计（地图、Zone 清单、Report、磁贴），但图纸数据不动，随时勾回来。改 <b>分区</b> = 把它搬到那个 zone，已打的勾和浇筑日期一起搬过去。</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
       +(ALLLV?TH('楼层'):'')+TH('编号 Mark')+TH('尺寸 Size')+TH('分区 Zone')+TH('区域')+TH('计入 Keep')+TH('状态 Status')+TH('浇筑日期')+TH('')+'</tr></thead><tbody>';
@@ -5360,9 +5404,7 @@ class Component extends DCLogic {
     root.querySelectorAll('.rgDel').forEach(b=>b.onclick=e=>{const a=at(e);
       this._confirmModal('彻底删除 "'+a.id+'"（'+a.lv+'）？\n它会从表、地图清单和所有统计里消失，状态和日期一起清掉。\n删错了可以点上方「已删除」恢复。',()=>{
         this._regPurge(a.lv,a.zmk,a.type,a.id);after();});});
-    root.querySelectorAll('.rgRestore').forEach(b=>b.onclick=e=>{const lv=e.target.dataset.lv;
-      const P=this._elemPurge(),ids=[];Object.keys(P).forEach(k=>{if(k.split('||')[0]===lv)P[k].forEach(id=>ids.push(id+' ('+k.split('||')[1]+')'));});
-      this._confirmModal('恢复 '+lv+' 已删除的 '+ids.length+' 个构件？\n'+ids.join(', '),()=>{this._regRestorePurged(lv);after();});});
+    root.querySelectorAll('.rgRestore').forEach(b=>b.onclick=e=>this._openPurgedModal(e.target.dataset.lv,after));
     root.querySelectorAll('.ncAdd').forEach(b=>b.onclick=e=>{
       const box=e.target.closest('div').parentElement;
       const t=box.querySelector('.ncNewType'),idi=box.querySelector('.ncNewId');
