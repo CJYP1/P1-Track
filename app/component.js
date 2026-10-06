@@ -7514,6 +7514,9 @@ class Component extends DCLogic {
     if(n&&(done||!q)){const fin=done===n;return {as:dates[0]||'',ae:fin?(dates[dates.length-1]||''):'',fin,pct:Math.round(done/n*100),txt:done+'/'+n,kind:'date'};}
     if(q&&qD>0){const fin=qT>0&&qD>=qT;return {as:mons[0],ae:fin?mons[mons.length-1]:'',fin,pct:qT>0?Math.min(100,Math.round(qD/qT*100)):null,txt:'',kind:'month'};}
     return {as:'',ae:'',fin:false,pct:(n||q)?0:null,txt:n?('0/'+n):'',kind:''};}
+  /* Delay in days = site finish − plan finish (positive = site later than plan). */
+  _psaDelay(pe,se){if(!/^\d{4}-\d\d-\d\d$/.test(pe||'')||!/^\d{4}-\d\d-\d\d$/.test(se||''))return null;return Math.round((Date.parse(se+'T00:00:00Z')-Date.parse(pe+'T00:00:00Z'))/86400000);}
+  _psaDelayHtml(pe,se){const d=this._psaDelay(pe,se);if(d==null)return '<span style="color:var(--faint)">—</span>';return `<b style="color:${d>0?'#c8102e':(d<0?'#15803d':'var(--dim)')}">${d>0?'+':''}${d}d</b>`;}
   _psaD(iso){const s=String(iso||'');return /^\d{4}-\d\d-\d\d$/.test(s)?(s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(2,4)):s;}
   _psaHas(lv,zmk){return this._psaActs().some(([a])=>{const g=this._psaGet(lv,zmk,a);return g.ps||g.pe||g.ss||g.se;});}
   /* Short lines for the map label: one per activity that has a date — end dates only. */
@@ -7523,7 +7526,8 @@ class Component extends DCLogic {
     if(!(g.ps||g.pe||g.ss||g.se||A.as))return [];
     /* End dates only — the map has no room for ranges. */
     const at=A.fin?(A.kind==='date'?sh(A.ae):A.ae):(A.as?((A.pct!=null?A.pct+'%':'…')):'—');
-    return [{t:'P '+sh(g.pe),c:'#1f3a8a'},{t:'S '+sh(g.se),c:'#b45309'},{t:'A '+at,c:A.fin?'#15803d':(A.as?'#b7791f':'#6b7280')}];}
+    const dl=this._psaDelay(g.pe,g.se),dt=dl==null?'':(dl>0?'  +'+dl+'d':(dl<0?'  '+dl+'d':'  0d'));
+    return [{t:'P '+sh(g.pe),c:'#1f3a8a'},{t:'S '+sh(g.se)+dt,c:dl>0?'#c8102e':'#b45309'},{t:'A '+at,c:A.fin?'#15803d':(A.as?'#b7791f':'#6b7280')}];}
   _psaPanel(lv,z){
     const zmk=z.mk||z.lid;if((z.cat||'NB')!=='NB')return '';
     const rows=this._psaActs().map(([a,lab])=>({a,lab,g:this._psaGet(lv,zmk,a),A:this._psaActual(lv,zmk,a)}))
@@ -7534,11 +7538,11 @@ class Component extends DCLogic {
     const td='padding:4px 6px;border-top:1px solid var(--line);white-space:nowrap';
     const body=rows.map(r=>{const A=r.A,ac=A.fin?'#15803d':(A.as?'#b7791f':'var(--faint)');
       const at=A.as?`${A.kind==='date'?this._psaD(A.as):A.as} → ${A.fin?(A.kind==='date'?this._psaD(A.ae):A.ae):'…'}${A.pct!=null&&!A.fin?` <small>(${A.txt||A.pct+'%'})</small>`:''}`:'—';
-      return `<tr><td style="${td};font-weight:800">${this.esc(r.lab)}</td><td style="${td}">${rg(r.g.ps,r.g.pe)}</td><td style="${td}">${rg(r.g.ss,r.g.se)}</td><td style="${td};color:${ac};font-weight:800">${at}</td></tr>`;}).join('');
+      return `<tr><td style="${td};font-weight:800">${this.esc(r.lab)}</td><td style="${td}">${rg(r.g.ps,r.g.pe)}</td><td style="${td}">${rg(r.g.ss,r.g.se)}</td><td style="${td};color:${ac};font-weight:800">${at}</td><td style="${td}">${this._psaDelayHtml(r.g.pe,r.g.se)}</td></tr>`;}).join('');
     const src=[...new Set(rows.map(r=>r.g.src).filter(Boolean))].join(' · ');
     return `<div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 10px;background:var(--panel)">
       <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:900;letter-spacing:.03em">P / S / A<span style="font-weight:600;color:var(--dim);font-size:9.5px">Plan · Site · Actual</span><span style="flex:1"></span><span class="allbtn psa-open" data-lv="${this.esc(lv)}" style="color:var(--accent);cursor:pointer;font-size:10px;font-weight:800">${admin?'✎ 表格':'表格'}</span></div>
-      <table style="width:100%;border-collapse:collapse;font-size:10.5px;margin-top:4px"><thead><tr style="color:var(--faint);font-size:9px;text-transform:uppercase"><th style="text-align:left;padding:3px 6px"></th><th style="text-align:left;padding:3px 6px">P · Plan</th><th style="text-align:left;padding:3px 6px">S · Site</th><th style="text-align:left;padding:3px 6px">A · Actual</th></tr></thead><tbody>${body}</tbody></table>
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px;margin-top:4px"><thead><tr style="color:var(--faint);font-size:9px;text-transform:uppercase"><th style="text-align:left;padding:3px 6px"></th><th style="text-align:left;padding:3px 6px">P · Plan</th><th style="text-align:left;padding:3px 6px">S · Site</th><th style="text-align:left;padding:3px 6px">A · Actual</th><th style="text-align:left;padding:3px 6px">Delay</th></tr></thead><tbody>${body}</tbody></table>
       <div style="font-size:9px;color:var(--faint);margin-top:4px">P = this app's plan · S = ${src?this.esc(src):'site programme'} · A = work recorded here</div></div>`;}
   openPsaTable(lv0){
     const old=document.getElementById('__psa');if(old)old.remove();
@@ -7566,7 +7570,7 @@ class Component extends DCLogic {
           rows+=`<tr>${i===0?`<td rowspan="${this._psaActs().length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:900;vertical-align:top;white-space:nowrap">${esc(z.label)}</td>`:''}
             <td style="${td};font-weight:700;white-space:nowrap">${lab}</td>
             <td style="${td}">${cell(z.zmk,a,'ps',g.ps,g.psOv)}</td><td style="${td}">${cell(z.zmk,a,'pe',g.pe,g.peOv)}</td>
-            <td style="${td}">${cell(z.zmk,a,'ss',g.ss,g.ssOv)}</td><td style="${td}">${cell(z.zmk,a,'se',g.se,g.seOv)}</td>
+            <td style="${td}">${cell(z.zmk,a,'ss',g.ss,g.ssOv)}</td><td style="${td}">${cell(z.zmk,a,'se',g.se,g.seOv)}</td><td style="${td}">${this._psaDelayHtml(g.pe,g.se)}</td>
             <td style="${td};color:${ac};font-weight:800;white-space:nowrap">${at}${A.pct!=null&&!A.fin&&A.as?` <small style="color:var(--dim)">${A.txt||A.pct+'%'}</small>`:''}</td>
             <td style="${td};color:var(--faint);font-size:9.5px">${esc(g.src||'')}</td></tr>`;});});
       const th='text-align:left;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap';
@@ -7578,15 +7582,15 @@ class Component extends DCLogic {
           <span style="flex:1"></span><button class="hbtn" id="psaCsv">⬇ CSV</button><button class="hbtn" id="psaClose">Close ✕</button></div>
         <div style="font-size:11px;color:var(--dim);margin-bottom:8px">P = Plan, this app's own activity dates (change them on the zone card) · S = Site, from the Podium schedule 5 Oct and the B1 / B2 site reports — editable here · A = Actual, read from the done dates and done quantities already recorded in this app.${admin?' Red border = typed here; typing the source value back removes the override.':''} ${shown} zone${shown===1?'':'s'} on ${esc(lv)}.</div>
         <table style="width:100%;border-collapse:collapse;font-size:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px"><thead><tr>
-          <th style="${th}">Zone</th><th style="${th}">Activity</th><th style="${th}">P start</th><th style="${th}">P end</th><th style="${th}">S start</th><th style="${th}">S end</th><th style="${th}">A · Actual</th><th style="${th}">Source</th></tr></thead>
-          <tbody>${rows||`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--faint)">No NB zone on ${esc(lv)} has P/S dates yet${admin?' — untick "只看有日期的 zone" to type them in':''}.</td></tr>`}</tbody></table></div>`;
+          <th style="${th}">Zone</th><th style="${th}">Activity</th><th style="${th}">P start</th><th style="${th}">P end</th><th style="${th}">S start</th><th style="${th}">S end</th><th style="${th}" title="S end − P end · + = site later than plan">Delay</th><th style="${th}">A · Actual</th><th style="${th}">Source</th></tr></thead>
+          <tbody>${rows||`<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--faint)">No NB zone on ${esc(lv)} has P/S dates yet${admin?' — untick "只看有日期的 zone" to type them in':''}.</td></tr>`}</tbody></table></div>`;
       ov.querySelector('#psaClose').onclick=()=>{ov.remove();this.render();};
       ov.querySelector('#psaLv').onchange=e=>{this._psaLv=e.target.value;draw();};
       ov.querySelector('#psaOnly').onchange=e=>{this._psaOnly=e.target.checked;draw();};
       ov.querySelector('#psaMap').onchange=e=>this._psaToggle(e.target.checked);
-      ov.querySelector('#psaCsv').onclick=()=>{const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',L=[['Level','Zone','Activity','P start','P end','S start','S end','A start','A end','Source'].map(q).join(',')];
+      ov.querySelector('#psaCsv').onclick=()=>{const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',L=[['Level','Zone','Activity','P start','P end','S start','S end','Delay (days)','A start','A end','Source'].map(q).join(',')];
         lvs.forEach(l=>((this.DATA.levels[l]||{}).zones||[]).filter(z=>(z.cat||'NB')==='NB').forEach(z=>{const zmk=z.mk||z.lid;if(!this._psaHas(l,zmk))return;
-          this._psaActs().forEach(([a,lab])=>{const g=this._psaGet(l,zmk,a),A=this._psaActual(l,zmk,a);L.push([l,z.label,lab,g.ps,g.pe,g.ss,g.se,A.as,A.ae,g.src].map(q).join(','));});}));
+          this._psaActs().forEach(([a,lab])=>{const g=this._psaGet(l,zmk,a),A=this._psaActual(l,zmk,a);L.push([l,z.label,lab,g.ps,g.pe,g.ss,g.se,this._psaDelay(g.pe,g.se),A.as,A.ae,g.src].map(q).join(','));});}));
         const b=new Blob(['﻿'+L.join('\r\n')],{type:'text/csv'}),u=URL.createObjectURL(b),aa=document.createElement('a');aa.href=u;aa.download='P1_PSA_dates.csv';aa.click();setTimeout(()=>URL.revokeObjectURL(u),2000);};
       ov.querySelectorAll('.psa-in').forEach(i=>i.onchange=e=>{const d=e.target.dataset;this._psaSet(this._psaLv,d.z,d.a,d.f,e.target.value);draw();});};
     draw();
