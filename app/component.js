@@ -5915,6 +5915,7 @@ class Component extends DCLogic {
     const _occ=[];
     const _resMark=(t,x,y,r,cat,zmk)=>{if(!t)return;const k=t.id||t.name;const e=_resTeams[k]||(_resTeams[k]={t,pts:[],cat:cat||'NB'});if(cat)e.cat=e.cat||cat;e.pts.push({x,y,r:r||0,zmk:zmk||''});};
     let _topDates='';   /* 所有浇筑/计划日期文字收集到这里, 最后画 → 永远在最上层, 不被柱子/overlay 盖住 */
+    let _colHitHtml='';   /* invisible copies of the column dots drawn above the staircase hit layer, so a column sitting on a staircase / lift box can still be clicked */
     let _stairHitHtml='';   /* 楼梯独立点击层最后绘制，避免被 Column、Zone 边界或日期层挡住 */
     ['podcis','podium','transfer'].forEach(k=>{
       if(!this.showOvl[k])return;const o=this.OVL[k];
@@ -6037,6 +6038,7 @@ class Component extends DCLogic {
         const _crit=!!(this._marineCritSet&&this._marineCritSet.has(_nid)) || (/^WF-1C/i.test(c.id)&&!!c.crit);   /* marine-col-map 标 critical, 或 WF-1C 系列自身 crit → 红 */
         const _red=st!=='done'&&(_uT||_crit);   /* critical 柱完成后变黑，同时去掉红色外圈 */
         _colHtml+=`<circle class="colmk${_uT?' colmk-t':''}" data-ci="${ci}"${_hid?' opacity="0.28" stroke-dasharray="500,400"':''} cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${fill}" stroke="${_red?'#c8102e':'#ffffff'}" stroke-width="${_red&&_uT?560:220}"/>`;
+        _colHitHtml+=`<circle class="colmk colhit" data-ci="${ci}" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="1100" fill="#ffffff" fill-opacity="0.002" pointer-events="all" style="cursor:pointer"/>`;
         _colHtml+=`<text class="collbl" ${_red?`style="fill:#c8102e"`:''}${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id.replace('WF-B2','').replace('MK-B2','MK-'))}</text>`;
         if(this.showDates&&_cdate&&st==='done')_colHtml+=`<text class="coldate"${_hid?' opacity="0.3"':''} x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_cdate))}</text>`;
       });
@@ -6060,6 +6062,7 @@ class Component extends DCLogic {
         if(this.filterCat!=='all'&&(!_pz||(_pz.cat||'NB')!==this.filterCat))return;
         _colSeen.add(_nid);
         _colHtml+=`<circle class="colmk colmk-placed" data-pcid="${this.esc(c.id)}" data-pczone="${this.esc(c.zone||'')}" style="cursor:pointer" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pf}" stroke="${_pr?'#c8102e':'#ffffff'}" stroke-width="${_pr?360:220}"/>`;
+        _colHitHtml+=`<circle class="colmk colhit" data-pcid="${this.esc(c.id)}" data-pczone="${this.esc(c.zone||'')}" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="1100" fill="#ffffff" fill-opacity="0.002" pointer-events="all" style="cursor:pointer"/>`;
         _colHtml+=`<text class="collbl" ${_pr?`style="fill:#c8102e"`:''} x="${c.x.toFixed(0)}" y="${(sy-2300).toFixed(0)}">${this.esc(c.id)}</text>`;
         if(this.showDates&&_pd&&_ps==='done')_colHtml+=`<text class="coldate" x="${c.x.toFixed(0)}" y="${(sy+2700).toFixed(0)}">${this.esc(this._fmtColDate(_pd))}</text>`;
       });
@@ -6263,7 +6266,8 @@ class Component extends DCLogic {
           +`</g>`;});
     }
     s+=_topDates;   /* 日期文字最后画 → 最上层, 不被柱子/overlay 遮住 */
-    s+=_stairHitHtml;   /* 楼梯命中层最高：重叠位置优先选择 Staircase */
+    s+=_stairHitHtml;   /* 楼梯命中层：重叠位置优先选择 Staircase … */
+    s+=_colHitHtml;     /* … except right on a column dot, which stays clickable (C64 on P1-ST-28/29) */
     this.svg.setAttribute('viewBox',`${this.vb.x} ${this.vb.y} ${this.vb.w} ${this.vb.h}`);
     const _u=this._curUnderlay(); let _uHtml=''; const _ulDrag=this._underlayAdjust&&!this._ulAligning;
     if(_u&&_u.src){const cx=(_u.x+_u.w/2).toFixed(1),cy=(_u.y+_u.h/2).toFixed(1);_uHtml=`<image class="underlayimg" href="${_u.src}" x="${_u.x.toFixed(1)}" y="${_u.y.toFixed(1)}" width="${_u.w.toFixed(1)}" height="${_u.h.toFixed(1)}" opacity="${_u.op||0.5}" transform="rotate(${_u.rot||0} ${cx} ${cy})" preserveAspectRatio="none" style="pointer-events:${_ulDrag?'auto':'none'};cursor:${_ulDrag?'move':'default'}"/>`;}
