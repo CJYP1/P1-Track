@@ -7522,7 +7522,7 @@ class Component extends DCLogic {
   /* Short lines for the map label: one per activity that has a date — end dates only. */
   /* Map: three short lines under the zone name — slab P / S range and the actual finish. */
   _psaMapLines(lv,zmk){
-    const g=this._psaGet(lv,zmk,'slab'),A=this._psaActual(lv,zmk,'slab'),sh=d=>d?this._psaD(d).slice(0,5):'—';
+    const g=this._psaGet(lv,zmk,'slab'),A=this._psaActual(lv,zmk,'slab'),sh=d=>d?this._psaD(d):'—';   /* dd/mm/yy */
     if(!(g.ps||g.pe||g.ss||g.se||A.as))return [];
     /* End dates only — the map has no room for ranges. */
     const at=A.fin?(A.kind==='date'?sh(A.ae):A.ae):(A.as?((A.pct!=null?A.pct+'%':'…')):'—');
