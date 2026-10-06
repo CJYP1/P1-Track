@@ -7521,9 +7521,9 @@ class Component extends DCLogic {
   _psaMapLines(lv,zmk){
     const g=this._psaGet(lv,zmk,'slab'),A=this._psaActual(lv,zmk,'slab'),sh=d=>d?this._psaD(d).slice(0,5):'—';
     if(!(g.ps||g.pe||g.ss||g.se||A.as))return [];
-    const rg=(a,b)=>(a||b)?(sh(a)+'–'+sh(b)):'—';
-    const at=A.fin?('✓ '+(A.kind==='date'?sh(A.ae):A.ae)):(A.as?('▶ '+(A.kind==='date'?sh(A.as):A.as)+(A.pct!=null?' '+A.pct+'%':'')):'—');
-    return [{t:'P '+rg(g.ps,g.pe),c:'#1f3a8a'},{t:'S '+rg(g.ss,g.se),c:'#b45309'},{t:'A '+at,c:A.fin?'#15803d':(A.as?'#b7791f':'#6b7280')}];}
+    /* End dates only — the map has no room for ranges. */
+    const at=A.fin?(A.kind==='date'?sh(A.ae):A.ae):(A.as?((A.pct!=null?A.pct+'%':'…')):'—');
+    return [{t:'P '+sh(g.pe),c:'#1f3a8a'},{t:'S '+sh(g.se),c:'#b45309'},{t:'A '+at,c:A.fin?'#15803d':(A.as?'#b7791f':'#6b7280')}];}
   _psaPanel(lv,z){
     const zmk=z.mk||z.lid;if((z.cat||'NB')!=='NB')return '';
     const rows=this._psaActs().map(([a,lab])=>({a,lab,g:this._psaGet(lv,zmk,a),A:this._psaActual(lv,zmk,a)}))
