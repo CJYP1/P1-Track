@@ -293,7 +293,9 @@ class Component extends DCLogic {
     if(dirty){this.saveCustom();this.saveElem&&this.saveElem();}
   }
   _migrateLW8(){
-    const _REN=[[/\bLW8\b/g,'ST3'],[/\bCW8\b/g,'Lift 1/2']];
+    /* CW8 -> "Lift 1/2" -> back to CW08 (the name everyone on site knows).  Its status / dates /
+       pour % saved under the lift kind move to the core-wall kind. */
+    const _REN=[[/\bLW8\b/g,'ST3'],[/\bCW8\b/g,'CW08'],[/\bLift 1\/2\b/g,'CW08'],[/Lift%201%2F2/g,'CW08'],[/\|\|lift\|\|CW08\b/g,'||core||CW08']];
     const RE={test:v=>{const t=String(v==null?'':v);return _REN.some(([r])=>new RegExp(r.source).test(t));}},
           sub=v=>{let t=String(v==null?'':v);_REN.forEach(([r,to])=>{t=t.replace(new RegExp(r.source,'g'),to);});return t;};
     let dirtyCfg=false, dirtyElem=false, dirtyAdd=false;
@@ -303,6 +305,7 @@ class Component extends DCLogic {
     }));});
     const rekey=(obj)=>{if(!obj)return false;let hit=false;Object.keys(obj).forEach(k=>{if(!RE.test(k))return;const nk=sub(k);if(obj[nk]==null)obj[nk]=obj[k];delete obj[k];hit=true;});return hit;};
     dirtyElem=rekey(this.elem)|rekey(this._elemDate);
+    if(rekey(this._manpower)){try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}}
     if(this._elemAdd){Object.keys(this._elemAdd).forEach(k=>{const arr=this._elemAdd[k]||[];arr.forEach((id,i)=>{if(RE.test(id)){arr[i]=sub(id);dirtyAdd=true;}});});if(rekey(this._elemAdd))dirtyAdd=true;
       /* Renaming can leave the old and the new name side by side in the same list. */
       Object.keys(this._elemAdd).forEach(k=>{const arr=this._elemAdd[k];if(!Array.isArray(arr))return;
@@ -351,11 +354,11 @@ class Component extends DCLogic {
     try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
     try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
   }
-  /* CW8 is Lift 1/2 (and LW8 is ST3).  Whatever still carries the old name — a register entry
-     added under it, an old list — is renamed where it is listed, and a name that then appears
-     twice in one zone (once as a core wall, once as a lift) is kept once, as the lift / stair. */
+  /* CW8 / "Lift 1/2" are one core wall, named CW08 (and LW8 is ST3).  Whatever still carries an
+     old name — a register entry added under it, an old list — is renamed where it is listed, and a
+     name that then appears twice in one zone is kept once, as the core wall. */
   _mergeRenamedWalls(){
-    const kinds=['lifts','stairs','cores'];
+    const kinds=['cores','lifts','stairs'];
     (this.DATA.order||[]).forEach(lv=>((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{
       const seen=new Set();
       kinds.forEach(arr=>{const list=z[arr];if(!Array.isArray(list))return;
@@ -2573,7 +2576,7 @@ class Component extends DCLogic {
        excluded, and a core counts once however many walls it is drawn with.
        Set _lsCoresOnly=false to count every element again. */
     if(aid==='ls'&&this._lsCoresOnly!==false){
-      /* Lift WALLS (LW…) are out; "Lift 1/2" is a core in its own right and stays in. */
+      /* Lift WALLS (LW…) are out; CW08 (the lift core) is a core in its own right and stays in. */
       const _lw=id=>/^LW/i.test(String(id||'').trim())||/^LW/i.test(this._cwGroupKeys(id)[0]||'');
       const _k=refs.filter(x=>(x.r.type==='core'&&!_lw(x.r.id))||x.r.type==='stair');
       if(_k.length){refs.length=0;_k.forEach(x=>refs.push(x));}}
@@ -6911,7 +6914,7 @@ class Component extends DCLogic {
   _shapeLabel(w){return this._lw8Name(w.id||((w.link&&w.link.id)||''));}
   /* Belt and braces for the renames: a shape whose stored name came back from the cloud after the
      migration ran is still drawn and matched under its new name — LW8 as ST3, CW8 as Lift 1/2. */
-  _lw8Name(v){return String(v==null?'':v).replace(/\bLW8\b/g,'ST3').replace(/\bCW8\b/g,'Lift 1/2');}
+  _lw8Name(v){return String(v==null?'':v).replace(/\bLW8\b/g,'ST3').replace(/\bCW8\b/g,'CW08').replace(/\bLift 1\/2\b/g,'CW08');}
   _idAliasSet(v){const s=String(v||'').replace(/\([^)]*\)/g,'').replace(/\s+/g,'').toUpperCase(),out=new Set([s]);const m=s.match(/^(.*?)(\d+)(?:\/(\d+))$/);if(m){out.add(m[1]+m[2]);out.add(m[1]+m[3]);}return out;}
   _idSameGroup(a,b){const A=this._idAliasSet(a),B=this._idAliasSet(b);for(const x of A)if(B.has(x))return true;return false;}
   /* 元素 id → 它所属的 Core Wall 编号(反查 CW_GROUPS, 含拼写变体) */
