@@ -349,6 +349,20 @@ class Component extends DCLogic {
     try{this._applyElemNew();}catch(e){console.error('elem new',e);}
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
     try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
+    try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
+  }
+  /* CW8 is Lift 1/2 (and LW8 is ST3).  Whatever still carries the old name — a register entry
+     added under it, an old list — is renamed where it is listed, and a name that then appears
+     twice in one zone (once as a core wall, once as a lift) is kept once, as the lift / stair. */
+  _mergeRenamedWalls(){
+    const kinds=['lifts','stairs','cores'];
+    (this.DATA.order||[]).forEach(lv=>((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{
+      const seen=new Set();
+      kinds.forEach(arr=>{const list=z[arr];if(!Array.isArray(list))return;
+        const out=[];list.forEach(it=>{const id=typeof it==='string'?it:(it&&it.id),nid=this._lw8Name(id);
+          const v=(nid!==id)?(typeof it==='string'?nid:{...it,id:nid}):it,k=this._colKey(nid);
+          if(seen.has(k))return;seen.add(k);out.push(v);});
+        z[arr]=out;});}));
   }
   /* An element listed under the wrong kind — LW6 is a lift wall, but the drawing schedule
      put it in the core-wall list.  The kind is a property of the element, not of one floor, so a
@@ -503,7 +517,7 @@ class Component extends DCLogic {
     return null;}
   _coreItemsFor(lv,zmk){const R=(this._appCfg&&this._appCfg.elemRetype)||{};return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]).filter(x=>{const id=typeof x==='string'?x:x.id;const to=R['core||'+this._colKey(id)];return !to||to==='core';});}
   _reconcileZoneCores(){this.__rangeCache=null;this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
-        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();}catch(_e){}}
+        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();this._mergeRenamedWalls&&this._mergeRenamedWalls();}catch(_e){}}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
