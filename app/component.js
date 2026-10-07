@@ -7508,7 +7508,7 @@ class Component extends DCLogic {
         if(d.wall)put(lv,sp.length?sp:cp,'wall',d.wall);});});
     this.__psaMar=out;this.__psaMarSig=sig;return out;}
   _psaSeedCell(lv,zmk,act){return ((this._psaSeed()[lv]||{})[zmk]||{})[act]||((this._psaMarSeed()[lv]||{})[zmk]||{})[act]||{};}
-  _psaZoneOk(z){return ['NB','MA'].indexOf(z.cat||'NB')>=0;}
+  _psaZoneOk(z){return ['NB','EB','MA'].indexOf(z.cat||'NB')>=0;}
   _psaOv(lv){const c=this._appCfg=this._appCfg||{},k='psa:'+lv;if(!c[k]||typeof c[k]!=='object')c[k]={};return c[k];}
   _psaGet(lv,zmk,act){
     const s=this._psaSeedCell(lv,zmk,act),o=((this._psaOv(lv)[zmk]||{})[act])||{},out={src:s.src||''};
@@ -7575,7 +7575,7 @@ class Component extends DCLogic {
   openPsaTable(lv0,cat0){
     const old=document.getElementById('__psa');if(old)old.remove();
     const admin=this.rwsIsAdmin(),esc=s=>this.esc(s);
-    const AREAS=[['NB','NB · New Basement'],['MA','Marine'],['all','All']];
+    const AREAS=[['NB','NB · New Basement'],['EB','EB · Existing Basement'],['MA','Marine'],['all','All']];
     if(cat0)this._psaCat=cat0;this._psaCat=this._psaCat||'NB';
     if(lv0){this._psaLv=lv0;this._psaZone='all';}this._psaLv=this._psaLv||'all';this._psaZone=this._psaZone||'all';
     this._psaOnly=(this._psaOnly==null)?true:this._psaOnly;
@@ -7604,7 +7604,7 @@ class Component extends DCLogic {
           const at=A.as?`${A.kind==='date'?this._psaD(A.as):A.as} → ${A.fin?(A.kind==='date'?this._psaD(A.ae):A.ae):'…'}`:'—';
           const ac=A.fin?'#15803d':(A.as?'#b7791f':'var(--faint)');
           const td='padding:4px 6px;border-bottom:1px solid var(--line)'+(i===0?';border-top:2px solid var(--line)':'');
-          const head=i===0?`${multiLv?`<td rowspan="${acts.length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:800;vertical-align:top;color:var(--dim)">${esc(z.lv)}</td>`:''}<td rowspan="${acts.length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:900;vertical-align:top;white-space:nowrap">${esc(z.label)}<div style="font-size:9px;font-weight:700;color:${z.cat==='MA'?'#3478c9':'#c2185b'}">${z.cat==='MA'?'Marine':'NB'}</div></td>`:'';
+          const head=i===0?`${multiLv?`<td rowspan="${acts.length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:800;vertical-align:top;color:var(--dim)">${esc(z.lv)}</td>`:''}<td rowspan="${acts.length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:900;vertical-align:top;white-space:nowrap">${esc(z.label)}<div style="font-size:9px;font-weight:700;color:${({MA:'#3478c9',EB:'#d95d92',NB:'#e58b35'})[z.cat]||'#e58b35'}">${({MA:'Marine',EB:'EB'})[z.cat]||'NB'}</div></td>`:'';
           rows+=`<tr>${head}<td style="${td};font-weight:700;white-space:nowrap">${lab}</td>
             <td style="${td}">${cell(z,a,'ps',g.ps,g.psOv)}</td><td style="${td}">${cell(z,a,'pe',g.pe,g.peOv)}</td>
             <td style="${td}">${cell(z,a,'ss',g.ss,g.ssOv)}</td><td style="${td}">${cell(z,a,'se',g.se,g.seOv)}</td><td style="${td}">${this._psaDelayHtml(g.pe,g.se)}</td>
@@ -7632,7 +7632,7 @@ class Component extends DCLogic {
       ov.querySelector('#psaOnly').onchange=e=>{this._psaOnly=e.target.checked;draw();};
       ov.querySelector('#psaMap').onchange=e=>this._psaToggle(e.target.checked);
       ov.querySelector('#psaCsv').onclick=()=>{const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',L=[['Level','Zone','Area','Activity','P start','P end','S start','S end','Delay (days)','A start','A end','Source'].map(q).join(',')];
-        zs.forEach(z=>acts.forEach(([a,lab])=>{const g=this._psaGet(z.lv,z.zmk,a),A=this._psaActual(z.lv,z.zmk,a);L.push([z.lv,z.label,z.cat==='MA'?'Marine':'NB',lab,g.ps,g.pe,g.ss,g.se,this._psaDelay(g.pe,g.se),A.as,A.ae,g.src].map(q).join(','));}));
+        zs.forEach(z=>acts.forEach(([a,lab])=>{const g=this._psaGet(z.lv,z.zmk,a),A=this._psaActual(z.lv,z.zmk,a);L.push([z.lv,z.label,(({MA:'Marine',EB:'EB'})[z.cat]||'NB'),lab,g.ps,g.pe,g.ss,g.se,this._psaDelay(g.pe,g.se),A.as,A.ae,g.src].map(q).join(','));}));
         const b=new Blob(['﻿'+L.join('\r\n')],{type:'text/csv'}),u=URL.createObjectURL(b),aa=document.createElement('a');aa.href=u;aa.download='P1_PSA_dates.csv';aa.click();setTimeout(()=>URL.revokeObjectURL(u),2000);};
       ov.querySelectorAll('.psa-in').forEach(i=>i.onchange=e=>{const d=e.target.dataset;this._psaSet(d.lv,d.z,d.a,d.f,e.target.value);draw();});};
     draw();
