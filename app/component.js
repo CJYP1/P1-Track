@@ -4431,7 +4431,26 @@ class Component extends DCLogic {
           if(v>0&&this._zpMonthInSpan(MS[i],a)){n=v;src='typed for '+MS[i];break;}
         }
       }
+      /* Core / lift / stair walls are built by the core-wall gang, which the Resource plan keeps
+         apart from the zone crews: its men typed against the core walls in this zone (start
+         month), else the workers on those core walls in the Resource plan. */
+      if((a.id==='ls'||a.id==='act_corewall')){
+        const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>(x.mk||x.lid)===zmk)||{};
+        const ids=[...new Set((z.cores||[]).concat(z.lifts||[]).map(x=>this._lw8Name(typeof x==='string'?x:x.id)).filter(Boolean))];
+        const m0=this.dateToActMonth(this._zpFmtISO(a.bs));let cw=0,cr=0;
+        ids.forEach(id=>{const v=m0?this._mzVal(lv,'CW:'+id,m0):null;if(v>0)cw+=v;
+          const ce=this._resourceCoreEntry&&this._resourceCoreEntry(lv,id);if(ce)cr+=Number(ce.item.workers)||0;});
+        if(cw>0){n=cw;src='core-wall men typed for '+m0;}
+        else if(cr>0){n=cr;src='Resource · core-wall workers';}
+      }
       if(n==null){const m2=this._mzMonth&&this._mzMonth();if(m2){const v=this._mzVal(lv,zmk,m2);if(v>0){n=v;src='typed for '+m2;}}}
+      /* Nothing typed against the zone: the Resource plan.  The zone's own Workers if set, else the
+         team's workers on this level — the team is the crew that comes to this zone. */
+      if(n==null){const re=this._resourceEntry&&this._resourceEntry(lv,zmk);
+        if(re){const zi=re.item._zoneItem||{},w=Number(zi.workers)||0;
+          if(w>0){n=w;src='Resource · '+(re.team.name||'team')+' (zone)';}
+          else{const tw=Number((this._resourceTeamValues(re.team,lv)||{}).workers)||0;
+            if(tw>0){n=tw;src='Resource · '+(re.team.name||'team')+' ('+lv+')';}}}}
     }catch(e){}
     if(n==null||!(n>0)){n=fb[a.id]||10;src='trade default';}
     a.crewSrc=src;
