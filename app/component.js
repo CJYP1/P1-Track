@@ -7569,58 +7569,72 @@ class Component extends DCLogic {
       return `<tr><td style="${td};font-weight:800">${this.esc(r.lab)}</td><td style="${td}">${rg(r.g.ps,r.g.pe)}</td><td style="${td}">${rg(r.g.ss,r.g.se)}</td><td style="${td};color:${ac};font-weight:800">${at}</td><td style="${td}">${this._psaDelayHtml(r.g.pe,r.g.se)}</td></tr>`;}).join('');
     const src=[...new Set(rows.map(r=>r.g.src).filter(Boolean))].join(' · ');
     return `<div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 10px;background:var(--panel)">
-      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:900;letter-spacing:.03em">P / S / A<span style="font-weight:600;color:var(--dim);font-size:9.5px">Plan · Site · Actual</span><span style="flex:1"></span><span class="allbtn psa-open" data-lv="${this.esc(lv)}" style="color:var(--accent);cursor:pointer;font-size:10px;font-weight:800">${admin?'✎ 表格':'表格'}</span></div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:900;letter-spacing:.03em">P / S / A<span style="font-weight:600;color:var(--dim);font-size:9.5px">Plan · Site · Actual</span><span style="flex:1"></span><span class="allbtn psa-open" data-lv="${this.esc(lv)}" data-cat="${this.esc(z.cat||'NB')}" style="color:var(--accent);cursor:pointer;font-size:10px;font-weight:800">${admin?'✎ 表格':'表格'}</span></div>
       <table style="width:100%;border-collapse:collapse;font-size:10.5px;margin-top:4px"><thead><tr style="color:var(--faint);font-size:9px;text-transform:uppercase"><th style="text-align:left;padding:3px 6px"></th><th style="text-align:left;padding:3px 6px">P · Plan</th><th style="text-align:left;padding:3px 6px">S · Site</th><th style="text-align:left;padding:3px 6px">A · Actual</th><th style="text-align:left;padding:3px 6px">Delay</th></tr></thead><tbody>${body}</tbody></table>
       <div style="font-size:9px;color:var(--faint);margin-top:4px">P = this app's plan · S = ${src?this.esc(src):'site programme'} · A = work recorded here</div></div>`;}
-  openPsaTable(lv0){
+  openPsaTable(lv0,cat0){
     const old=document.getElementById('__psa');if(old)old.remove();
-    const admin=this.rwsIsAdmin();
-    const lvs=(this.DATA.order||[]).filter(l=>((this.DATA.levels[l]||{}).zones||[]).some(z=>this._psaZoneOk(z)));
-    this._psaLv=(lv0&&lvs.indexOf(lv0)>=0)?lv0:(this._psaLv&&lvs.indexOf(this._psaLv)>=0?this._psaLv:(lvs.indexOf(this.curLevel)>=0?this.curLevel:lvs[0]));
+    const admin=this.rwsIsAdmin(),esc=s=>this.esc(s);
+    const AREAS=[['NB','NB · New Basement'],['MA','Marine'],['all','All']];
+    if(cat0)this._psaCat=cat0;this._psaCat=this._psaCat||'NB';
+    if(lv0){this._psaLv=lv0;this._psaZone='all';}this._psaLv=this._psaLv||'all';this._psaZone=this._psaZone||'all';
     this._psaOnly=(this._psaOnly==null)?true:this._psaOnly;
     const ov=document.createElement('div');ov.id='__psa';
     ov.style.cssText='position:fixed;inset:0;z-index:99996;background:var(--bg);color:var(--txt);overflow:auto;padding:18px 16px 60px';
     document.body.appendChild(ov);
+    const catOk=z=>this._psaZoneOk(z)&&(this._psaCat==='all'||(z.cat||'NB')===this._psaCat);
+    /* every zone the current area / level filters allow, in level order then label order */
+    const list=()=>{const out=[];(this.DATA.order||[]).forEach(l=>{if(this._psaLv!=='all'&&l!==this._psaLv)return;
+      const seen=new Set();((this.DATA.levels[l]||{}).zones||[]).filter(catOk)
+        .map(z=>({lv:l,zmk:z.mk||z.lid,label:z.label||(z.mk||z.lid),cat:z.cat||'NB'}))
+        .sort((a,b)=>String(a.label).localeCompare(String(b.label),undefined,{numeric:true}))
+        .forEach(z=>{if(seen.has(z.zmk))return;seen.add(z.zmk);out.push(z);});});return out;};
     const draw=()=>{
-      const lv=this._psaLv,esc=s=>this.esc(s);
-      const zs=((this.DATA.levels[lv]||{}).zones||[]).filter(z=>this._psaZoneOk(z)).map(z=>({zmk:z.mk||z.lid,label:z.label||(z.mk||z.lid)}))
-        .filter((z,i,a)=>a.findIndex(x=>x.zmk===z.zmk)===i)
-        .sort((a,b)=>String(a.label).localeCompare(String(b.label),undefined,{numeric:true}));
+      const lvs=(this.DATA.order||[]).filter(l=>((this.DATA.levels[l]||{}).zones||[]).some(catOk));
+      if(this._psaLv!=='all'&&lvs.indexOf(this._psaLv)<0)this._psaLv='all';
+      const all=list(),zlabs=[...new Set(all.map(z=>z.label))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+      if(this._psaZone!=='all'&&zlabs.indexOf(this._psaZone)<0)this._psaZone='all';
+      const zs=all.filter(z=>(this._psaZone==='all'||z.label===this._psaZone)&&(!this._psaOnly||this._psaHas(z.lv,z.zmk)));
+      const multiLv=this._psaLv==='all';
       const IN='font:inherit;font-size:11.5px;padding:2px 4px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:inherit;width:122px';
-      const cell=(z,a,f,v,ovr)=>(admin&&(f==='ss'||f==='se'))?`<input type="date" class="psa-in" data-z="${esc(z)}" data-a="${a}" data-f="${f}" value="${esc(v)}" style="${IN}${ovr?';border-color:#c8102e;font-weight:800':''}" title="${ovr?'typed here (overrides the source)':'from the source schedule'}">`
+      const cell=(z,a,f,v,ovr)=>(admin&&(f==='ss'||f==='se'))?`<input type="date" class="psa-in" data-lv="${esc(z.lv)}" data-z="${esc(z.zmk)}" data-a="${a}" data-f="${f}" value="${esc(v)}" style="${IN}${ovr?';border-color:#c8102e;font-weight:800':''}" title="${ovr?'typed here (overrides the source)':'from the source schedule'}">`
         :`<span style="${ovr?'font-weight:800':''}">${esc(this._psaD(v))||'—'}</span>`;
-      let rows='';let shown=0;
-      zs.forEach(z=>{const has=this._psaHas(lv,z.zmk);if(this._psaOnly&&!has)return;shown++;
-        this._psaActs().forEach(([a,lab],i)=>{const g=this._psaGet(lv,z.zmk,a),A=this._psaActual(lv,z.zmk,a);
+      const acts=this._psaActs();let rows='';
+      zs.forEach(z=>{acts.forEach(([a,lab],i)=>{const g=this._psaGet(z.lv,z.zmk,a),A=this._psaActual(z.lv,z.zmk,a);
           const at=A.as?`${A.kind==='date'?this._psaD(A.as):A.as} → ${A.fin?(A.kind==='date'?this._psaD(A.ae):A.ae):'…'}`:'—';
           const ac=A.fin?'#15803d':(A.as?'#b7791f':'var(--faint)');
           const td='padding:4px 6px;border-bottom:1px solid var(--line)'+(i===0?';border-top:2px solid var(--line)':'');
-          rows+=`<tr>${i===0?`<td rowspan="${this._psaActs().length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:900;vertical-align:top;white-space:nowrap">${esc(z.label)}</td>`:''}
-            <td style="${td};font-weight:700;white-space:nowrap">${lab}</td>
-            <td style="${td}">${cell(z.zmk,a,'ps',g.ps,g.psOv)}</td><td style="${td}">${cell(z.zmk,a,'pe',g.pe,g.peOv)}</td>
-            <td style="${td}">${cell(z.zmk,a,'ss',g.ss,g.ssOv)}</td><td style="${td}">${cell(z.zmk,a,'se',g.se,g.seOv)}</td><td style="${td}">${this._psaDelayHtml(g.pe,g.se)}</td>
+          const head=i===0?`${multiLv?`<td rowspan="${acts.length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:800;vertical-align:top;color:var(--dim)">${esc(z.lv)}</td>`:''}<td rowspan="${acts.length}" style="padding:4px 8px;border-top:2px solid var(--line);font-weight:900;vertical-align:top;white-space:nowrap">${esc(z.label)}<div style="font-size:9px;font-weight:700;color:${z.cat==='MA'?'#3478c9':'#c2185b'}">${z.cat==='MA'?'Marine':'NB'}</div></td>`:'';
+          rows+=`<tr>${head}<td style="${td};font-weight:700;white-space:nowrap">${lab}</td>
+            <td style="${td}">${cell(z,a,'ps',g.ps,g.psOv)}</td><td style="${td}">${cell(z,a,'pe',g.pe,g.peOv)}</td>
+            <td style="${td}">${cell(z,a,'ss',g.ss,g.ssOv)}</td><td style="${td}">${cell(z,a,'se',g.se,g.seOv)}</td><td style="${td}">${this._psaDelayHtml(g.pe,g.se)}</td>
             <td style="${td};color:${ac};font-weight:800;white-space:nowrap">${at}${A.pct!=null&&!A.fin&&A.as?` <small style="color:var(--dim)">${A.txt||A.pct+'%'}</small>`:''}</td>
             <td style="${td};color:var(--faint);font-size:9.5px">${esc(g.src||'')}</td></tr>`;});});
       const th='text-align:left;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);padding:5px 6px;border-bottom:1px solid var(--line);white-space:nowrap';
-      ov.innerHTML=`<div style="max-width:1180px;margin:0 auto">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:18px">📅 P / S / A dates · NB &amp; Marine</b>
-          <select id="psaLv" style="font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:inherit">${lvs.map(l=>`<option${l===lv?' selected':''}>${esc(l)}</option>`).join('')}</select>
+      const SEL='font:inherit;padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:inherit';
+      const seg=AREAS.map(([k,t])=>`<button class="hbtn psa-cat${this._psaCat===k?' primary':''}" data-c="${k}" style="padding:4px 10px">${t}</button>`).join('');
+      ov.innerHTML=`<div style="max-width:1220px;margin:0 auto">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:18px">📅 P / S / A dates</b>
+          <span style="display:flex;gap:4px">${seg}</span>
+          <label style="font-size:11px;color:var(--dim);font-weight:700">楼层 <select id="psaLv" style="${SEL}"><option value="all"${multiLv?' selected':''}>All</option>${lvs.map(l=>`<option${l===this._psaLv?' selected':''}>${esc(l)}</option>`).join('')}</select></label>
+          <label style="font-size:11px;color:var(--dim);font-weight:700">Zone <select id="psaZone" style="${SEL}"><option value="all">All</option>${zlabs.map(l=>`<option${l===this._psaZone?' selected':''}>${esc(l)}</option>`).join('')}</select></label>
           <label style="font-size:12px"><input type="checkbox" id="psaOnly"${this._psaOnly?' checked':''}> 只看有日期的 zone</label>
           <label style="font-size:12px"><input type="checkbox" id="psaMap"${this._psaOn()?' checked':''}> 地图上显示</label>
           <span style="flex:1"></span><button class="hbtn" id="psaCsv">⬇ CSV</button><button class="hbtn" id="psaClose">Close ✕</button></div>
-        <div style="font-size:11px;color:var(--dim);margin-bottom:8px">P = Plan, this app's own activity dates (change them on the zone card) · S = Site, from the Podium schedule 5 Oct, the B1 / B2 site reports and (Marine) the KH Zone C schedule 19 Sep — editable here · A = Actual, read from the done dates and done quantities already recorded in this app.${admin?' Red border = typed here; typing the source value back removes the override.':''} ${shown} zone${shown===1?'':'s'} on ${esc(lv)}.</div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px">P = Plan, this app's own activity dates (change them on the zone card) · S = Site, from the Podium schedule 5 Oct, the B1 / B2 site reports and (Marine) the KH Zone C schedule 19 Sep — editable here · A = Actual, read from the done dates and done quantities already recorded in this app.${admin?' Red border = typed here; typing the source value back removes the override.':''} <b>${zs.length}</b> zone${zs.length===1?'':'s'} shown.</div>
         <table style="width:100%;border-collapse:collapse;font-size:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px"><thead><tr>
-          <th style="${th}">Zone</th><th style="${th}">Activity</th><th style="${th}">P start</th><th style="${th}">P end</th><th style="${th}">S start</th><th style="${th}">S end</th><th style="${th}" title="S end − P end · + = site later than plan">Delay</th><th style="${th}">A · Actual</th><th style="${th}">Source</th></tr></thead>
-          <tbody>${rows||`<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--faint)">No NB zone on ${esc(lv)} has P/S dates yet${admin?' — untick "只看有日期的 zone" to type them in':''}.</td></tr>`}</tbody></table></div>`;
+          ${multiLv?`<th style="${th}">Level</th>`:''}<th style="${th}">Zone</th><th style="${th}">Activity</th><th style="${th}">P start</th><th style="${th}">P end</th><th style="${th}">S start</th><th style="${th}">S end</th><th style="${th}" title="S end − P end · + = site later than plan">Delay</th><th style="${th}">A · Actual</th><th style="${th}">Source</th></tr></thead>
+          <tbody>${rows||`<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--faint)">Nothing matches these filters${this._psaOnly?' — untick "只看有日期的 zone" to see every zone':''}.</td></tr>`}</tbody></table></div>`;
       ov.querySelector('#psaClose').onclick=()=>{ov.remove();this.render();};
-      ov.querySelector('#psaLv').onchange=e=>{this._psaLv=e.target.value;draw();};
+      ov.querySelectorAll('.psa-cat').forEach(b=>b.onclick=()=>{this._psaCat=b.dataset.c;this._psaZone='all';draw();});
+      ov.querySelector('#psaLv').onchange=e=>{this._psaLv=e.target.value;this._psaZone='all';draw();};
+      ov.querySelector('#psaZone').onchange=e=>{this._psaZone=e.target.value;draw();};
       ov.querySelector('#psaOnly').onchange=e=>{this._psaOnly=e.target.checked;draw();};
       ov.querySelector('#psaMap').onchange=e=>this._psaToggle(e.target.checked);
-      ov.querySelector('#psaCsv').onclick=()=>{const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',L=[['Level','Zone','Activity','P start','P end','S start','S end','Delay (days)','A start','A end','Source'].map(q).join(',')];
-        lvs.forEach(l=>((this.DATA.levels[l]||{}).zones||[]).filter(z=>this._psaZoneOk(z)).forEach(z=>{const zmk=z.mk||z.lid;if(!this._psaHas(l,zmk))return;
-          this._psaActs().forEach(([a,lab])=>{const g=this._psaGet(l,zmk,a),A=this._psaActual(l,zmk,a);L.push([l,z.label,lab,g.ps,g.pe,g.ss,g.se,this._psaDelay(g.pe,g.se),A.as,A.ae,g.src].map(q).join(','));});}));
+      ov.querySelector('#psaCsv').onclick=()=>{const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',L=[['Level','Zone','Area','Activity','P start','P end','S start','S end','Delay (days)','A start','A end','Source'].map(q).join(',')];
+        zs.forEach(z=>acts.forEach(([a,lab])=>{const g=this._psaGet(z.lv,z.zmk,a),A=this._psaActual(z.lv,z.zmk,a);L.push([z.lv,z.label,z.cat==='MA'?'Marine':'NB',lab,g.ps,g.pe,g.ss,g.se,this._psaDelay(g.pe,g.se),A.as,A.ae,g.src].map(q).join(','));}));
         const b=new Blob(['﻿'+L.join('\r\n')],{type:'text/csv'}),u=URL.createObjectURL(b),aa=document.createElement('a');aa.href=u;aa.download='P1_PSA_dates.csv';aa.click();setTimeout(()=>URL.revokeObjectURL(u),2000);};
-      ov.querySelectorAll('.psa-in').forEach(i=>i.onchange=e=>{const d=e.target.dataset;this._psaSet(this._psaLv,d.z,d.a,d.f,e.target.value);draw();});};
+      ov.querySelectorAll('.psa-in').forEach(i=>i.onchange=e=>{const d=e.target.dataset;this._psaSet(d.lv,d.z,d.a,d.f,e.target.value);draw();});};
     draw();
   }
   _adminAggZones(lv,z){const set=(this._adminAggLevel===lv&&this._adminAggSet)?this._adminAggSet:null;if(!set||!set.size)return[z];const L=this.DATA.levels[lv],out=[];set.forEach(k=>{const saved=this._adminAggObjs&&this._adminAggObjs.get(k),live=(L&&L.zones||[]).find(x=>String(x.mk||x.lid)===k);if(saved||live)out.push(saved||live);});return out.length?out:[z];}
@@ -7810,7 +7824,7 @@ class Component extends DCLogic {
       ${this._custSecHtml(lv,z,this.rwsIsAdmin())}
       </div>`;
     this.setSummaryVis();
-    this.root.querySelectorAll('.psa-open').forEach(b=>b.addEventListener('click',()=>this.openPsaTable(b.dataset.lv)));
+    this.root.querySelectorAll('.psa-open').forEach(b=>b.addEventListener('click',()=>this.openPsaTable(b.dataset.lv,b.dataset.cat)));
     const _aggMode=this.root.querySelector('.admin-agg-mode');if(_aggMode)_aggMode.addEventListener('click',()=>{if(this._adminAggLevel!==lv){this._adminAggLevel=lv;this._adminAggSet=new Set();this._adminAggObjs=new Map();}this._adminAggMode=!this._adminAggMode;if(this._adminAggMode&&this._adminAggSet&&!this._adminAggSet.size)this._adminAggToggle(lv,z);this.render();this.selectZone(z,sub);this.paintSel();});
     const _aggClear=this.root.querySelector('.admin-agg-clear');if(_aggClear)_aggClear.addEventListener('click',()=>{this._adminAggMode=false;this._adminAggSet=new Set();this._adminAggObjs=new Map();this._adminAggLevel=lv;this.render();this.selectZone(z,sub);this.paintSel();});
     this.root.querySelector('#back').addEventListener('click',()=>{this._discardOpenSections(lv,z);this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
