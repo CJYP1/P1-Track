@@ -4605,7 +4605,17 @@ class Component extends DCLogic {
         +'<b style="font-size:12.5px">'+esc(a.label)+'</b><div style="font-size:11px;color:var(--dim,#667)">'
         +(a.qty?a.qty.toLocaleString()+' '+esc(a.unit)+' · ':'')+a.bd+' d'
         +(a.pct>0?' · <b style="color:#2e7d4f">'+Math.round(a.pct*100)+'% done</b>':'')+'</div></div>').join('')
-      +'</div></div>';
+      +'</div>'
+      /* Activities this zone really has (elements listed, or a quantity / monthly plan) but no
+         start + finish date: they cannot sit in the chain, so say so instead of leaving a gap. */
+      +(()=>{const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return '';
+        const have=new Set(A.map(a=>a.id)),M=this.ACT_MONTHS||[],miss=[];
+        (this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!have.has(a.id)).forEach(a=>{
+          let refs=0;try{refs=(this._activityElemRefs(lv,zmk,a.id)||[]).length;}catch(e){}
+          const tot=Number(this.actTotal(lv,zmk,a.id,a.total))||0,plan=M.some(m=>this.actPlan(lv,zmk,a.id,m)!=null);
+          if(refs||tot>0||plan)miss.push(a.label+(refs?' ('+refs+')':''));});
+        return miss.length?'<div style="margin-top:9px;font-size:11.5px;color:#b45309">Not in the chain — no start / finish date on the zone card yet: <b>'+esc(miss.join(' · '))+'</b></div>':'';})()
+      +'</div>';
     h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">Baseline · forecast · catch-up</div>'
       +'<div style="font-size:12.5px;margin:8px 0 6px">Restart the first activity on '
       +'<input type="date" id="zpStart" value="'+esc(st.start)+'" style="font:inherit;padding:3px 6px;border:1px solid var(--line,#dde);border-radius:4px;background:var(--panel,#fff);color:inherit"></div>'
