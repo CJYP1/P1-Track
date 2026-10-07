@@ -5951,6 +5951,16 @@ class Component extends DCLogic {
         _ovlLines+=`<${tag} class="ovl" points="${p}" vector-effect="non-scaling-stroke" fill="none" stroke="${o.c}" stroke-width="${(o.w*0.55).toFixed(1)}" stroke-dasharray="5 5" stroke-opacity="0.42"/>`;
       });
     });
+    /* On L1, the L2 zone lines (every zone boundary, not just the outline) as a faint dashed
+       overlay with their names, so the floor above can be read against the podium / deck below. */
+    if(!_focusOnly&&this.curLevel==='L1'&&this._l2zOn()){
+      ((this.DATA.levels.L2||{}).zones||[]).forEach(z=>{const ring=z.ring||z.pts;if(!ring||ring.length<3)return;
+        const p=ring.map(pt=>{const q=this.proj(pt,H);return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
+        _ovlLines+=`<polygon class="ovl l2z" points="${p}" vector-effect="non-scaling-stroke" fill="none" stroke="#ffffff" stroke-width="3" stroke-opacity="0.5" style="pointer-events:none"/>`;
+        _ovlLines+=`<polygon class="ovl l2z" points="${p}" vector-effect="non-scaling-stroke" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-dasharray="6 4" stroke-opacity="0.85" style="pointer-events:none"/>`;
+        const n=ring.length,c=this.proj([ring.reduce((a,q)=>a+q[0],0)/n,ring.reduce((a,q)=>a+q[1],0)/n],H);
+        _ovlLines+=`<text x="${c[0].toFixed(0)}" y="${c[1].toFixed(0)}" text-anchor="middle" font-size="2300" fill="#7c3aed" fill-opacity="0.9" stroke="#ffffff" stroke-width="420" paint-order="stroke" style="font-weight:800;pointer-events:none">L2 ${this.esc(z.label||'')}</text>`;});
+    }
     if(!_focusOnly&&this.rwsIsAdmin() && this.showBeams && this.DATA.beamlines && this.DATA.beamlines[this.curLevel]){
       this.DATA.beamlines[this.curLevel].forEach(seg=>{
         const p=seg.map(pt=>pt[0].toFixed(0)+','+(H-pt[1]).toFixed(0)).join(' ');
@@ -8244,6 +8254,8 @@ class Component extends DCLogic {
   paintTimelineSel(){this.root.querySelectorAll('#schedbody .gbar').forEach(el=>el.classList.toggle('sel',this.selKey&&el.dataset.k===this.selKey));}
 
   /* ---------- controls ---------- */
+  /* "L2 zones" overlay on L1: on by default, remembered per browser. */
+  _l2zOn(){if(this.showL2z==null){let v=null;try{v=localStorage.getItem('rws_show_l2z');}catch(e){}this.showL2z=(v==null)?true:(v==='1');}return !!this.showL2z;}
   _ovlDefaults(lv){const podiumBase={'B2':1,'B1':1,'B1M':1,'L1':1};return podiumBase[lv]?{podium:false,transfer:false,podcis:false}:{podium:false,transfer:false,podcis:true};}   /* Podium outline / L5 transfer 默认关闭 */
   _applyOvlForLevel(lv){this._ovlByLevel=this._ovlByLevel||{};this.showOvl=this._ovlByLevel[lv]?{...this._ovlByLevel[lv]}:this._ovlDefaults(lv);}
   _lvName(lv){return ({'3F':'L3','4F':'L4','5F':'L5'})[lv]||lv;}
@@ -8385,6 +8397,7 @@ class Component extends DCLogic {
     mkToggle(this.showDates,`<span style="font-size:10px">🕓</span>Dates`,()=>{this.showDates=!this.showDates;this.buildMetrics();this.render();});
     mkToggle(this._psaOn(),`<span style="font-size:10px">📅</span>P/S/A`,()=>this._psaToggle(!this._psaOn()));   /* NB Plan / Site / Actual end dates under each zone name */   /* 所有账号可看; slab 日期、区域 column 月份及每根柱子的完成日期 */
     Object.keys(this.OVL).forEach(k=>{const o=this.OVL[k];mkToggle(this.showOvl[k],`<span class="dash" style="color:${o.c}"></span>${o.label}`,()=>{this.showOvl[k]=!this.showOvl[k];this._ovlByLevel=this._ovlByLevel||{};this._ovlByLevel[this.curLevel]={...this.showOvl};this.buildMetrics();this.render();});});
+    if(this.curLevel==='L1')mkToggle(this._l2zOn(),`<span class="dash" style="color:#7c3aed"></span>L2 zones`,()=>{this.showL2z=!this._l2zOn();try{localStorage.setItem('rws_show_l2z',this.showL2z?'1':'0');}catch(e){}this.buildMetrics();this.render();});   /* L2 zone lines over L1 */
     if(this.rwsIsAdmin() && this.DATA.beamlines && this.DATA.beamlines[this.curLevel])
       mkToggle(this.showBeams,`<span style="width:16px;border-top:2px solid var(--beam);display:inline-block"></span>Steel main beams`,()=>{this.showBeams=!this.showBeams;this.buildMetrics();this.render();});
     if(this.COLUMNS && this.COLUMNS[this.curLevel])
