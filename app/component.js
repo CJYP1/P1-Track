@@ -353,6 +353,32 @@ class Component extends DCLogic {
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
     try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
     try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
+    try{this._rehomeOrphanElems();}catch(e){console.error('rehome elems',e);}
+  }
+  /* A status / completion date is stored against level + zone + element.  The zone lists are
+     rebuilt from where each element sits on the map, so an element can end up in a different zone
+     than the one its done-record was saved under — and then counts as not done everywhere (Report,
+     monthly catch-up, zone card).  Re-attach such records to the zone that lists the element now.
+     Only records whose zone no longer lists that element are touched. */
+  _rehomeOrphanElems(){
+    const E=this.elem||{},D=this._elemDate||{},keys=new Set([...Object.keys(E),...Object.keys(D)]);if(!keys.size)return;
+    const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
+    const listed={},where={},zoneKeys=new Set();   /* lv||zmk||type||ID -> true ; lv||type||ID -> zone */
+    (this.DATA.order||[]).forEach(lv=>((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{const zmk=z.mk||z.lid;zoneKeys.add(lv+'||'+zmk);
+      Object.keys(arrOf).forEach(t=>(z[arrOf[t]]||[]).forEach(x=>{const id=(typeof x==='string')?x:(x&&x.id);if(!id)return;const k=this._colKey(id);
+        listed[lv+'||'+zmk+'||'+t+'||'+k]=1;const w=lv+'||'+t+'||'+k;if(!where[w])where[w]=z;}));}));
+    const admin=this.rwsIsAdmin&&this.rwsIsAdmin();let n=0;
+    keys.forEach(k=>{const p=k.split('||');if(p.length!==4||!arrOf[p[2]])return;const [lv,zmk,t,id]=p,ck=this._colKey(id);
+      if(listed[lv+'||'+zmk+'||'+t+'||'+ck])return;          /* still where it was saved */
+      if(!zoneKeys.has(lv+'||'+zmk))return;                      /* saved on a sub-zone (L1 P / C) or a retired zone: leave it */
+      const z=where[lv+'||'+t+'||'+ck];if(!z)return;            /* element no longer listed anywhere: leave it */
+      const nk=this.ekey(lv,z,t,id);if(nk===k)return;
+      if(E[nk]!=null||D[nk]!=null)return;                       /* the new zone already has its own record */
+      if(admin)this._migrateElemKey(k,nk);
+      else{if(E[k]!=null)E[nk]=E[k];if(D[k]!=null)D[nk]=D[k];}  /* read-only users: in memory only */
+      n++;});
+    if(n){this._rehomedElems=(this._rehomedElems||0)+n;if(admin){this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();}
+      console.info('[P1] re-attached '+n+' element record(s) to the zone that lists the element now');}
   }
   /* CW8 / "Lift 1/2" are one core wall, named CW08 (and LW8 is ST3).  Whatever still carries an
      old name — a register entry added under it, an old list — is renamed where it is listed, and a
