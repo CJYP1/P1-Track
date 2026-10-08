@@ -5789,18 +5789,56 @@ class Component extends DCLogic {
   /* The area Report as an Excel sheet (SpreadsheetML, opens straight in Excel) so the site team
      can check and correct it offline.  Same figures as on screen; Catch-Up % and Actual % are
      formulas, so changing a total, a planned or a done figure recalculates the row. */
+  /* The Report's rows exactly as on screen, for the Excel and PowerPoint exports. */
+  _reportExportRows(cat){
+    const def=this._reportDefs()[cat];if(!def)return [];const rows=[];
+    def.levels.forEach(lv=>(this._liveReportRows(cat,[lv])||[]).forEach(r=>{
+      const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),
+            liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=Number(A.total)||0;
+      const done=liveA.pour?(den*(Number(A.pct)||0)/100):(Number(A.done)||0);
+      rows.push({lv,a:r.a,unit:liveA.pour?'items (pour %)':(r.unit||''),u:r.unit||'',pour:!!liveA.pour,
+        den:Math.round(den),planned:Math.round(Number(P.planned)||0),done:Math.round(done),
+        tgt:den>0?Math.min(100,Math.round((Number(P.planned)||0)/den*100)):0,apct:Number(A.pct)||0,
+        by:P.end?this._fmtDShort(P.end):''});}));
+    return rows;}
+  /* The Report as a PowerPoint slide (two levels per slide, like the screen): real tables, so the
+     figures can be corrected in PowerPoint before it is sent. PptxGenJS is loaded only on click. */
+  async exportReportPpt(cat){
+    const def=this._reportDefs()[cat];if(!def)return;
+    if(!window.PptxGenJS){try{await new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='app/vendor/pptxgen.bundle.js';sc.onload=ok;sc.onerror=no;document.head.appendChild(sc);});}
+      catch(e){this._toast&&this._toast('Could not load the PowerPoint library.');return;}}
+    const rows=this._reportExportRows(cat),today=this._reportDateLabel(this._reportToday());
+    const byLv=[];def.levels.forEach(lv=>{const rr=rows.filter(r=>r.lv===lv);if(rr.length)byLv.push([lv,rr]);});
+    if(!byLv.length){this._toast&&this._toast('Nothing to export.');return;}
+    const pptx=new window.PptxGenJS();pptx.layout='LAYOUT_WIDE';
+    const M='6D1327',F='Arial',n=v=>Math.round(Number(v)||0).toLocaleString('en-US');
+    const hdr=t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:M},align:'center',valign:'middle',fontSize:10.5}});
+    for(let i=0;i<byLv.length;i+=2){
+      const sl=pptx.addSlide();sl.background={color:'FFFFFF'};
+      sl.addShape(pptx.ShapeType.rect,{x:0.4,y:0.35,w:0.09,h:0.62,fill:{color:M},line:{color:M}});
+      sl.addText([{text:'P1 Waterfront ',options:{color:'161616'}},{text:'| '+def.title,options:{color:M}}],{x:0.6,y:0.3,w:12,h:0.42,fontFace:F,fontSize:22,bold:true});
+      sl.addText('Report · '+today,{x:0.6,y:0.72,w:12,h:0.3,fontFace:F,fontSize:13,bold:true,color:M});
+      byLv.slice(i,i+2).forEach(([lv,rr],k)=>{
+        const x0=0.4+k*6.35;
+        sl.addText(lv+' Structure',{x:x0,y:1.15,w:6.1,h:0.32,fontFace:F,fontSize:14,bold:true,color:M});
+        const body=rr.map(r=>{const unit=r.u?(' '+r.u):'';
+          return [{text:r.a,options:{bold:true,color:'FFFFFF',fill:{color:M},valign:'middle',fontSize:10.5}},
+            {text:[{text:r.tgt+'%',options:{fontSize:13,bold:true,align:'center',breakLine:true}},{text:'('+n(r.planned)+'/'+n(r.den)+unit+' planned to date)\nComplete by '+(r.by||'—'),options:{fontSize:8.5,color:'6D3B40',align:'center'}}],options:{fill:{color:'F4DBDF'},align:'center',valign:'middle'}},
+            {text:[{text:Math.round(r.apct)+'%',options:{fontSize:13,bold:true,align:'center',breakLine:true}},{text:r.pour?(Math.round(r.apct)+'% pouring · '+n(r.den)+' items'):('('+n(r.done)+'/'+n(r.den)+unit+')'),options:{fontSize:8.5,color:'6D3B40',align:'center'}}],options:{fill:{color:'F8E9EC'},align:'center',valign:'middle'}}];});
+        sl.addTable([[hdr('Activity'),hdr("CJY's Catch-Up\n"+today),hdr('Actual\nDone ÷ level total')],...body],
+          {x:x0,y:1.5,w:6.1,colW:[1.75,2.25,2.1],fontFace:F,color:'2B1114',border:{type:'solid',pt:1.5,color:'EFE9DF'},rowH:0.62,autoPage:false});
+      });
+      sl.addText('Catch-Up = plan due by today ÷ level total; Actual = completed quantity ÷ the same level total.',{x:0.4,y:7.0,w:12.5,h:0.3,fontFace:F,fontSize:9,color:'667085'});
+    }
+    await pptx.writeFile({fileName:'P1_'+cat+'_Report_'+this.todayISOStr()+'.pptx'});
+    this._toast&&this._toast('PowerPoint exported');
+  }
   exportReportXls(cat){
     const defs=this._reportDefs(),def=defs[cat];if(!def)return;
     const x=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const S=v=>`<Cell><Data ss:Type="String">${x(v)}</Data></Cell>`,N=v=>`<Cell ss:StyleID="n"><Data ss:Type="Number">${Math.round((Number(v)||0)*100)/100}</Data></Cell>`;
     const today=this._reportDateLabel(this._reportToday());
-    const rows=[];
-    def.levels.forEach(lv=>(this._liveReportRows(cat,[lv])||[]).forEach(r=>{
-      const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),
-            liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=Number(A.total)||0;
-      const done=liveA.pour?(den*(Number(A.pct)||0)/100):(Number(A.done)||0);
-      /* whole numbers, as the Report shows them */
-      rows.push({lv,a:r.a,unit:liveA.pour?'items (pour %)':(r.unit||''),den:Math.round(den),planned:Math.round(Number(P.planned)||0),done:Math.round(done),by:P.end?this._fmtDShort(P.end):''});}));
+    const rows=this._reportExportRows(cat);
     const head=['Level','Activity','Unit','Level total','Planned to date','Catch-Up %','Done','Actual %','Complete by','Remarks'];
     let body=`<Row ss:StyleID="t"><Cell ss:MergeAcross="9"><Data ss:Type="String">${x('P1 Waterfront | '+def.title+' · Report · '+today)}</Data></Cell></Row>`
       +`<Row><Cell ss:MergeAcross="9"><Data ss:Type="String">${x('Catch-Up % = Planned to date ÷ Level total;  Actual % = Done ÷ Level total.  Edit the yellow cells; the % columns recalculate.')}</Data></Cell></Row>`
@@ -5860,9 +5898,10 @@ class Component extends DCLogic {
     const tabs=cats.length>1?`<div class="seg" id="rptSeg" style="margin:0 0 14px">${cats.map(c=>`<button data-c="${c}" class="${c===cat?'on':''}">${this.esc(c+' Report')}</button>`).join('')}</div>`:'';
     const _leg=[['#f3aeb8','In progress'],['#74c043','Completed'],['#7ea6d4','CIS area'],['#f0b24a','Tie beam']].map(([c,l])=>`<span style="white-space:nowrap"><span style="display:inline-block;width:14px;height:14px;background:${c};border:1px solid rgba(0,0,0,.25);vertical-align:-2px;margin-right:5px"></span>${l}</span>`).join('');
     const editBtns=canReportEdit?(editing?'<button class="hbtn primary" id="rptSave">Save</button><button class="hbtn" id="rptCancel">Cancel</button>':'<button class="hbtn" id="rptEdit">✎ Edit</button>'):'';
-    ov.innerHTML=`<div style="max-width:1120px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><div style="display:flex;gap:7px">${editBtns}<button class="hbtn" id="rptXls" title="Download this Report as an Excel sheet to check and correct offline — the % columns are formulas">⬇ Excel</button><button class="hbtn" id="laClose">Close ✕</button></div></div><div class="seg" id="rptViewSeg" style="margin:0 0 10px"><button data-view="area" class="on">Area Report</button><button data-view="combined">Combined Status</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">Scope: ${this.esc(def.scope)} · Structure + Excavation · Both percentages use the same full level total. Catch-Up = plan due by today ÷ level total; Actual = completed quantity ÷ level total. Every Slab row covers its whole level.${editing?' · Report edit mode: all values must be whole numbers.':''}</div>${tables}</div>`;
+    ov.innerHTML=`<div style="max-width:1120px;margin:0 auto"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px"><div style="border-left:6px solid #6d1327;padding-left:14px;flex:1"><div style="font-size:23px;font-weight:800;line-height:1.2"><span style="color:#161616">P1 Waterfront</span> <span style="color:#6d1327">| ${this.esc(def.title)}</span></div><div style="font-size:16px;font-weight:800;color:#6d1327;text-decoration:underline;text-underline-offset:3px;margin-top:6px">Report</div></div><div style="display:flex;gap:7px">${editBtns}<button class="hbtn" id="rptPpt" title="Download this Report as a PowerPoint slide (editable tables)">⬇ PPT</button><button class="hbtn" id="rptXls" title="Download this Report as an Excel sheet to check and correct offline — the % columns are formulas">⬇ Excel</button><button class="hbtn" id="laClose">Close ✕</button></div></div><div class="seg" id="rptViewSeg" style="margin:0 0 10px"><button data-view="area" class="on">Area Report</button><button data-view="combined">Combined Status</button></div>${tabs}<div style="display:flex;gap:18px;flex-wrap:wrap;margin:4px 0 14px;font-size:12.5px;color:#333;font-weight:600">${_leg}</div><div style="font-size:11.5px;color:var(--dim);margin-bottom:14px">Scope: ${this.esc(def.scope)} · Structure + Excavation · Both percentages use the same full level total. Catch-Up = plan due by today ÷ level total; Actual = completed quantity ÷ level total. Every Slab row covers its whole level.${editing?' · Report edit mode: all values must be whole numbers.':''}</div>${tables}</div>`;
     ov.style.display='block'; const cl=ov.querySelector('#laClose'); if(cl)cl.onclick=close;
     {const xb=ov.querySelector('#rptXls');if(xb)xb.onclick=()=>this.exportReportXls(cat);}
+    {const pb=ov.querySelector('#rptPpt');if(pb)pb.onclick=()=>this.exportReportPpt(cat);}
     const combinedBtn=ov.querySelector('[data-view="combined"]');if(combinedBtn)combinedBtn.onclick=()=>this._openCombinedReport(cat);
     ov.querySelectorAll('#rptSeg button[data-c]').forEach(b=>b.onclick=()=>{this._reportCat=b.dataset.c;this.openLookAhead();});
     ov.querySelectorAll('.rpt-cmt-open').forEach(b=>b.onclick=()=>{const key=b.dataset.lv+'||'+b.dataset.zmk+'||'+b.dataset.a;this._cmtOpen=this._cmtOpen===key?null:key;this.openLookAhead();});
