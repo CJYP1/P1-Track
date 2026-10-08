@@ -4644,13 +4644,19 @@ class Component extends DCLogic {
         +Math.round(pred.pct*100)+'% done, baseline '+this._zpFmt(pred.bs)+' \u2192 '+this._zpFmt(pred.be)
         +'. On this forecast it finishes <b>'+this._zpFmt(pred.fcE)+'</b>.'
         +'<span style="color:var(--dim,#667)"> Top-down only \u2014 act_date has no such link, so this is a site decision.</span></span></label>'):'')
-      +((d0<=0&&!st.pred)?('<div style="font-size:12px;color:var(--dim,#667);margin:0 0 8px">'
-        +esc(A[0].label)+' is not due to start until '+this._zpFmt(A[0].bs)+', which is after the restart date above, so the forecast sits on the baseline and there is no slip to recover yet. Move the date past '+this._zpFmt(A[0].bs)+', or switch on the slab above, to see it move.</div>'):'')
+      +(()=>{if(!A.length)return '';const L=A.length-1,f0=S0[L].e,f1=S1[L].e,dl0=this._zpDiff(f0,baseFin),dl1=this._zpDiff(f1,baseFin),gain=this._zpDiff(f0,f1);
+        const nf=d=>this._zpFmt(d);let t='';
+        if(dl0<=0&&!st.pred)t='这个 zone 还没到开工时间（第一项 '+esc(A[0].label)+' 计划 '+nf(A[0].bs)+' 才开始，比上面的重启日期晚），所以<b>照现在的安排不会迟</b>：红虚线和灰色计划一样长，每行写「准时」。';
+        else if(dl0>0)t='照现在的人数和进度，从 '+nf(startD)+' 做下去，这个 zone 会在 <b>'+nf(f0)+'</b> 做完，<b style="color:#c2412d">比计划 '+nf(baseFin)+' 迟 '+dl0+' 天</b>。';
+        else t='照现在的安排，这个 zone 会在 '+nf(f0)+' 做完，不比计划 '+nf(baseFin)+' 晚。';
+        if(gain>0)t+=' 按下面表格加 <b>'+A.reduce((n,a)=>n+Math.max(0,(a.n||0)-(a.n0||0)),0)+'</b> 人，可以快 <b style="color:#2e7d4f">'+gain+' 天</b>，在 <b>'+nf(f1)+'</b> 做完'+(dl1>0?'，仍比计划迟 '+dl1+' 天。':(dl1<0?'，比计划早 '+(-dl1)+' 天。':'，刚好赶上计划。'));
+        else t+=' 下面表格没有加人，所以彩色条和虚线一样。';
+        return '<div style="font-size:12.5px;line-height:1.55;margin:0 0 10px;padding:9px 11px;background:var(--panel2,#f3f5f7);border-left:3px solid #2F6F7E;border-radius:6px">'+t+'</div>';})()
       +'<div style="overflow-x:auto"><svg id="zpGantt"></svg></div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim,#667);margin-top:8px">'
-      +'<span><svg width="24" height="8" style="vertical-align:middle"><rect width="24" height="6" y="1" rx="1" fill="#8E9BA1"/></svg> baseline</span>'
-      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect x="1" y="1" width="22" height="10" rx="2" fill="none" stroke="#c2412d" stroke-dasharray="3 2"/></svg> forecast</span>'
-      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect width="24" height="12" rx="2" fill="#2F6F7E"/></svg> with catch-up crew</span>'
+      +'<span><svg width="24" height="8" style="vertical-align:middle"><rect width="24" height="6" y="1" rx="1" fill="#8E9BA1"/></svg> 灰：你的计划 (baseline)</span>'
+      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect x="1" y="1" width="22" height="10" rx="2" fill="none" stroke="#c2412d" stroke-dasharray="3 2"/></svg> 红虚线：照现在的人数和进度，从重启日期做下去</span>'
+      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect width="24" height="12" rx="2" fill="#2F6F7E"/></svg> 彩色：按下面表格加人以后</span>'
       +'<span><svg width="6" height="12" style="vertical-align:middle"><rect width="2" height="12" fill="#c2412d"/></svg> today, '+this._zpFmt(TODAY)+'</span></div></div>';
     h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">Catch-up: crew, output, days recovered</div>'
       +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:10px">Baseline crew comes from the zone manpower typed against the month each activity starts in; where none is typed a trade-size default stands in. Output grows with (crew ratio)<sup>α</sup> — the working face is finite, so output per man falls as the crew grows — and each activity has a floor it will not go below.</div>'
@@ -4798,8 +4804,10 @@ class Component extends DCLogic {
     g+=bar(S0[0].s,S0[LASTi].e,y+21,11,'none','stroke="#c2412d" stroke-dasharray="3 2"');
     g+=bar(S1[0].s,S1[LASTi].e,y+4,14,INK||'#18232A');
     const dd0=this._zpDiff(S0[LASTi].e,baseFin),dd1=this._zpDiff(S1[LASTi].e,baseFin);
-    g+='<text x="'+(x(this._zpAdd(S0[LASTi].e,1))+5)+'" y="'+(y+30)+'" font-size="11" font-weight="700" fill="#c2412d" font-family="ui-monospace,monospace">'+(dd0>=0?'+':'')+dd0+'d</text>';
-    g+='<text x="'+(x(this._zpAdd(S1[LASTi].e,1))+5)+'" y="'+(y+14)+'" font-size="11" font-weight="700" fill="'+(dd1>0?'#c2412d':'#2e7d4f')+'" font-family="ui-monospace,monospace">'+(dd1>=0?'+':'')+dd1+'d</text>';
+    /* Words, not signs: "+0d" next to a dashed bar told nobody anything. */
+    const late=d=>d>0?('迟 '+d+' 天'):(d<0?('早 '+(-d)+' 天'):'准时');
+    g+='<text x="'+(x(this._zpAdd(S0[LASTi].e,1))+5)+'" y="'+(y+30)+'" font-size="11" font-weight="700" fill="'+(dd0>0?'#c2412d':C)+'">不加人：'+late(dd0)+'</text>';
+    g+='<text x="'+(x(this._zpAdd(S1[LASTi].e,1))+5)+'" y="'+(y+14)+'" font-size="11" font-weight="700" fill="'+(dd1>0?'#c2412d':'#2e7d4f')+'">加人后：'+late(dd1)+'</text>';
     A.forEach((a,i)=>{
       y=top+(i+1)*rowH;
       g+='<line x1="0" x2="'+W+'" y1="'+(y+rowH-3)+'" y2="'+(y+rowH-3)+'" stroke="'+LN+'"/>';
@@ -4810,13 +4818,13 @@ class Component extends DCLogic {
       g+=bar(S0[i].s,S0[i].e,y+22,11,'none','stroke="#c2412d" stroke-dasharray="3 2"');
       g+=bar(S1[i].s,S1[i].e,y+4,15,a.c);
       const w1=x(this._zpAdd(S1[i].e,1))-x(S1[i].s),rem=this._zpRemDur(a);
-      const lbl=S1[i].d+'d'+(S1[i].d<rem?' (−'+(rem-S1[i].d)+')':'');
+      const lbl=S1[i].d+' 天'+(S1[i].d<rem?' · 快 '+(rem-S1[i].d)+' 天':'');
       g+='<text x="'+(w1>70?x(S1[i].s)+6:x(this._zpAdd(S1[i].e,1))+5)+'" y="'+(y+16)+'" font-size="11" font-family="ui-monospace,monospace" fill="'+(w1>70?'#fff':C)+'">'+lbl+'</text>';
       const sl=this._zpDiff(S0[i].e,a.be);
-      g+='<text x="'+(x(this._zpAdd(S0[i].e,1))+5)+'" y="'+(y+32)+'" font-size="10" font-family="ui-monospace,monospace" fill="#c2412d">'+(sl>=0?'+':'')+sl+'d</text>';});
+      g+='<text x="'+(x(this._zpAdd(S0[i].e,1))+5)+'" y="'+(y+32)+'" font-size="10" fill="'+(sl>0?'#c2412d':C)+'">'+late(sl)+'</text>';});
     const tx=x(TODAY);
     g+='<line x1="'+tx+'" x2="'+tx+'" y1="'+(top-10)+'" y2="'+(H-6)+'" stroke="#c2412d" stroke-width="2"/>';
-    g+='<text x="'+(tx+4)+'" y="'+(top-12)+'" font-size="10" fill="#c2412d" font-weight="700">TODAY</text>';
+    g+='<text x="'+(tx+4)+'" y="'+(H-10)+'" font-size="10" fill="#c2412d" font-weight="700">今天</text>';   /* at the foot, clear of the month names */
     svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('width',W);svg.setAttribute('height',H);
     svg.innerHTML=g;
   }
