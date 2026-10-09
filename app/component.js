@@ -762,9 +762,12 @@ class Component extends DCLogic {
   _elemPourKey(lv,zmk,aid,type,id){return lv+'||'+zmk+'||'+aid+'||pour_elem||'+type+'||'+encodeURIComponent(String(id||''));}
   elemPourPct(lv,zmk,aid,type,id){const v=(this._manpower||{})[this._elemPourKey(lv,zmk,aid,type,id)];return v==null?null:Math.max(0,Math.min(100,Math.round(Number(v)||0)));}
   actPourStats(lv,zmk,aid){
-    const refs=this._activityElemRefs(lv,zmk,aid).filter(r=>['core','lift','stair'].indexOf(r.type)>=0),vals=[];
-    refs.forEach(r=>{const v=this.elemPourPct(lv,zmk,aid,r.type,r.id);vals.push(v==null?(this.elemStatus(r.key)==='done'?100:0):v);});
-    return {count:vals.length,sum:vals.reduce((n,v)=>n+v,0),pct:vals.length?Math.round(vals.reduce((n,v)=>n+v,0)/vals.length):null};
+    const T=aid==='col'?['col']:['core','lift','stair'];
+    const refs=this._activityElemRefs(lv,zmk,aid).filter(r=>T.indexOf(r.type)>=0),vals=[];let typed=0;
+    refs.forEach(r=>{const v=this.elemPourPct(lv,zmk,aid,r.type,r.id);if(v!=null)typed++;vals.push(v==null?(this.elemStatus(r.key)==='done'?100:0):v);});
+    /* Columns: % only takes over once someone has typed one; until then the done count stands. */
+    if(aid==='col'&&!typed)return {count:vals.length,sum:0,pct:null,typed:0};
+    return {typed,count:vals.length,sum:vals.reduce((n,v)=>n+v,0),pct:vals.length?Math.round(vals.reduce((n,v)=>n+v,0)/vals.length):null};
   }
   actPourPct(lv,zmk,aid){return this.actPourStats(lv,zmk,aid).pct;}
   setElemPourPct(lv,zmk,aid,type,id,raw){if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny&&this.rwsDeny('Outside your assigned zones.');return;}const k=this._elemPourKey(lv,zmk,aid,type,id),s=String(raw==null?'':raw).trim(),v=s===''?null:Math.max(0,Math.min(100,Math.round(Number(s)||0)));this._manpower=this._manpower||{};if(v==null)delete this._manpower[k];else this._manpower[k]=v;try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);}
@@ -1719,7 +1722,7 @@ class Component extends DCLogic {
       /* 分母优先用总量(全 scope): "做在计划前面"(done 已录, plan 还排在后面月份)也照样算进度; 没总量再退回累计计划, 再退回已完成量 */
       const _tot=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));
       const denom=(_tot!=null&&_tot>0)?_tot:(cumPlan>0?cumPlan:cumDone);
-      const pourPct=(aid==='ls'||aid==='act_corewall')?this.actPourPct(lv,zmk,aid):null;
+      const pourPct=(aid==='ls'||aid==='act_corewall'||aid==='col')?this.actPourPct(lv,zmk,aid):null;
       if(pourPct!=null){(ph[p]=ph[p]||[]).push(this.clamp(pourPct/100,0,1));return;}   /* Core/Lift/Stair 以逐构件浇筑百分比为准 */
       if(denom<=0)return;
       (ph[p]=ph[p]||[]).push(this.clamp(cumDone/denom,0,1));});
@@ -2597,7 +2600,7 @@ class Component extends DCLogic {
       total+=zt;planned+=zp;if(d.end&&(!end||d.end>end))end=d.end;});});
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
-    const elems={},isPour=aid==='ls'||aid==='act_corewall',refs=[];
+    const elems={},isPour=aid==='ls'||aid==='act_corewall'||aid==='col',refs=[];
     (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>refs.push({lv,zmk,z,r}));});});
     /* Core/Lift/Stair is reported by core wall wherever a core exists.  Members
        can sit in a different Zone from their core, so this must be resolved over
@@ -5067,6 +5070,44 @@ class Component extends DCLogic {
     this._saveElemPurge();this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
     this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
   }
+  /* L1 columns are the L1→L2 lifts, so every counted L1 column must also be on L2.
+     Lists L1 columns with no L2 match (e.g. B2 columns that stop at B1M) and
+     columns whose L2 zone is in another area, and unticks 计入 for the picks. */
+  _l1vsL2(){
+    const nk=id=>this._colKey(String(id).replace(/^\s*(WF|MK)\s*-/i,'')),L2={},miss=[],area=[];
+    ((this.DATA.levels.L2||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const k=nk(id);(L2[k]=L2[k]||[]).push({zone:z.label,cat:z.cat||'NB'});}));
+    ((this.DATA.levels.L1||{}).zones||[]).forEach(z=>{const zmk=z.mk||z.lid,cat=z.cat||'NB';this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const hit=L2[nk(id)];const r={lv:'L1',zmk,zone:z.label,cat,id};
+      if(!hit){r.base=(z.cols||[]).some(c=>this._colKey(typeof c==='string'?c:(c.id||c.name))===this._colKey(id));miss.push(r);}else if(!hit.some(h=>h.cat===cat))area.push(Object.assign(r,{l2:hit.map(h=>h.zone+' '+h.cat).join(', ')}));});});
+    return {miss,area};
+  }
+  _openL1vsL2(after){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
+    const {miss,area}=this._l1vsL2(),E=s=>this.esc(String(s));
+    const old=document.getElementById('__l1l2');if(old)old.remove();
+    const ov=document.createElement('div');ov.id='__l1l2';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:16px';
+    const row=(r,i,g,on,extra)=>`<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:12px"><input type="checkbox" data-g="${g}" data-i="${i}" ${on?'checked':''}><b style="min-width:92px">${E(r.id)}</b><span style="color:var(--dim)">${E(r.zone)} · ${E(r.cat)}</span>${extra?'<span style="color:var(--faint)">'+extra+'</span>':''}</label>`;
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:620px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><b>L1 柱子 对照 L2</b><button class="hbtn" id="l2X">关闭</button></div>
+      <div style="padding:10px 16px;overflow:auto;flex:1">
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px">L1 的柱子 = 从 L1 浇到 L2 的柱子，所以每根都应该在 L2 的清单里找得到。编号不一样但其实是同一根的（例如 L2 写法不同），请把勾去掉。</div>
+        <div style="font-weight:800;font-size:12px;margin:6px 0 2px">① L2 没有这根柱子 · ${miss.length} 根（NB 默认勾选；EB / Marine 和原始数据就在 L1 的不勾）</div>
+        ${miss.map((r,i)=>row(r,i,'m',r.cat==='NB'&&!r.base,r.base?'原始图纸数据就在 L1（可能 L2 编号写法不同），请核对':'')).join('')||'<div style="font-size:12px;color:var(--faint)">没有</div>'}
+        <div style="font-weight:800;font-size:12px;margin:12px 0 2px">② L2 上属于别的区域 · ${area.length} 根（默认不勾）</div>
+        ${area.map((r,i)=>row(r,i,'a',false,'L2: '+E(r.l2))).join('')||'<div style="font-size:12px;color:var(--faint)">没有</div>'}
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line)"><button class="hbtn" id="l2Go" style="background:#6474df;color:#fff;border-color:#6474df;font-weight:800">取消所选的「计入」</button></div></div>`;
+    document.body.appendChild(ov);const close=()=>ov.remove();
+    ov.querySelector('#l2X').onclick=close;ov.onclick=e=>{if(e.target===ov)close();};
+    ov.querySelector('#l2Go').onclick=()=>{const picks=[...ov.querySelectorAll('input[type=checkbox]:checked')].map(i=>(i.dataset.g==='m'?miss:area)[+i.dataset.i]);
+      if(!picks.length){this._toast('没有勾选');return;}
+      this._confirmModal('取消 '+picks.length+' 根 L1 柱子的「计入」？之后在登记表里还能勾回来。',()=>{
+        const D=this._elemDrop();picks.forEach(r=>{const k=r.lv+'||'+r.zmk+'||col',a=D[k]=D[k]||[];if(!a.some(x=>this._colKey(x)===this._colKey(r.id)))a.push(r.id);});
+        try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+        if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',D,null,null);
+        this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+        this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();close();this.render();this._toast('已取消 '+picks.length+' 根');after&&after();});};
+  }
   _elemDropped(lv,zmk,type,id){
     if(this._elemPurged&&this._elemPurged(lv,zmk,type,id))return true;
     /* A hidden column used to vanish from the map and the Zone list while the
@@ -5382,6 +5423,7 @@ class Component extends DCLogic {
             +'\u91cd\u590d '+dup+' \u6761 \u00b7 \u8d2f\u901a\u6784\u4ef6</span>':'');
       })()
       +(this._rgPrefixable(st)?'<button class="hbtn" id="rgPrefix" title="把这一层的编号开头改成该层的数字，例如 2VB11 → 3VB11">↺ 按楼层改编号</button>':'')
+      +(st.lv==='L1'&&st.type==='col'&&this.rwsIsAdmin()?'<button class="hbtn" id="rgVsL2" title="L1 的柱子要上到 L2 才算 L1 柱子：拿 L2 的柱子清单逐根对照">⇅ 对照 L2</button>':'')
       +'<span style="flex:1"></span>'
       +(ALLLV?'<span style="color:var(--dim);font-size:12px">选一个楼层才能新增</span>'
         :('<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;border:1px dashed var(--line);border-radius:8px;padding:4px 6px">'
@@ -5430,6 +5472,7 @@ class Component extends DCLogic {
       if(this._regAdd(st.lv,zsel.value,st.type,idi.value)){idi.value='';re();}};}
     {const zb=root.querySelector('#rgZone');if(zb)zb.onchange=e=>{st.zone=e.target.value;re();};}
     {const pb=root.querySelector('#rgPrefix');if(pb)pb.onclick=()=>this._rgRenumber(st,re);}
+    {const vb=root.querySelector('#rgVsL2');if(vb)vb.onclick=()=>this._openL1vsL2(re);}
     this._bindRegHandlers(root,re);
   }
   openRegisterImport(){
@@ -7561,8 +7604,8 @@ class Component extends DCLogic {
       const displayId=this._elemDisplayId(lv,type,id);
       const idHtml=this._idSpanMaybeCol(id,displayId,z,lv);
       const cwTag=(type==='lift'||type==='stair')?this._cwTag(id):'';
-      const _isPour=(type==='core'||type==='lift'||type==='stair'),_zmk=z.mk||z.lid,_coveredCore=(type==='lift'||type==='stair')?this._lsMemberCore(z,id):'',_pv=(_isPour&&!_coveredCore)?this.elemPourPct(lv,_zmk,'ls',type,id):null,_canPour=_isPour&&!_coveredCore&&(this.rwsIsAdmin()||this.rwsScopeOk(lv,_zmk));
-      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(_coveredCore)}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="Three-pour progress for this individual item"><span>Pour</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="ls" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
+      const _isPour=(type==='core'||type==='lift'||type==='stair'||type==='col'),_pa=type==='col'?'col':'ls',_zmk=z.mk||z.lid,_coveredCore=(type==='lift'||type==='stair')?this._lsMemberCore(z,id):'',_pv=(_isPour&&!_coveredCore)?this.elemPourPct(lv,_zmk,_pa,type,id):null,_canPour=_isPour&&!_coveredCore&&(this.rwsIsAdmin()||this.rwsScopeOk(lv,_zmk));
+      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(_coveredCore)}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="${type==='col'?'Progress of this column (e.g. rebar / formwork done, not yet cast)':'Three-pour progress for this individual item'}"><span>${type==='col'?'进度':'Pour'}</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="${_pa}" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
       return `<div class="idrow ${crit?'crit':''}">${idHtml}${cwTag}<span class="meta">${metaFn?metaFn(x):''}</span>${_pourCtl}${this.elChip(key)}${dc}</div>`;}).join('');}
 
   /* ---------- schedule-record (ZP) integration — enriches the detail panel only; map unchanged ---------- */
@@ -7895,7 +7938,7 @@ class Component extends DCLogic {
       const carryLine=cg.hasData?`<div class="actsub actcarry"><span class="am2" title="Backlog carried in from earlier months = cumulative plan − cumulative done">Backlog in</span> <b>${this.fmt(cg.carryIn)}</b>${_ub}<span class="asep">|</span><span class="am2" title="What to do this month = this-month plan">Target</span> <b>${this.fmt(cg.required)}</b>${_ub}<span class="asep">|</span><span class="am2">Balance</span> ${_balTxt}${_ub}${(cg.carryIn>0&&cg.done>0)?`<span class="acum" title="Of what you did this month: cleared old backlog + this-month share">did ${this.fmt(cg.done)} = ${this.fmt(cg.cleared)} backlog + ${this.fmt(cg.current)} this-mo</span>`:''}</div>`:'';
       /* 条 = 累计完成 ÷ 总量(含"Before Apr'26"), 早做完的量会一直带到后面月份, 不会因为当月没做就变回未完成 */
       /* 有总量→累计÷总量; 无总量但有当月计划→当月done÷计划; 两者都没有→不猜百分比(显示 —), 但活动仍会列出、Done 值可见 */
-      const _isPourAct=(a.id==='ls'||a.id==='act_corewall');
+      const _isPourAct=(a.id==='ls'||a.id==='act_corewall'||a.id==='col');
       const _pourPct=_isPourAct?this.actPourPct(lv,zmk,a.id):null;
       const pct=_pourPct!=null?_pourPct:((total!=null&&total>0)?Math.min(100,Math.round(cumThrough/total*100)):((plan!=null&&plan>0)?Math.min(100,Math.round((dm||0)/plan*100)):null));
       const bc=pct==null?'var(--faint)':(pct>=100?'#35c08e':(pct>0?this.cssvar('--wip'):'var(--faint)'));
