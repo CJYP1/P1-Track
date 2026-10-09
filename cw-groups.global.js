@@ -19,7 +19,7 @@ window.CW_GROUPS = {
   "CW2B": { lifts:["P1-CSL1","P1-CSL2","P1-CSL3","P1-PL5","P1-PL1","P1-PL3","P1-PL2","P1-PL4","P1-PL6"],
             stairs:[], f:"B2", t:"L4" },
   "CW01": { lifts:["PL-HSL/EL5","P1-FL4","P1-PL22","P1-PL21","P1-PL20","P1-PL19","P1-SK1","P1-SK2"],
-            stairs:["P1-ST-04","P1-ST-18/19"], f:"L1", t:"L16" },
+            stairs:[], f:"L1", t:"L16" }   /* P1-ST-04, P1-ST-18/19 are not part of CW01 (site, 9 Oct 26) */,
   "LW6":  { lifts:["P1-ML1","P1-ML2","P1-ML3","P1-ML4"], stairs:[], f:"L1", t:"L4" },
   "LW7":  { lifts:["P1-CL4","P1-CL3"], stairs:[], f:"L1", t:"L3" },
   "LW9":  { lifts:["P1-CL1","P1-CL2"], stairs:[], f:"L2", t:"L3" },
