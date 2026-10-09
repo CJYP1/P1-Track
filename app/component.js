@@ -786,7 +786,7 @@ class Component extends DCLogic {
   toggleHideCol(id){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can hide columns.');return;}this._appCfg=this._appCfg||{};this._hidePush();const hc=this._appCfg.hideCols=this._appCfg.hideCols||{};const lv=this.curLevel;const arr=hc[lv]=hc[lv]||[];const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);else arr.push(id);if(!arr.length)delete hc[lv];try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function'){rwsSyncKV('settings','hideCols',this._appCfg.hideCols||{},null,null);rwsSyncKV('settings','hideColsUndo',this._appCfg.hideColsUndo||[],null,null);}this.render();}
   toggleHideColMode(){if(!this.rwsIsAdmin())return;this._hidingCol=!this._hidingCol;if(this._placingCol&&this._hidingCol)this._placingCol=false;this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   actDefaultMonthVis(){const dm=this.actDefaultMonth(),VM=this.visMonths();return VM.indexOf(dm)>=0?dm:VM[VM.length-1];}
-  actTotal(lv,zmk,a,def){if(a==='ls'||a==='act_corewall'){const refs=this._activityElemRefs(lv,zmk,a);if(refs.length)return refs.length;}const v=(this._actTotal||{})[lv+'||'+zmk+'||'+a];return v==null?def:v;}
+  actTotal(lv,zmk,a,def){if(a==='ls'||a==='act_corewall'||a==='col'){const refs=this._activityElemRefs(lv,zmk,a);if(refs.length)return refs.length;}const v=(this._actTotal||{})[lv+'||'+zmk+'||'+a];return v==null?def:v;}
   /* Auto excavation volume — NEW BASEMENT only: B1 area×8.5m, B2 area×6m */
   excDepth(lv){return lv==='B1'?8.5:(lv==='B2'?6:null);}
   excAuto(lv,z){if((z.cat||'NB')!=='NB')return null;const d=this.excDepth(lv);return d==null?null:Math.round((z.area||0)*d);}
@@ -5191,7 +5191,7 @@ class Component extends DCLogic {
       if(type==='col'){const CO=(this.COLUMNS&&this.COLUMNS[lv])||[];
         const c=CO.find(x=>this._colKey(x.id)===this._colKey(id));if(c&&c.sz)sz=c.sz;
         if(!sz){const pc=((this._colAdd&&this._colAdd[lv])||[]).find(x=>this._colKey(x.id)===this._colKey(id));if(pc&&pc.sz)sz=pc.sz;}}
-      out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',type,label,id,key,sz,
+      out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',pod:!!z._pod,type,label,id,key,sz,
                 keep:(hid||drp)?'N':'Y',why:hid?'隐藏 hidden':(drp?'剔除 dropped':''),
                 st:this.elemStatus(key),date:this.elemDate(key)||''});};
     (this.DATA.order||[]).forEach(lv=>{
@@ -5217,6 +5217,11 @@ class Component extends DCLogic {
                 if(lab===(z.label||''))add(lv,z,zmk,type,label,id);});}
           }
         });});});
+    /* Marine podium P zones (L1) are not map zones, so they were missing here.  Their columns
+       come from the podium ledger; the zone is fixed (no move), Keep / status / date work as usual. */
+    {const S=this.SUBZONES&&this.SUBZONES.L1;((S&&S.P)||[]).forEach(e=>{const zmk='L1|'+e.label,z={mk:zmk,label:e.label,cat:'MA',_pod:true};
+      ((this._marineCol&&this._marineCol[e.label])||[]).forEach(c=>{const id=typeof c==='string'?c:(c&&c.id);if(id)add('L1',z,zmk,'col','Column',id);});
+      (this._elemDrop()['L1||'+zmk+'||col']||[]).forEach(id=>add('L1',z,zmk,'col','Column',id));});}
     return out;
   }
   _regCsv(){
@@ -5505,7 +5510,7 @@ class Component extends DCLogic {
           +'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
-          +(ALLLV?esc(r.zone):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>')+'</td>'
+          +(ALLLV||r.pod?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>'
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
@@ -8124,7 +8129,10 @@ class Component extends DCLogic {
         ${z.area?this.statCell(lv,z.mk||z.lid,'area','Area m²',z.area):''}
         ${!(z.cat==='NB'&&(lv==='B2'||lv==='B1'))?'':this.excAuto(lv,z)!=null?`<div class="stat" title="Auto-computed for new basement: area \u00d7 depth"><div class="n">${this.fmt(this.excTotal(lv,z))}</div><div class="l">Excavation m\u00b3</div><div class="statcalc">${this.fmt(z.area||0)} m\u00b2 \u00d7 ${this.excDepth(lv)} m</div></div>`:(this.rwsIsAdmin()?`<div class="stat"><input class="exc-ov-in" value="${this.actTotal(lv,z.mk||z.lid,'exc','')}" placeholder="\u2014" title="Excavation total m\u00b3 (admin)" style="width:100%;background:var(--panel);border:1px dashed var(--accent);border-radius:5px;padding:2px 5px;font-size:15px;font-weight:700;color:var(--accent);text-align:left"><div class="l">Excavation m\u00b3</div></div>`:(this.actTotal(lv,z.mk||z.lid,'exc',0)?`<div class="stat"><div class="n">${this.fmt(this.actTotal(lv,z.mk||z.lid,'exc',0))}</div><div class="l">Excavation m\u00b3</div></div>`:''))}
         ${!(z.cat==='EB'&&(lv==='B2'||lv==='B1'))?'':this.rwsIsAdmin()?`<div class="stat"><input class="demo-ov-in" value="${this.actTotal(lv,z.mk||z.lid,'demo','')}" placeholder="\u2014" title="Demolition total m\u00b3 (admin)" style="width:100%;background:var(--panel);border:1px dashed var(--accent);border-radius:5px;padding:2px 5px;font-size:15px;font-weight:700;color:var(--accent);text-align:left"><div class="l">Demolition m\u00b3</div></div>`:(this.actTotal(lv,z.mk||z.lid,'demo',0)?`<div class="stat"><div class="n">${this.fmt(this.actTotal(lv,z.mk||z.lid,'demo',0))}</div><div class="l">Demolition m\u00b3</div></div>`:'')}
-        ${this._actList(lv,z).filter(a=>a.id!=='exc'&&a.id!=='demo'&&(a.id!=='pile'||lv==='B2')).map(a=>{const zmk=z.mk||z.lid;const hidden=this.actHidden(lv,zmk,a.id);if(!this.rwsIsAdmin()&&hidden)return '';const tot=this.actTotal(lv,zmk,a.id,a.total);const lab=this.esc(a.label)+(a.unit?' '+this.esc(a.unit):'');const _isOv=this.actTotal(lv,zmk,a.id,null)!=null;const _autoTag=(!_isOv&&tot!=null)?' <span style="font-weight:600;color:var(--faint);font-size:8px;text-transform:none">· auto</span>':'';if(this.rwsIsAdmin())return `<div class="stat"><input class="actot-ov-in" data-a="${this.esc(a.id)}" value="${tot==null?'':tot}" placeholder="—" title="${this.esc(a.label)} total (admin) — ${_isOv?'manually set; clear to restore auto-calc from the Activities data below':'auto-calculated by summing the Activities plan quantities below — type a value to override'}" style="width:100%;background:var(--panel);border:1px dashed var(--accent);border-radius:5px;padding:2px 5px;font-size:15px;font-weight:700;color:var(--accent);text-align:left"><div class="l">${lab}${_autoTag}${this._lockIco('act_total',lv+'||'+zmk+'||'+a.id)}</div></div>`;return tot?`<div class="stat"><div class="n">${this.fmt(tot)}</div><div class="l">${lab}</div></div>`:'';}).join('')}
+        ${this._actList(lv,z).filter(a=>a.id!=='exc'&&a.id!=='demo'&&(a.id!=='pile'||lv==='B2')).map(a=>{const zmk=z.mk||z.lid;const hidden=this.actHidden(lv,zmk,a.id);if(!this.rwsIsAdmin()&&hidden)return '';const tot=this.actTotal(lv,zmk,a.id,a.total);const lab=this.esc(a.label)+(a.unit?' '+this.esc(a.unit):'');const _isOv=this.actTotal(lv,zmk,a.id,null)!=null;const _autoTag=(!_isOv&&tot!=null)?' <span style="font-weight:600;color:var(--faint);font-size:8px;text-transform:none">· auto</span>':'';
+          /* Column count = the Column list (minus 计入 = N); it is not typed here any more. */
+          if(a.id==='col'&&(this._activityElemRefs(lv,zmk,'col')||[]).length)return `<div class="stat" title="= Column list below (counted columns only)"><div class="n">${this.fmt(tot)}</div><div class="l">${lab} <span style="font-weight:600;color:var(--faint);font-size:8px;text-transform:none">· = list</span></div></div>`;
+          if(this.rwsIsAdmin())return `<div class="stat"><input class="actot-ov-in" data-a="${this.esc(a.id)}" value="${tot==null?'':tot}" placeholder="—" title="${this.esc(a.label)} total (admin) — ${_isOv?'manually set; clear to restore auto-calc from the Activities data below':'auto-calculated by summing the Activities plan quantities below — type a value to override'}" style="width:100%;background:var(--panel);border:1px dashed var(--accent);border-radius:5px;padding:2px 5px;font-size:15px;font-weight:700;color:var(--accent);text-align:left"><div class="l">${lab}${_autoTag}${this._lockIco('act_total',lv+'||'+zmk+'||'+a.id)}</div></div>`;return tot?`<div class="stat"><div class="n">${this.fmt(tot)}</div><div class="l">${lab}</div></div>`:'';}).join('')}
         ${(this.customCats()||[]).map(ct=>{const zmk=z.mk||z.lid;const hidden=this.actHidden(lv,zmk,ct.code);if(!this.rwsIsAdmin()&&hidden)return '';const ids=this.customItemsFor(lv,zmk,ct.code);if(!ids.length&&!this.rwsIsAdmin())return '';const nd=ids.filter(id=>this.elemStatus(lv+'||'+zmk+'||'+ct.code+'||'+id)==='done').length;return `<div class="stat statcust" data-jumpsec="${this.esc(ct.code)}" title="Custom category — click to open"><div class="n">${nd}/${ids.length}</div><div class="l">${this.esc(ct.label)}</div></div>`;}).join('')}
       </div>
       ${this.rwsIsAdmin()?'<div style="font-size:9.5px;color:var(--faint);margin:-6px 0 9px">Dashed boxes above are editable (admin) — press Enter or click away to save. Lift/Stair count isn\'t editable here.</div>':''}
