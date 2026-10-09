@@ -354,7 +354,27 @@ class Component extends DCLogic {
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
     try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
     try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
+    try{this._stripPodiumDupes();}catch(e){console.error('podium dupes',e);}
     try{this._rehomeOrphanElems();}catch(e){console.error('rehome elems',e);}
+  }
+  /* L1 columns in Marine's podium ledger belong to their P zone only.  A register add or move
+     could still put one into an NB zone too (WF-1C60 in P11 and in M-SLAB 5), so it was counted
+     twice.  Take it out of every non-Marine L1 zone; a tick or date saved there is carried to the
+     P zone when the P zone's own record is less advanced. */
+  _stripPodiumDupes(){
+    const own={};Object.keys(this._marineCol||{}).forEach(p=>(this._marineCol[p]||[]).forEach(c=>{const id=typeof c==='string'?c:(c&&c.id);if(id)own[this._colKey(id)]={p,id};}));
+    if(!Object.keys(own).length)return;
+    const E=this.elem=this.elem||{},D=this._elemDate=this._elemDate||{},admin=this.rwsIsAdmin&&this.rwsIsAdmin(),rank=v=>v==='done'?2:((v&&v!=='todo')?1:0);
+    this._podiumDupes=[];let moved=0;
+    (((this.DATA.levels.L1||{}).zones)||[]).forEach(z=>{if((z.cat||'NB')==='MA')return;const zmk=z.mk||z.lid;
+      z.cols=(z.cols||[]).filter(x=>{const id=typeof x==='string'?x:(x&&x.id),o=id&&own[this._colKey(id)];if(!o)return true;
+        this._podiumDupes.push(id+': '+z.label+' → '+o.p);
+        const ok='L1||'+zmk+'||col||'+id,nk='L1||L1|'+o.p+'||col||'+o.id;
+        if(rank(E[ok])>rank(E[nk])){E[nk]=E[ok];if(D[ok]!=null)D[nk]=D[ok];moved++;
+          if(admin){try{typeof rwsSyncElementStatus==='function'&&rwsSyncElementStatus(nk,E[nk]);if(D[nk]!=null&&typeof rwsSyncKV==='function')rwsSyncKV('elem_date',nk,D[nk],'L1','L1|'+o.p);}catch(e){}}}
+        return false;});
+      if(z.counts)z.counts.columns=z.cols.length;});
+    if(moved&&admin){this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();}
   }
   /* A column keeps one area all the way up: the area of the lowest level it appears on.  Zone
      boundaries differ from level to level, so a column on an area seam could land in an EB or
@@ -742,7 +762,7 @@ class Component extends DCLogic {
   /* Un-hide a column on any level. toggleHideCol only ever works on the level
      being looked at, which is no use from a list that spans all of them. */
   _unhideCol(lv,id){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can unhide columns.');return;}
+    if(!this._regCan()){this.rwsDeny('Only admin can unhide columns.');return;}
     const hc=(this._appCfg&&this._appCfg.hideCols)||null;if(!hc||!hc[lv])return;
     this._hidePush();
     hc[lv]=hc[lv].filter(x=>x!==id);
@@ -1815,17 +1835,18 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList','#openElemReg','#openTodayUpd'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList','#openTodayUpd'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
     try{if(this.DATA&&this.root.querySelector('#rail')){this.buildRail();this.buildMetrics();}}catch(_e){}
     if(hb)hb.style.display=(u&&this.rwsCanSnapshot())?'':'none';   /* 历史快照: admin 或有 HIST 权限才看得到 */
-    if(!u){info.textContent='';lo.style.display='none';ab.style.display='none';adminOnly.forEach(b=>b.style.display='none');if(manpowerBtn)manpowerBtn.style.display='none';if(sched)sched.style.display='none';if(rb)rb.style.display='none';return;}
+    if(!u){info.textContent='';lo.style.display='none';ab.style.display='none';adminOnly.forEach(b=>b.style.display='none');{const rg=this.root.querySelector('#openElemReg');if(rg)rg.style.display='none';}if(manpowerBtn)manpowerBtn.style.display='none';if(sched)sched.style.display='none';if(rb)rb.style.display='none';return;}
     info.textContent='👤 '+(u.display_name||u.username);   /* 只显示用户名(权限区域不再列在这里) */
     lo.style.display='';
     ab.style.display=(u.role==='admin')?'':'none';
     adminOnly.forEach(b=>b.style.display=(u.role==='admin')?'':'none');
+    {const rg=this.root.querySelector('#openElemReg');if(rg)rg.style.display=this._regCan()?'':'none';}
     if(manpowerBtn)manpowerBtn.style.display='';
     if(sched)sched.style.display='';
     if(rb)rb.style.display=this.rwsCanResource()?'':'none';
@@ -5038,7 +5059,7 @@ class Component extends DCLogic {
   _saveElemPurge(){try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemPurge',this._elemPurge(),null,null);}
   _regPurge(lv,zmk,type,id){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can delete elements.');return;}
+    if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can delete elements.');return;}
     const ck=this._colKey(id),k=lv+'||'+zmk+'||'+type;
     /* Added by hand: just take it out of the added list. */
     const N=this._elemNew();let wasNew=false;
@@ -5057,7 +5078,8 @@ class Component extends DCLogic {
   }
   /* picks: [{k:'lv||zmk||type',id}] ; mode 'restore' | 'gone' */
   _regPurgedAct(picks,mode){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
+    if(!this._regCan()){this.rwsDeny('Only admin can change the register.');return;}
+    if(!this.rwsIsAdmin())picks=(picks||[]).filter(p=>{const q=String(p&&p.k||'').split('||');return this.rwsScopeOk(q[0],q[1]);});
     const P=this._elemPurge(),G=this._elemGone();
     picks.forEach(({k,id})=>{const ck=this._colKey(id);
       if(P[k]){P[k]=P[k].filter(x=>this._colKey(x)!==ck);if(!P[k].length)delete P[k];}
@@ -5153,6 +5175,10 @@ class Component extends DCLogic {
   /* Dropped and hidden elements are listed as well, with Keep = N. They are out
      of every count, but they have to stay visible here or there would be no way
      to put one back. */
+  /* Register access: admin everywhere; NB / EB / MA accounts in their own area(s). */
+  _regCan(){return this.rwsIsAdmin()||['NB','EB','MA'].some(c=>this.rwsHasScope(c));}
+  _regOk(lv,zmk){return this.rwsIsAdmin()||(this._regCan()&&this.rwsScopeOk(lv,zmk));}
+  _regZoneOk(lv,label){if(this.rwsIsAdmin())return true;const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>(x.label||x.mk)===label||String(x.mk||x.lid)===String(label));return !!z&&this.rwsScopeOk(lv,z.mk||z.lid);}
   _regRows(){
     const out=[],seen=new Set();
     const add=(lv,z,zmk,type,label,id)=>{
@@ -5294,7 +5320,7 @@ class Component extends DCLogic {
     });
   }
   _regAdd(lv,zmk,type,id){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can add elements.');return false;}
+    if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can add elements.');return false;}
     id=String(id||'').trim();if(!id)return false;
     if(/[.。]+$/.test(id))id=this._dotFixId(id);
     const k=lv+'||'+zmk+'||'+type,N=this._elemNew();
@@ -5307,7 +5333,7 @@ class Component extends DCLogic {
     return true;
   }
   _regRename(lv,zmk,type,oldId,newId){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can rename elements.');return false;}
+    if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can rename elements.');return false;}
     newId=String(newId||'').trim();if(!newId||newId===oldId)return false;
     if(/[.。]+$/.test(newId))newId=this._dotFixId(newId);
     const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return false;
@@ -5327,7 +5353,7 @@ class Component extends DCLogic {
     return true;
   }
   _regSetKeep(lv,zmk,type,id,keep){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
+    if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can change the register.');return;}
     /* Hidden and dropped both stop an element counting, so putting one back has
        to lift whichever is holding it out. */
     if(keep&&type==='col'&&this._colHidden&&this._colHidden(lv,id))this._unhideCol(lv,id);
@@ -5355,7 +5381,7 @@ class Component extends DCLogic {
     this.setElemDate(this.ekey(lv,z,type,id),iso||'');
   }
   _regMove(lv,type,id,zoneLabel){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can move elements.');return;}
+    if(!this._regCan()||!this._regZoneOk(lv,zoneLabel)){this.rwsDeny('Only admin can move elements outside your area.');return;}
     this._setElemMove(lv,type,id,zoneLabel);
     this._saveElemMoves();
     this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
@@ -5392,7 +5418,7 @@ class Component extends DCLogic {
       after&&after();});
   }
   openRegisterGrid(){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit the register.');return;}
+    if(!this._regCan()){this.rwsDeny('Only admin can edit the register.');return;}
     const old=document.getElementById('__regGrid');if(old)old.remove();
     const st=this._rg=this._rg||{};
     if(!st.lv)st.lv=this.curLevel;
@@ -5411,8 +5437,9 @@ class Component extends DCLogic {
     const st=this._rg,esc=s=>this.esc(s);
     const TYPES=this._regTypes();
     const ALLLV=st.lv==='__all';
-    const zones=ALLLV?[]:((this.DATA.levels[st.lv]||{}).zones||[]);
-    const all=this._regRows().filter(r=>(ALLLV||r.lv===st.lv)&&r.type===st.type);
+    const _adm=this.rwsIsAdmin();
+    const zones=ALLLV?[]:((this.DATA.levels[st.lv]||{}).zones||[]).filter(z=>_adm||this.rwsScopeOk(st.lv,z.mk||z.lid));
+    const all=this._regRows().filter(r=>(ALLLV||r.lv===st.lv)&&r.type===st.type&&(_adm||this.rwsScopeOk(r.lv,r.zmk)));
     const q=String(st.q||'').trim().toUpperCase();
     const matched=all.filter(r=>(st.cat==='all'||r.cat===st.cat)
       &&(!st.zone||st.zone==='__all'||r.zone===st.zone)
@@ -5428,7 +5455,7 @@ class Component extends DCLogic {
       +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1 · admin</div>'
       +'<div style="font-size:24px;font-weight:800;line-height:1.15">构件台账 — 直接在网页上改</div></div>'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-      +'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
+      +(_adm?'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button>':'')+'<button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
       +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'全部楼层（贯通构件按层重复）')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
       +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+'</select>'
@@ -5491,7 +5518,7 @@ class Component extends DCLogic {
     root.innerHTML=h;
     const re=()=>this._rgRender();
     root.querySelector('#rgClose').onclick=()=>{const o=document.getElementById('__regGrid');if(o)o.remove();};
-    root.querySelector('#rgCsv').onclick=()=>this.openRegisterImport();
+    {const cb=root.querySelector('#rgCsv');if(cb)cb.onclick=()=>this.openRegisterImport();}
     root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
