@@ -817,13 +817,17 @@ class Component extends DCLogic {
   _elemPourKey(lv,zmk,aid,type,id){return lv+'||'+zmk+'||'+aid+'||pour_elem||'+type+'||'+encodeURIComponent(String(id||''));}
   elemPourPct(lv,zmk,aid,type,id){const v=(this._manpower||{})[this._elemPourKey(lv,zmk,aid,type,id)];return v==null?null:Math.max(0,Math.min(100,Math.round(Number(v)||0)));}
   actPourStats(lv,zmk,aid){
-    const T=aid==='col'?['col']:['core','lift','stair'];
+    const T=({col:['col'],pile:['pile'],mbeam:['beam'],cbeam:['cbeam']})[aid]||['core','lift','stair'];
     const refs=this._activityElemRefs(lv,zmk,aid).filter(r=>T.indexOf(r.type)>=0),vals=[];let typed=0;
     refs.forEach(r=>{const v=this.elemPourPct(lv,zmk,aid,r.type,r.id);if(v!=null)typed++;vals.push(v==null?(this.elemStatus(r.key)==='done'?100:0):v);});
     /* Columns: % only takes over once someone has typed one; until then the done count stands. */
-    if(aid==='col'&&!typed)return {count:vals.length,sum:vals.reduce((n,v)=>n+v,0),pct:null,typed:0};
+    if(this._pctAid(aid)&&!typed)return {count:vals.length,sum:vals.reduce((n,v)=>n+v,0),pct:null,typed:0};
     return {typed,count:vals.length,sum:vals.reduce((n,v)=>n+v,0),pct:vals.length?Math.round(vals.reduce((n,v)=>n+v,0)/vals.length):null};
   }
+  /* Element activities that take a typed per-element % (columns, beams, pile caps).  Unlike core
+     walls / stairs, their % only takes over once someone has typed one. */
+  _pctAid(aid){return aid==='col'||aid==='pile'||aid==='mbeam'||aid==='cbeam';}
+  _pourAidOfType(type){return ({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'ls',lift:'ls',stair:'ls'})[type]||null;}
   actPourPct(lv,zmk,aid){return this.actPourStats(lv,zmk,aid).pct;}
   setElemPourPct(lv,zmk,aid,type,id,raw){if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny&&this.rwsDeny('Outside your assigned zones.');return;}const k=this._elemPourKey(lv,zmk,aid,type,id),s=String(raw==null?'':raw).trim(),v=s===''?null:Math.max(0,Math.min(100,Math.round(Number(s)||0)));this._manpower=this._manpower||{};if(v==null)delete this._manpower[k];else this._manpower[k]=v;try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);}
   setActRes(lv,zmk,aid,which,raw){if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny&&this.rwsDeny('Outside your assigned zones.');return;}
@@ -1777,7 +1781,7 @@ class Component extends DCLogic {
       /* 分母优先用总量(全 scope): "做在计划前面"(done 已录, plan 还排在后面月份)也照样算进度; 没总量再退回累计计划, 再退回已完成量 */
       const _tot=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid));
       const denom=(_tot!=null&&_tot>0)?_tot:(cumPlan>0?cumPlan:cumDone);
-      const pourPct=(aid==='ls'||aid==='act_corewall'||aid==='col')?this.actPourPct(lv,zmk,aid):null;
+      const pourPct=(aid==='ls'||aid==='act_corewall'||this._pctAid(aid))?this.actPourPct(lv,zmk,aid):null;
       if(pourPct!=null){(ph[p]=ph[p]||[]).push(this.clamp(pourPct/100,0,1));return;}   /* Core/Lift/Stair 以逐构件浇筑百分比为准 */
       if(denom<=0)return;
       (ph[p]=ph[p]||[]).push(this.clamp(cumDone/denom,0,1));});
@@ -2656,7 +2660,7 @@ class Component extends DCLogic {
       total+=zt;planned+=zp;if(d.end&&(!end||d.end>end))end=d.end;});});
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
-    const elems={},isPour=aid==='ls'||aid==='act_corewall'||aid==='col',refs=[];let refs0Typed=false;
+    const elems={},isPour=aid==='ls'||aid==='act_corewall'||this._pctAid(aid),refs=[];let refs0Typed=false;
     (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>refs.push({lv,zmk,z,r}));});});
     /* Core/Lift/Stair is reported by core wall wherever a core exists.  Members
        can sit in a different Zone from their core, so this must be resolved over
@@ -2694,8 +2698,7 @@ class Component extends DCLogic {
     if(Object.keys(elems).length){
       const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;
         const items=Object.keys(elems).map(k=>{const q=k.split('||');return q[2]==='coregrp'?('Core '+q[3]):((q[2]==='stair'?'Stair ':q[2]==='core'?'Core ':q[2]+' ')+q[3]);});
-        const _colTyped=aid==='col'&&refs0Typed;
-        return {done,total,pct:this._reportPct(done,total),pour:isPour&&(aid!=='col'||_colTyped),items};} }
+        return {done,total,pct:this._reportPct(done,total),pour:isPour&&(!this._pctAid(aid)||refs0Typed),items};} }
     /* Quantities: each zone's done is capped at that zone's own scope before the zones are added
        up.  Capping only the level sum let a zone recorded above its area (or recorded twice) fill
        the gap of a zone that has not been poured — B1 slab read 100% with zones still open.  The
@@ -5507,7 +5510,7 @@ class Component extends DCLogic {
           +'<button class="hbtn primary" id="rgAdd">+ Add</button></span>'))
       +(()=>{const P=this._elemPurge();let n=0;Object.keys(P).forEach(k=>{if(k.split('||')[0]===st.lv)n+=P[k].length;});
         return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="Restore or permanently clear elements deleted on this level">Deleted '+n+' · restore / clear</button>':'';})()+'</div>';
-    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Each cell saves as you change it and syncs to every account. Untick <b>Keep</b> = the element no longer counts anywhere (map, zone list, Report, tiles); the drawing data is untouched and you can tick it back any time. Change <b>Zone</b> = move it to that zone; ticks and cast dates move with it. <b>%</b> = progress of a column / core wall / lift / staircase — the same figure as in the zone panel.</div>';
+    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Each cell saves as you change it and syncs to every account. Untick <b>Keep</b> = the element no longer counts anywhere (map, zone list, Report, tiles); the drawing data is untouched and you can tick it back any time. Change <b>Zone</b> = move it to that zone; ticks and cast dates move with it. <b>%</b> = progress of the element — the same figure as in the zone panel.</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
       +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
     if(!rows.length)h+='<tr><td colspan="10" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
@@ -5530,7 +5533,7 @@ class Component extends DCLogic {
           +['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+(()=>{
             /* Same % as the zone panel: columns under Column, core walls / lifts / stairs under Core/Lift/Stair. */
-            const pa=r.custom?null:r.type==='col'?'col':((r.type==='core'||r.type==='lift'||r.type==='stair')?'ls':null);if(!pa)return '<span style="color:var(--faint)">—</span>';
+            const pa=r.custom?null:this._pourAidOfType(r.type);if(!pa)return '<span style="color:var(--faint)">—</span>';
             const v=this.elemPourPct(r.lv,r.zmk,pa,r.type,r.id);
             return '<input type="number" min="0" max="100" step="1" class="rgPct" '+d+' data-a="'+pa+'" value="'+(v==null?'':v)+'" placeholder="%" style="'+IN+';width:62px">';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
@@ -7685,8 +7688,8 @@ class Component extends DCLogic {
       const displayId=this._elemDisplayId(lv,type,id);
       const idHtml=this._idSpanMaybeCol(id,displayId,z,lv);
       const cwTag=(type==='lift'||type==='stair')?this._cwTag(id):'';
-      const _isPour=(type==='core'||type==='lift'||type==='stair'||type==='col'),_pa=type==='col'?'col':'ls',_zmk=z.mk||z.lid,_coveredCore=(type==='lift'||type==='stair')?this._lsMemberCore(z,id):'',_pv=(_isPour&&!_coveredCore)?this.elemPourPct(lv,_zmk,_pa,type,id):null,_canPour=_isPour&&!_coveredCore&&(this.rwsIsAdmin()||this.rwsScopeOk(lv,_zmk));
-      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(_coveredCore)}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="${type==='col'?'Progress of this column (e.g. rebar / formwork done, not yet cast)':'Three-pour progress for this individual item'}"><span>${type==='col'?'Progress':'Pour'}</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="${_pa}" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
+      const _pa=this._pourAidOfType(type),_isPour=!!_pa,_zmk=z.mk||z.lid,_coveredCore=(type==='lift'||type==='stair')?this._lsMemberCore(z,id):'',_pv=(_isPour&&!_coveredCore)?this.elemPourPct(lv,_zmk,_pa,type,id):null,_canPour=_isPour&&!_coveredCore&&(this.rwsIsAdmin()||this.rwsScopeOk(lv,_zmk));
+      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(_coveredCore)}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="${_pa==='ls'?'Three-pour progress for this individual item':'Progress of this item (e.g. rebar / formwork done, not yet cast)'}"><span>${_pa==='ls'?'Pour':'Progress'}</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="${_pa}" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
       return `<div class="idrow ${crit?'crit':''}">${idHtml}${cwTag}<span class="meta">${metaFn?metaFn(x):''}</span>${_pourCtl}${this.elChip(key)}${dc}</div>`;}).join('');}
 
   /* ---------- schedule-record (ZP) integration — enriches the detail panel only; map unchanged ---------- */
@@ -7973,12 +7976,12 @@ class Component extends DCLogic {
   _adminZoneProgressPanel(lv,z){
     if(!this.rwsIsAdmin())return '';
     const zones=this._adminAggZones(lv,z),multi=!!(this._adminAggLevel===lv&&this._adminAggSet&&this._adminAggSet.size),M=this.ACT_MONTHS||[],sm=(this._actMonth&&M.includes(this._actMonth))?this._actMonth:this.actDefaultMonth(),mi=Math.max(0,M.indexOf(sm)),fmtN=v=>this.fmt(Math.round(Number(v)||0)),by={};
-    zones.forEach(zz=>{const zmk=zz.mk||zz.lid;(this._actList(lv,zz)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,zz)).forEach(a=>{const r=by[a.id]||(by[a.id]={a,total:0,cum:0,cumAll:0,byM:{},early:{},monthPlan:0,monthDone:0,hasPlan:false,hasDone:false,missing:0,pourSum:0,pourCount:0}),_pi=M.findIndex(m=>this.actPlan(lv,zmk,a.id,m)!=null),total=Number(a.total),hasTotal=Number.isFinite(total)&&total>0,cum=M.slice(0,mi+1).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),mp=this.actPlan(lv,zmk,a.id,sm),md=this.actDoneMonth(lv,zmk,a.id,sm),ps=(a.id==='ls'||a.id==='act_corewall'||a.id==='col')?this.actPourStats(lv,zmk,a.id):null;
+    zones.forEach(zz=>{const zmk=zz.mk||zz.lid;(this._actList(lv,zz)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,zz)).forEach(a=>{const r=by[a.id]||(by[a.id]={a,total:0,cum:0,cumAll:0,byM:{},early:{},monthPlan:0,monthDone:0,hasPlan:false,hasDone:false,missing:0,pourSum:0,pourCount:0}),_pi=M.findIndex(m=>this.actPlan(lv,zmk,a.id,m)!=null),total=Number(a.total),hasTotal=Number.isFinite(total)&&total>0,cum=M.slice(0,mi+1).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),mp=this.actPlan(lv,zmk,a.id,sm),md=this.actDoneMonth(lv,zmk,a.id,sm),ps=(a.id==='ls'||a.id==='act_corewall'||this._pctAid(a.id))?this.actPourStats(lv,zmk,a.id):null;
         /* Columns / beams / pile caps: count the ticked elements (same source as the Report), not the monthly Done numbers. */
         if(this._elemAct(a.id)&&a.id!=='ls'&&a.id!=='act_corewall'){const refs=this._activityElemRefs(lv,zmk,a.id)||[];r.elem=true;r.eBy=r.eBy||{};r.eSeen=r.eSeen||new Set();
           refs.forEach(x=>{const uk=x.type+'||'+this._colKey(x.id);if(r.eSeen.has(uk))return;r.eSeen.add(uk);r.eTot=(r.eTot||0)+1;if(this.elemStatus(x.key)!=='done')return;const d=this.elemDate&&this.elemDate(x.key),m=d?this.dateToActMonth(d):'',i=m?M.indexOf(m):-1;if(m&&i>mi)return;r.eDone=(r.eDone||0)+1;const lab=i>=0?m:'(no date)';r.eBy[lab]=(r.eBy[lab]||0)+1;});}
         r.cum+=cum;M.forEach((m,i)=>{const d=Number(this.actDoneMonth(lv,zmk,a.id,m))||0;if(!d)return;r.cumAll+=d;if(i<=mi)r.byM[m]=(r.byM[m]||0)+d;if(_pi>=0&&i<_pi)r.early[m]=(r.early[m]||0)+d;});if(hasTotal)r.total+=total;else if(cum>0||mp!=null||md!=null)r.missing++;if(mp!=null){r.monthPlan+=Number(mp)||0;r.hasPlan=true;}if(md!=null){r.monthDone+=Number(md)||0;r.hasDone=true;}if(ps&&ps.count){r.pourSum+=ps.sum;r.pourCount+=ps.count;if(ps.typed)r.typed=true;}});});
-    Object.values(by).forEach(r=>{if(r.elem&&r.eTot>0){r.total=r.eTot;r.cum=r.eDone||0;r.byM=r.eBy||{};r.missing=0;r.cumAll=r.cum;r.early={};}if(r.a.id==='col'&&!r.typed)r.pourCount=0;});
+    Object.values(by).forEach(r=>{if(r.elem&&r.eTot>0){r.total=r.eTot;r.cum=r.eDone||0;r.byM=r.eBy||{};r.missing=0;r.cumAll=r.cum;r.early={};}if(this._pctAid(r.a.id)&&!r.typed)r.pourCount=0;});
     const rows=Object.values(by).map(r=>{const unit=r.a.unit||this._actUnit(r.a.id),pourPct=r.pourCount?Math.round(r.pourSum/r.pourCount):null,scopePct=pourPct!=null?pourPct:(r.total>0?Math.min(100,Math.round(r.cum/r.total*100)):null),monthPct=r.hasPlan&&r.monthPlan>0?Math.min(100,Math.round(r.monthDone/r.monthPlan*100)):null,has=r.total>0||r.cum>0||r.hasPlan||r.hasDone||pourPct!=null;if(!has)return null;const monthTxt=r.hasPlan?`${fmtN(r.monthDone)} / ${fmtN(r.monthPlan)} ${this.esc(unit)} = ${monthPct||0}%`:(r.hasDone?`${fmtN(r.monthDone)} ${this.esc(unit)} done`:'No work entered'),over=r.total>0&&r.cum>r.total,after=r.cumAll-r.cum,scopeTxt=(pourPct!=null?`${r.pourCount} item${r.pourCount===1?'':'s'} pouring avg = ${pourPct}%`:(r.total>0?`${fmtN(r.cum)} / ${fmtN(r.total)} ${this.esc(unit)} = ${over?Math.round(r.cum/r.total*100):scopePct}%${r.missing?` · ${r.missing} missing total`:''}`:'Total not set'))
         /* Where the cumulative figure comes from, so a wrong month or a double entry can be found. */
         +(()=>{const ks=Object.keys(r.byM);let h='';
@@ -8024,7 +8027,7 @@ class Component extends DCLogic {
       const carryLine=cg.hasData?`<div class="actsub actcarry"><span class="am2" title="Backlog carried in from earlier months = cumulative plan − cumulative done">Backlog in</span> <b>${this.fmt(cg.carryIn)}</b>${_ub}<span class="asep">|</span><span class="am2" title="What to do this month = this-month plan">Target</span> <b>${this.fmt(cg.required)}</b>${_ub}<span class="asep">|</span><span class="am2">Balance</span> ${_balTxt}${_ub}${(cg.carryIn>0&&cg.done>0)?`<span class="acum" title="Of what you did this month: cleared old backlog + this-month share">did ${this.fmt(cg.done)} = ${this.fmt(cg.cleared)} backlog + ${this.fmt(cg.current)} this-mo</span>`:''}</div>`:'';
       /* 条 = 累计完成 ÷ 总量(含"Before Apr'26"), 早做完的量会一直带到后面月份, 不会因为当月没做就变回未完成 */
       /* 有总量→累计÷总量; 无总量但有当月计划→当月done÷计划; 两者都没有→不猜百分比(显示 —), 但活动仍会列出、Done 值可见 */
-      const _isPourAct=(a.id==='ls'||a.id==='act_corewall'||a.id==='col');
+      const _isPourAct=(a.id==='ls'||a.id==='act_corewall'||this._pctAid(a.id));
       const _pourPct=_isPourAct?this.actPourPct(lv,zmk,a.id):null;
       const pct=_pourPct!=null?_pourPct:((total!=null&&total>0)?Math.min(100,Math.round(cumThrough/total*100)):((plan!=null&&plan>0)?Math.min(100,Math.round((dm||0)/plan*100)):null));
       const bc=pct==null?'var(--faint)':(pct>=100?'#35c08e':(pct>0?this.cssvar('--wip'):'var(--faint)'));
