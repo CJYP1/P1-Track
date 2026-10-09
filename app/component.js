@@ -228,6 +228,12 @@ class Component extends DCLogic {
     const flat=this._actItemsFlat(lv,z,aid,admin);
     const linked=(this.customCats()||[]).filter(ct=>this._catAct(ct)===aid&&ct.code!==itemsCode).map(ct=>this._custCatSec(lv,z,ct,admin,true)).join('');
     const _am=this._actMeta().find(a=>a.id===aid);const _alab=_am?_am.label:'Status';
+    /* Columns, beams, pile caps and core/lift/stair items are added in the Element register now, so
+       there is one list to keep (renames, moves, Keep, % all live there).  Podium P zones are not
+       register zones, so they keep the old button. */
+    const _regT={col:'col',pile:'pile',mbeam:'beam',cbeam:'cbeam',act_corewall:'core',ls:'stair'}[aid],_zk=String(z.mk||z.lid||'');
+    if(_regT&&!/^L1\|/.test(_zk)){const can=this._regCan&&this._regCan()&&(admin||this.rwsScopeOk(lv,_zk));
+      return base+flat+linked+(can?`<div class="cust-add-row" style="padding-left:2px"><span class="allbtn reg-add-act" data-t="${_regT}" data-z="${this.esc(z.label||'')}" title="Add, rename or move ${this.esc(_alab)} items in the Element register" style="color:var(--accent);cursor:pointer;font-size:10.5px;font-weight:700">+ Add in Element register</span></div>`:'');}
     const addl=admin?`<div class="cust-add-row" style="padding-left:2px"><span class="allbtn cnewcat-act" data-a="${aid}" data-lab="${this.esc(_alab)}" title="Add an item to the ${this.esc(_alab)} list" style="color:var(--accent);cursor:pointer;font-size:10.5px;font-weight:700">+ ${this.esc(_alab)} List</span></div>`:'';
     return base+flat+linked+addl;
   }
@@ -5496,7 +5502,7 @@ class Component extends DCLogic {
       +(ALLLV?'<span style="color:var(--dim);font-size:12px">Pick one level to add elements</span>'
         :('<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;border:1px dashed var(--line);border-radius:8px;padding:4px 6px">'
           +'<b style="font-size:12px;white-space:nowrap">Add to</b>'
-          +'<select id="rgNewZone" class="hbtn" title="Zone for the new element">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
+          +'<select id="rgNewZone" class="hbtn" title="Zone for the new element">'+zones.map(z=>opt(z.mk||z.lid,((zones.find(x=>x.label===st.zone)||{}).mk||(zones.find(x=>x.label===st.zone)||{}).lid||''),(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
           +'<input id="rgNewId" placeholder="New mark" style="'+IN+';width:130px">'
           +'<button class="hbtn primary" id="rgAdd">+ Add</button></span>'))
       +(()=>{const P=this._elemPurge();let n=0;Object.keys(P).forEach(k=>{if(k.split('||')[0]===st.lv)n+=P[k].length;});
@@ -8190,6 +8196,7 @@ class Component extends DCLogic {
       const items=({col:z.cols,pile:z.piles,beam:z.beams,lift:z.lifts,stair:z.stairs,core:z.cores})[type]||[];
       items.forEach(x=>{const key=this.ekey(this.curLevel,z,type,typeof x==='string'?x:x.id);this.elem[key]='done';rwsSyncElementStatus(key,'done');});this.commitElem();}));
     sb.querySelectorAll('[data-bulk-all]').forEach(el=>el.addEventListener('click',()=>this.setZoneElems(this.curLevel,z,el.dataset.bulkAll)));
+    sb.querySelectorAll('.reg-add-act').forEach(el=>el.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();this._rg=Object.assign(this._rg||{},{lv:this.curLevel,type:el.dataset.t,cat:'all',zone:el.dataset.z,q:''});this.openRegisterGrid();}));
     sb.querySelectorAll('.cnewcat-act').forEach(el=>el.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();const aid=el.dataset.a;const lab=el.dataset.lab||'status';this._inputModal({title:'Add to '+lab+' list',label:lab+' item ID / Area / Vol / Nos. etc',placeholder:'e.g. CX19-CY41',ok:'Add',onOk:(id)=>{const code=this._ensureActItemsCat(aid);this.addCustomItem(this.curLevel,z.mk||z.lid,code,id);}});}));
     sb.querySelectorAll('.cadd').forEach(el=>el.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();this._inputModal({title:'Add item',label:'Item ID / mark',placeholder:'e.g. W-1',ok:'Add',onOk:(id)=>this.addCustomItem(this.curLevel,z.mk||z.lid,el.dataset.cat,id)});}));
     sb.querySelectorAll('.cdel').forEach(el=>el.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();const q=el.dataset.del.split('||');this._confirmModal('Delete '+q[1]+'?',()=>this.delCustomItem(this.curLevel,z.mk||z.lid,q[0],q[1]));}));
