@@ -265,7 +265,7 @@ class Component extends DCLogic {
   /* A hand-typed id that ends in a dot cannot be told apart from the same id
      without one — not in the list, and certainly not on the map. Rename it to
      a suffix that reads: WF-B2C41. becomes WF-B2C41a. */
-  _dotFixId(id){return String(id==null?'':id).replace(/[.\u3002]+$/,'a');}
+  _dotFixId(id){return String(id==null?'':id).replace(/[.。]+$/,'a');}
   _migrateDotIds(){
     if(!this._elemAdd)return;
     let dirty=false;
@@ -275,7 +275,7 @@ class Component extends DCLogic {
       const p=k.split('||');if(p.length<3)return;
       const out=[];
       arr.forEach(id=>{
-        if(!/[.\u3002]+$/.test(String(id))){if(out.indexOf(id)<0)out.push(id);return;}
+        if(!/[.。]+$/.test(String(id))){if(out.indexOf(id)<0)out.push(id);return;}
         const nid=this._dotFixId(id);
         dirty=true;
         const ok=k+'||'+id,nk=k+'||'+nid;
@@ -288,7 +288,7 @@ class Component extends DCLogic {
     });
     let cdirty=false;
     Object.keys(this._colAdd||{}).forEach(lv=>(this._colAdd[lv]||[]).forEach(c=>{
-      if(c&&c.id&&/[.\u3002]+$/.test(String(c.id))){c.id=this._dotFixId(c.id);cdirty=true;}}));
+      if(c&&c.id&&/[.。]+$/.test(String(c.id))){c.id=this._dotFixId(c.id);cdirty=true;}}));
     if(cdirty)this.savePlacedCols();
     if(dirty){this.saveCustom();this.saveElem&&this.saveElem();}
   }
@@ -505,7 +505,7 @@ class Component extends DCLogic {
     this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
     this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
     const nm={core:'Core Wall',lift:'Lift',stair:'Staircase'};
-    this._toast&&this._toast(id+' \u2192 '+nm[to]+' \u2713 \uff08\u6240\u6709\u697c\u5c42\uff09');
+    this._toast&&this._toast(id+' \u2192 '+nm[to]+' \u2713 (all levels)');
   }
   _stairTarget(lv,w){
     const L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];if(!L||!w||!w.pts||!w.pts.length)return null;
@@ -1228,13 +1228,13 @@ class Component extends DCLogic {
       if(el.classList.contains('resource-core-qty')){const card=el.closest('.resource-core-card'),i=card?Number(card.dataset.i):-1;if(i<0||!cs[i])return;cs[i][el.dataset.key]=this._resourceNum(el.value);this._resourceSave();this.render();this._renderResourcePanel();}};
     if(p._resourceCapture)p.removeEventListener('click',p._resourceCapture,true);p._resourceCapture=e=>{const editBtn=e.target.closest&&e.target.closest('#resourceEdit');if(editBtn){e.preventDefault();e.stopImmediatePropagation();this._resourceEditing=!this._resourceEditing;this.render();this._renderResourcePanel();return;}const cb=e.target.closest&&e.target.closest('.resource-core-remove');if(cb&&t){e.preventDefault();e.stopImmediatePropagation();const cc=cb.closest('.resource-core-card'),k=cc?Number(cc.dataset.i):-1;if(k>=0&&cs[k]){const at=t.cores.indexOf(cs[k]);if(at>=0)t.cores.splice(at,1);this._resourceInspect=null;this._resourceCoreRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();}return;}
     const b=e.target.closest&&e.target.closest('.resource-up,.resource-down,.resource-remove');if(!b||!t)return;e.preventDefault();e.stopImmediatePropagation();const card=b.closest('.resource-zone-card'),i=card?Number(card.dataset.i):-1;if(i<0||!zs[i])return;if(b.classList.contains('resource-remove')){const at=t.zones.indexOf(zs[i]);if(at>=0)t.zones.splice(at,1);this._resourceInspect=null;}else{const j=b.classList.contains('resource-up')?i-1:i+1;if(j<0||j>=zs.length)return;const a=zs[i].order,c=zs[j].order;zs[i].order=c;zs[j].order=a;}this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};p.addEventListener('click',p._resourceCapture,true);
-    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}${(()=>{const _M=this._mpMonths(),_i=Math.max(0,_M.indexOf(this._resMon()));return `<span style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel)"><button class="hbtn" id="resourceMonPrev" title="Previous month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i<=0?' disabled':''}>\u2039</button><b id="resourceMonLbl" style="padding:0 8px;font-size:11px;font-weight:800;color:var(--txt);white-space:nowrap">${this.esc(_M[_i]||'')}</b><button class="hbtn" id="resourceMonNext" title="Next month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i>=_M.length-1?' disabled':''}>\u203a</button></span>`;})()}<button class="hbtn" id="resourceMpMonth" style="padding:5px 8px" title="Men per area and level, month by month">\u25a6 Month</button><button class="hbtn" id="resourceBigMap" style="padding:5px 8px" title="\u6bcf\u5c42\u4e00\u5f20\u5927\u56fe\uff0c\u4e0a\u4e0b\u6392\u5f00\uff0c\u53ef\u9009\u5bbd\u5ea6\u548c\u500d\u6570">\u2b07 \u5927\u56fe</button><button class="hbtn ${this.showManpower===false?'':'primary'}" id="resourceMen" style="padding:5px 8px" title="\u5730\u56fe\u4e0a\u7684\u4eba\u6570\uff08\u73ed\u7ec4\u6570\u5b57 + \u6838\u5fc3\u7b52\u836f\u4e38\uff09\u5f00/\u5173\uff0c\u4e0d\u5f71\u54cd zone \u548c\u5de5\u5e8f">${this.showManpower===false?'\u2460 \u4eba\u6570\uff1a\u5173':'\u2460 \u4eba\u6570\uff1a\u5f00'}</button><button class="hbtn ${this._cleanMap?'primary':''}" id="resourceClean" style="padding:5px 8px" title="\u5e73\u9762\u5e72\u51c0\u7248: \u7070\u5e95 + \u5f53\u524d\u6708\u6709\u5de5\u4f5c\u7684 zone \u6d82\u7ea2\uff0c\u53ef\u4ee5\u76f4\u63a5\u622a\u56fe">\u25a3 \u5e72\u51c0\u7248</button>${admin?`<button class="hbtn ${this._mzClick?'primary':''}" id="resourceZoneMen" style="padding:5px 8px" title="Click a zone on the map to type the men on it for the month now shown">\u270e Zone men</button>`:''}<button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button><button class="hbtn" id="resourceSeqPng" style="padding:5px 8px" title="Export the work sequence of every team on this level as a PNG">\u2b07 PNG</button><button class="hbtn" id="resourceTable" style="padding:5px 8px" title="Edit the whole plan as a table">\u25a4 Table</button><button class="hbtn" id="resourceClearLv" style="padding:5px 8px;color:var(--crit)" title="Remove every Team\u2019s zones and core walls on the level you are looking at">\ud83d\uddd1 Clear level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
+    p.innerHTML=`<div style="padding:10px 10px 18px"><div style="display:flex;align-items:center;gap:6px"><div style="font-size:10px;color:var(--dim);line-height:1.4;flex:1">${editing?'Edit mode: choose a Team, then click Zones in work order and Core Walls on the map, and enter resources.':'View mode: click a coloured Zone or Core Wall to inspect its Team, order and resources.'}</div>${admin?`<button class="hbtn ${editing?'primary':''}" id="resourceEdit" style="padding:5px 9px">${editing?'Done':'Edit'}</button>`:''}${(()=>{const _M=this._mpMonths(),_i=Math.max(0,_M.indexOf(this._resMon()));return `<span style="display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel)"><button class="hbtn" id="resourceMonPrev" title="Previous month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i<=0?' disabled':''}>\u2039</button><b id="resourceMonLbl" style="padding:0 8px;font-size:11px;font-weight:800;color:var(--txt);white-space:nowrap">${this.esc(_M[_i]||'')}</b><button class="hbtn" id="resourceMonNext" title="Next month" style="border:0;border-radius:0;padding:5px 7px;line-height:1"${_i>=_M.length-1?' disabled':''}>\u203a</button></span>`;})()}<button class="hbtn" id="resourceMpMonth" style="padding:5px 8px" title="Men per area and level, month by month">\u25a6 Month</button><button class="hbtn" id="resourceBigMap" style="padding:5px 8px" title="One large image per level, stacked; choose width and scale">\u2b07 Large map</button><button class="hbtn ${this.showManpower===false?'':'primary'}" id="resourceMen" style="padding:5px 8px" title="Show / hide the manpower numbers on the map (crew numbers + core-wall pills); zones and activities are not affected">${this.showManpower===false?'\u2460 Men: off':'\u2460 Men: on'}</button><button class="hbtn ${this._cleanMap?'primary':''}" id="resourceClean" style="padding:5px 8px" title="Clean plan: grey base, zones with work this month in red — ready for a screenshot">\u25a3 Clean view</button>${admin?`<button class="hbtn ${this._mzClick?'primary':''}" id="resourceZoneMen" style="padding:5px 8px" title="Click a zone on the map to type the men on it for the month now shown">\u270e Zone men</button>`:''}<button class="hbtn" id="resourceClose" style="padding:5px 8px">Exit</button></div><div style="display:flex;gap:5px;flex-wrap:wrap;margin:10px 0">${tabs}${editing?'<button class="hbtn" id="resourceAddTeam" style="padding:5px 8px">+ Team</button><button class="hbtn" id="resourceCopyLv" style="padding:5px 8px" title="Copy every Team\u2019s zones and core walls from one level to others, scaled">\u29c9 Copy level</button><button class="hbtn" id="resourceSeqPng" style="padding:5px 8px" title="Export the work sequence of every team on this level as a PNG">\u2b07 PNG</button><button class="hbtn" id="resourceTable" style="padding:5px 8px" title="Edit the whole plan as a table">\u25a4 Table</button><button class="hbtn" id="resourceClearLv" style="padding:5px 8px;color:var(--crit)" title="Remove every Team\u2019s zones and core walls on the level you are looking at">\ud83d\uddd1 Clear level</button>':''}</div>${selectedNote}${t?`<div style="display:flex;align-items:center;gap:7px;margin:9px 0;padding:8px;background:var(--panel2);border-radius:8px">${editing?`<input id="resourceTeamColor" type="color" value="${t.color}" title="Team colour" style="width:30px;height:30px;padding:1px;border:1px solid var(--line);border-radius:6px"><input id="resourceTeamName" value="${this.esc(t.name)}" style="min-width:0;flex:1;font-weight:900;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">`:`<span style="width:12px;height:12px;border-radius:50%;background:${t.color}"></span><b style="flex:1">${this.esc(t.name)}</b>`}<span style="font-size:9px;color:var(--dim)">${zs.length} Zones on ${new Set(zs.map(x=>x.lv)).size} level${new Set(zs.map(x=>x.lv)).size===1?'':'s'} \u00b7 ${cs.length} Core walls</span>${editing&&d.teams.length>1?'<button id="resourceDeleteTeam" style="border:0;background:transparent;color:var(--crit);cursor:pointer">Delete</button>':''}</div>${cards}${coreSection}<div style="padding:11px;border-top:3px solid ${t.color};background:var(--panel2);border-radius:8px"><div style="font-size:9px;font-weight:900;letter-spacing:.06em;color:var(--dim)">TEAM TOTAL</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px"><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">WORKERS</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.workers)}</b></div><div><small style="display:block;font-size:9px;font-weight:800;color:var(--dim)">TOTAL</small><b style="font-size:28px;font-weight:900;line-height:1.1;color:${t.color}">${this.fmt(tot.t)}</b></div></div></div>`:'<div class="empty">No teams yet.</div>'}</div>`;
     p.querySelector('#resourceClose').onclick=()=>this._closeResourcePlanner();{const _cl=p.querySelector('#resourceCopyLv');if(_cl)_cl.onclick=()=>this.openResourceCopyLevel();}{const _xl=p.querySelector('#resourceClearLv');if(_xl)_xl.onclick=()=>this.resourceClearLevel();}{const _rt=p.querySelector('#resourceTable');if(_rt)_rt.onclick=()=>this.openResourceTable();}{const _sp=p.querySelector('#resourceSeqPng');if(_sp)_sp.onclick=()=>this.exportResourceSeqPng();}{const _mp=p.querySelector('#resourceMpMonth');if(_mp)_mp.onclick=()=>this.openManpowerMonth();}
     {const _bm=p.querySelector('#resourceBigMap');if(_bm)_bm.onclick=()=>this.openBigMapExport();}
     {const _mn=p.querySelector('#resourceMen');if(_mn)_mn.onclick=()=>{
       this.showManpower=(this.showManpower===false);this.render();this._renderResourcePanel();};}
     {const _cm=p.querySelector('#resourceClean');if(_cm)_cm.onclick=()=>{this._cleanMap=!this._cleanMap;
-      this._toast(this._cleanMap?'干净版：灰底，当前月有工作的分区涂红。再点一次回到正常视图。':'回到正常视图。');
+      this._toast(this._cleanMap?'Clean view: grey base, zones with work this month in red. Click again for the normal view.':'Back to the normal view.');
       this.render();this._renderResourcePanel();};}{const _M=this._mpMonths(),_step=d=>{const i=Math.max(0,_M.indexOf(this._resMon()))+d;if(i<0||i>=_M.length)return;this._resMonSel=_M[i];this.render();this._renderResourcePanel();};const _pv=p.querySelector('#resourceMonPrev');if(_pv)_pv.onclick=()=>_step(-1);const _nx=p.querySelector('#resourceMonNext');if(_nx)_nx.onclick=()=>_step(1);}{const _zm=p.querySelector('#resourceZoneMen');if(_zm)_zm.onclick=()=>{this._mzClick=!this._mzClick;this._toast&&this._toast(this._mzClick?'Click a zone to type its men \u00b7 '+this._mzMonth():'Zone-men entry off');this._renderResourcePanel();};}const edit=p.querySelector('#resourceEdit');if(edit)edit.onclick=()=>{this._resourceEditing=!this._resourceEditing;this._renderResourcePanel();};p.querySelectorAll('.resource-team-tab').forEach(b=>b.onclick=()=>{this._resourceTeamId=b.dataset.team;this._resourceInspect=null;this.render();this._renderResourcePanel();});const add=p.querySelector('#resourceAddTeam');if(add)add.onclick=()=>{const name=window.prompt('Team name','Team '+String.fromCharCode(65+d.teams.length));if(!name||!name.trim())return;const id='team_'+Date.now().toString(36);const _used=new Set(d.teams.map(q=>String(q.color||'').toLowerCase()));const _free=colors.find(c=>!_used.has(String(c).toLowerCase()))||colors[d.teams.length%colors.length];d.teams.push({id,name:name.trim(),color:_free,zones:[]});this._resourceTeamId=id;this._resourceSave();this.render();this._renderResourcePanel();};if(!t)return;const tn=p.querySelector('#resourceTeamName'),tc=p.querySelector('#resourceTeamColor');if(tn)tn.onchange=()=>{t.name=tn.value.trim()||t.name;this._resourceSave();this.render();this._renderResourcePanel();};if(tc)tc.onchange=()=>{t.color=tc.value;this._resourceSave();this.render();this._renderResourcePanel();};const del=p.querySelector('#resourceDeleteTeam');if(del)del.onclick=()=>this._confirmModal('Delete this team and its Zone assignment?',()=>{d.teams=d.teams.filter(q=>q.id!==t.id);this._resourceTeamId=(d.teams[0]||{}).id;this._resourceSave();this.render();this._renderResourcePanel();});p.querySelectorAll('.resource-core-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;if(!cs[i])return;this._resourceInspect={core:true,lv:cs[i].lv,id:cs[i].id};this.render();this._renderResourcePanel();};});
     p.querySelectorAll('.resource-zone-card[data-i]').forEach(card=>{const i=+card.dataset.i;card.onclick=e=>{if(e.target.closest('input,button'))return;this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();};card.querySelectorAll('.resource-qty').forEach(inp=>inp.onchange=()=>{zs[i][inp.dataset.key]=this._resourceNum(inp.value);this._resourceSave();this._resourceInspect={lv:zs[i].lv,zmk:zs[i].zmk};this.render();this._renderResourcePanel();});const up=card.querySelector('.resource-up'),dn=card.querySelector('.resource-down'),rm=card.querySelector('.resource-remove');if(up)up.onclick=()=>{if(i<1)return;[zs[i-1],zs[i]]=[zs[i],zs[i-1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(dn)dn.onclick=()=>{if(i>=zs.length-1)return;[zs[i+1],zs[i]]=[zs[i],zs[i+1]];this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};if(rm)rm.onclick=()=>{const gone=zs[i];zs.splice(i,1);if(this._resourceInspect&&this._resourceInspect.lv===gone.lv&&this._resourceInspect.zmk===gone.zmk)this._resourceInspect=null;this._resourceRenumber(t);this._resourceSave();this.render();this._renderResourcePanel();};});}
   /* Marine L1: the Report counts the Podium alone, but the catch-up has to show every Marine L1
@@ -1296,7 +1296,7 @@ class Component extends DCLogic {
         if(e.pct!=null&&e.pct!=='')bits.push(this.fmt(e.pct)+'%');
         if(e.crew)bits.push(String(e.crew));
         const body=[e.text||e.note||e.msg||'',bits.join(' \u00b7 ')].filter(Boolean).join('  \u2014  ');
-        out.push({kind:'note',t:e.ts,who:e.by||e.user||'\u5de5\u5730\u66f4\u65b0',lv,zmk:mk,
+        out.push({kind:'note',t:e.ts,who:e.by||e.user||'Site update',lv,zmk:mk,
                   zone:zLabel(lv,mk),text:body});});});
     out.sort((a,b)=>b.t-a.t||lvOrd(a.lv)-lvOrd(b.lv));
     return out;
@@ -1310,7 +1310,7 @@ class Component extends DCLogic {
     const hhmm=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
     const dayLab=t=>{const d=new Date(t),n=new Date();
       const same=d.toDateString()===n.toDateString();
-      if(same)return '\u4eca\u5929';
+      if(same)return 'Today';
       return (d.getMonth()+1)+'/'+d.getDate();};
     const byWho={};rows.forEach(r=>{(byWho[r.who]=byWho[r.who]||[]).push(r);});
     const whos=Object.keys(byWho).sort((a,b)=>byWho[b].length-byWho[a].length);
@@ -1319,32 +1319,32 @@ class Component extends DCLogic {
       ? `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
            <span style="font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums">${dayLab(r.t)} ${hhmm(r.t)}</span>
            <b style="margin-left:8px">${esc(r.lv)} \u00b7 ${esc(r.zone)}</b>
-           <span style="margin-left:8px;font-size:11px;color:var(--accent,#3b5bdb);font-weight:700">\u5de5\u5730\u66f4\u65b0</span>
+           <span style="margin-left:8px;font-size:11px;color:var(--accent,#3b5bdb);font-weight:700">Site update</span>
            <div style="font-size:12px;margin-top:2px">${esc(r.text)}</div></div>`
       : `<div style="padding:6px 0;border-bottom:1px solid var(--line)">
            <span style="font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums">${dayLab(r.t)} ${hhmm(r.t)}</span>
            <b style="margin-left:8px">${esc(r.lv)} \u00b7 ${esc(r.zone)}</b>
            <span style="margin-left:8px">${esc(r.act)}</span>
            <div style="font-size:11.5px;color:var(--dim);margin-top:2px">
-             \u603b\u91cf ${num(r.total)||'\u2014'} \u00b7 \u8ba1\u5212 ${num(r.plan)||'\u2014'} \u00b7 \u5b8c\u6210 ${num(r.done)||'\u2014'} ${esc(r.unit||'')}</div></div>`;
+             Total ${num(r.total)||'\u2014'} \u00b7 Plan ${num(r.plan)||'\u2014'} \u00b7 Done ${num(r.done)||'\u2014'} ${esc(r.unit||'')}</div></div>`;
     const old=document.getElementById('__updToday');if(old)old.remove();
     const ov=document.createElement('div');ov.id='__updToday';
     ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
-    const rangeLab=D===0?'\u4eca\u5929':('\u6700\u8fd1 '+(D+1)+' \u5929');
+    const rangeLab=D===0?'Today':('Last '+(D+1)+' days');
     ov.innerHTML=`<div style="background:var(--panel);color:var(--ink,var(--txt));border-radius:12px;max-width:660px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
-        <b>\u{1f195} \u66f4\u65b0 \u00b7 ${rangeLab}</b>
+        <b>\u{1f195} Updates \u00b7 ${rangeLab}</b>
         <div style="display:flex;gap:6px;align-items:center">
-          ${[0,2,6].map(d=>`<button class="hbtn ${d===D?'primary':''}" data-d="${d}" style="padding:4px 9px;font-size:11.5px">${d===0?'\u4eca\u5929':(d+1)+'\u5929'}</button>`).join('')}
-          <button class="hbtn" id="__utX">\u5173\u95ed</button></div></div>
+          ${[0,2,6].map(d=>`<button class="hbtn ${d===D?'primary':''}" data-d="${d}" style="padding:4px 9px;font-size:11.5px">${d===0?'Today':(d+1)+' days'}</button>`).join('')}
+          <button class="hbtn" id="__utX">Close</button></div></div>
       <div style="padding:12px 16px;overflow:auto">
-        ${rows.length?`<div style="font-size:12px;color:var(--dim);margin-bottom:10px">${rows.length} \u6761 \u00b7 ${whos.length} \u4eba</div>`
+        ${rows.length?`<div style="font-size:12px;color:var(--dim);margin-bottom:10px">${rows.length} entries \u00b7 ${whos.length} people</div>`
           +whos.map(w=>`<div style="margin-bottom:14px">
              <div style="font-weight:800;font-size:12.5px;margin-bottom:3px">${esc(w)} <span style="font-weight:500;color:var(--dim)">\u00b7 ${byWho[w].length}</span></div>
              ${byWho[w].map(line).join('')}</div>`).join('')
-          :`<div style="color:var(--dim);font-size:13px;padding:18px 0;text-align:center">${D===0?'\u4eca\u5929\u8fd8\u6ca1\u6709\u66f4\u65b0\u3002':'\u8fd9\u6bb5\u65f6\u95f4\u6ca1\u6709\u66f4\u65b0\u3002'}</div>`}
+          :`<div style="color:var(--dim);font-size:13px;padding:18px 0;text-align:center">${D===0?'No updates today yet.':'No updates in this period.'}</div>`}
         <div style="font-size:11px;color:var(--faint,var(--dim));border-top:1px solid var(--line);padding-top:8px;margin-top:4px">
-          \u53ea\u80fd\u5217\u51fa\u5e26\u65f6\u95f4\u6233\u7684\u6539\u52a8\uff1a\u6d3b\u52a8\u7684\u603b\u91cf / \u6708\u5ea6\u8ba1\u5212 / \u6708\u5ea6\u5b8c\u6210\uff0c\u4ee5\u53ca\u5de5\u5730\u66f4\u65b0\u3002\u6784\u4ef6\u6253\u52fe\u6ca1\u6709\u8bb0\u65f6\u95f4\uff0c\u6240\u4ee5\u4e0d\u5728\u8fd9\u91cc\u3002</div>
+          Only time-stamped changes are listed: activity totals / monthly plan / monthly done, and site updates. Element ticks carry no time, so they are not shown here.</div>
       </div></div>`;
     document.body.appendChild(ov);
     ov.querySelector('#__utX').onclick=()=>ov.remove();
@@ -1516,7 +1516,7 @@ class Component extends DCLogic {
           <option value="wallcol">Walls + columns + core (25%)</option>
         </select></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">
-        <button id="__aa_merge" class="hbtn" style="padding:7px 10px;margin-right:auto;font-size:11.5px" title="\u628a\u624b\u52a8\u65b0\u5efa\u7684\u540c\u540d\u6d3b\u52a8\u5e76\u56de\u5185\u7f6e\u7684 Slab Demolition">\u29c9 \u5408\u5e76\u91cd\u540d\u6d3b\u52a8</button>
+        <button id="__aa_merge" class="hbtn" style="padding:7px 10px;margin-right:auto;font-size:11.5px" title="Merge hand-made activities with the same name back into the built-in Slab Demolition">\u29c9 Merge duplicate activities</button>
         <button id="__aa_cancel" class="hbtn" style="padding:7px 14px">Cancel</button>
         <button id="__aa_ok" class="hbtn" style="padding:7px 16px;background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700">Add</button>
       </div></div>`;
@@ -1578,7 +1578,7 @@ class Component extends DCLogic {
     return `<div style="margin:4px 0 2px;border-left:2px solid color-mix(in srgb,var(--accent) 32%,transparent);padding-left:10px;border-radius:0 8px 8px 0">${warn}${rows}</div>`;}
   delCustomCat(code){if(!this.rwsIsAdmin())return;this._confirmModal('Delete this category and its items everywhere?',()=>{this._catAdd=this.customCats().filter(c=>c.code!==code);Object.keys(this._elemAdd||{}).forEach(k=>{if(k.split('||')[2]===code)delete this._elemAdd[k];});this.saveCustom();rwsDelCat(code);this._actRerender(this._selZone());});}
   addCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin()){this.rwsDeny('Not allowed.');return;}id=(id||'').trim();if(!id||id.indexOf('||')>=0)return;
-    if(/[.\u3002]+$/.test(id)){const fixed=this._dotFixId(id);this._toast('A trailing dot is invisible next to the same number without one — saved as "'+fixed+'".');id=fixed;}const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();
+    if(/[.。]+$/.test(id)){const fixed=this._dotFixId(id);this._toast('A trailing dot is invisible next to the same number without one — saved as "'+fixed+'".');id=fixed;}const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();
     /* The add must reach the server, otherwise it lives in this browser only
        and no other account ever sees it. Roll back on a hard rejection. */
     Promise.resolve(rwsAddItem(lv+'||'+zmk+'||'+type+'||'+id,lv,zmk,type,id)).then(r=>{
@@ -1857,7 +1857,7 @@ class Component extends DCLogic {
       this._readonlyView=true;
       try{const g=this.root.querySelector('#rwsAuthGate');if(g)g.style.display='none';}catch(e){}
       try{this.buildRail&&this.buildRail();this.buildMetrics&&this.buildMetrics();this.render&&this.render();}catch(e){}
-      try{let b=document.getElementById('__roBanner');if(!b){b=document.createElement('div');b.id='__roBanner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99998;background:#1f4a73;color:#fff;font:700 12px Poppins,sans-serif;text-align:center;padding:5px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25)';b.textContent='🔒 只读快照 / Read-only snapshot — 仅供查看, 不能编辑或同步';document.body.appendChild(b);document.body.style.paddingTop='26px';}}catch(e){}
+      try{let b=document.getElementById('__roBanner');if(!b){b=document.createElement('div');b.id='__roBanner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99998;background:#1f4a73;color:#fff;font:700 12px Poppins,sans-serif;text-align:center;padding:5px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25)';b.textContent='🔒 Read-only snapshot — view only, no editing or sync';document.body.appendChild(b);document.body.style.paddingTop='26px';}}catch(e){}
       return;
     }
     this._adminEntry=rwsIsAdminEntryRequested();
@@ -2021,21 +2021,21 @@ class Component extends DCLogic {
   async rwsOpenChanges(){
     const modal=this.root.querySelector('#rwsChangesModal');
     const body=this.root.querySelector('#rwsChangesBody');
-    modal.style.display='flex'; body.innerHTML='<div class="empty">加载中…</div>';
+    modal.style.display='flex'; body.innerHTML='<div class="empty">Loading…</div>';
     try{
       const rows=await rwsAdminActivityLog(200);
       const seen=localStorage.getItem('rws_changes_seen')||'';
       const fmtV=v=>{if(v==null||v==='')return '—';const s=(typeof v==='object')?JSON.stringify(v):String(v);return this.esc(s.replace(/^"|"$/g,''));};
-      if(!rows.length){ body.innerHTML='<div class="empty">暂无变更记录</div>'; }
+      if(!rows.length){ body.innerHTML='<div class="empty">No changes yet</div>'; }
       else {
-        body.innerHTML='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">共 '+rows.length+' 条最近变更 · 高亮=自你上次查看后的新变更</div><table class="reg"><thead><tr><th>时间</th><th>谁</th><th>改了什么</th><th>区域</th><th>楼层·分区</th><th>项目</th><th>原值→新值</th></tr></thead><tbody>'+
+        body.innerHTML='<div style="font-size:11px;color:var(--dim);margin-bottom:8px">'+rows.length+' recent changes · highlighted = new since you last looked</div><table class="reg"><thead><tr><th>Time</th><th>Who</th><th>What</th><th>Area</th><th>Level · Zone</th><th>Item</th><th>Old → New</th></tr></thead><tbody>'+
           rows.map(r=>{const d=this.rwsLogParts(r);const isNew=seen&&r.created_at>seen;return '<tr'+(isNew?' style="background:color-mix(in srgb,var(--accent) 14%,transparent)"':'')+'><td>'+this.esc(new Date(r.created_at).toLocaleString())+'</td><td>'+this.esc(r.username||'')+'</td><td>'+this.esc(this.rwsActionLabel(r))+'</td><td>'+this.esc(d.area)+'</td><td>'+this.esc(d.zone)+'</td><td>'+this.esc(d.detail)+'</td><td>'+fmtV(r.old_value)+' → '+fmtV(r.new_value)+'</td></tr>';}).join('')+
           '</tbody></table>';
       }
       // 标记为已看, 清红点
       if(rows.length) localStorage.setItem('rws_changes_seen', rows[0].created_at);
       const dot=this.root.querySelector('#rwsChangesDot'); if(dot) dot.style.display='none';
-    }catch(e){ body.innerHTML='<div class="empty">无法加载变更: '+this.esc(e.message)+'</div>'; }
+    }catch(e){ body.innerHTML='<div class="empty">Could not load changes: '+this.esc(e.message)+'</div>'; }
   }
   async rwsCheckChangesDot(){
     if(!this.rwsIsAdmin())return;
@@ -2082,21 +2082,21 @@ class Component extends DCLogic {
         const g={};
         logins.forEach(r=>{const dt=new Date(r.created_at);const day=dt.toISOString().slice(0,10);const key=day+'||'+(r.username||'');const o=g[key]||(g[key]={day,user:r.username||'',cnt:0,last:0,ips:new Set()});o.cnt++;const t=dt.getTime();if(t>o.last)o.last=t;if(r.target_key)o.ips.add(String(r.target_key));});
         const list=Object.values(g).sort((a,b)=>(a.day<b.day?1:a.day>b.day?-1:0)||(a.user<b.user?-1:a.user>b.user?1:0));   /* 日期倒序, 同日按账号 */
-        if(!list.length){body.innerHTML='<div class="empty">暂无登录记录(还没有人用账号登录过, 或活动日志已清)</div>';return;}
+        if(!list.length){body.innerHTML='<div class="empty">No logins recorded yet (nobody has signed in, or the activity log was cleared)</div>';return;}
         const multi=list.filter(o=>o.ips.size>1).length;
-        body.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:11px;color:var(--dim)">谁哪天登录过 · 每人每天一行 · 共 ${list.length} 条${multi?` · <b style="color:var(--crit)">${multi} 条同账号当天出现多个 IP(已标红)</b>`:''}</div><button class="hbtn" id="rwsLoginCsv">⬇ 导出 CSV</button></div>
-        <div style="font-size:9.5px;color:var(--faint);margin-bottom:6px">IP = 客户端公网 IP(x-forwarded-for)。同一办公室/WiFi 会是同一个 IP;同账号同一天出现<b>不同 IP</b> = 换了网络或多人共用,标红提示。只有跑过登录IP SQL 之后的登录才有 IP。</div>
-        <table class="reg"><thead><tr><th>日期 Date</th><th>账号 Account</th><th>次数</th><th>IP(s)</th><th>最后登录</th></tr></thead><tbody>`+
+        body.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:11px;color:var(--dim)">Who signed in on which day · one row per person per day · ${list.length} rows${multi?` · <b style="color:var(--crit)">${multi} rows with several IPs for one account on one day (in red)</b>`:''}</div><button class="hbtn" id="rwsLoginCsv">⬇ Export CSV</button></div>
+        <div style="font-size:9.5px;color:var(--faint);margin-bottom:6px">IP = the client's public IP (x-forwarded-for). One office / Wi-Fi shows as one IP; <b>different IPs</b> for one account on one day = changed network or a shared account, shown in red. Only logins after the login-IP SQL was run carry an IP.</div>
+        <table class="reg"><thead><tr><th>Date</th><th>Account</th><th>Count</th><th>IP(s)</th><th>Last login</th></tr></thead><tbody>`+
           list.map(o=>{const ips=[...o.ips];const flag=ips.length>1;return `<tr${flag?' style="background:color-mix(in srgb,var(--crit) 12%,transparent)"':''}><td>${this.esc(this._fmtD(o.day))}</td><td><b>${this.esc(o.user)}</b></td><td>${o.cnt}</td><td style="font-size:10.5px${flag?';color:var(--crit);font-weight:700':''}">${flag?'⚠ ':''}${this.esc(ips.join(', ')||'—')}</td><td>${this.esc(new Date(o.last).toLocaleTimeString())}</td></tr>`;}).join('')+
           '</tbody></table>';
         const cb=body.querySelector('#rwsLoginCsv');
         if(cb)cb.addEventListener('click',()=>{const csv='date,account,times,ips,last_login\n'+list.map(o=>`${o.day},${(o.user||'').replace(/,/g,' ')},${o.cnt},${[...o.ips].join(' ')},${new Date(o.last).toISOString()}`).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='login_log.csv';a.click();});
-      }catch(e){ body.innerHTML='<div class="empty">无法加载登录记录: '+this.esc(e.message)+'</div>'; }
+      }catch(e){ body.innerHTML='<div class="empty">Could not load logins: '+this.esc(e.message)+'</div>'; }
       return;
     }
     try{
       const users=await rwsAdminListUsers();
-      const AREAS=[['EB','Existing Basement'],['NB','New Basement'],['MA','Marine'],['RWS','RWS · all Reports (view only)'],['REPEDIT','Report Edit (combine with NB / EB / Marine)'],['PLAN','Planning Comments (To Planning)'],['CMT','Comment (main map + M28)'],['M28_OTHER','M28 · L2/L3/L4 · Ramp · TST · Hoarding'],['RESOURCE','Resource Map & Planning (view team allocation)'],['HIST','🕓 History / 历史快照 (view snapshots)']];
+      const AREAS=[['EB','Existing Basement'],['NB','New Basement'],['MA','Marine'],['RWS','RWS · all Reports (view only)'],['REPEDIT','Report Edit (combine with NB / EB / Marine)'],['PLAN','Planning Comments (To Planning)'],['CMT','Comment (main map + M28)'],['M28_OTHER','M28 · L2/L3/L4 · Ramp · TST · Hoarding'],['RESOURCE','Resource Map & Planning (view team allocation)'],['HIST','🕓 History (view snapshots)']];
       body.innerHTML=`<div style="margin-bottom:14px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel2)">
         <div style="font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Add / update account</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -2147,7 +2147,7 @@ class Component extends DCLogic {
         if(_delBtn)_delBtn.style.display='';
       }));
       if(_clrBtn)_clrBtn.addEventListener('click',()=>{this._editUser=null;['#rwsNuUser','#rwsNuName','#rwsNuPass'].forEach(s=>{const el=body.querySelector(s);if(el)el.value='';});const r=body.querySelector('#rwsNuRole');if(r)r.value='user';body.querySelectorAll('.rwsNuArea').forEach(cb=>cb.checked=false);if(_delBtn)_delBtn.style.display='none';});
-      if(_delBtn)_delBtn.addEventListener('click',()=>{if(!this._editUser)return;const _u=this._editUser;this._confirmModal('确定删除账号 "'+_u+'" ?(不可恢复)',async()=>{try{await rwsAdminDeleteUser(_u);this._toast('已删除 '+_u);this._editUser=null;this.rwsRenderAdmin();}catch(e){this._toast('删除失败: '+e.message);}});});
+      if(_delBtn)_delBtn.addEventListener('click',()=>{if(!this._editUser)return;const _u=this._editUser;this._confirmModal('Delete account "'+_u+'"? (cannot be undone)',async()=>{try{await rwsAdminDeleteUser(_u);this._toast('Deleted '+_u);this._editUser=null;this.rwsRenderAdmin();}catch(e){this._toast('Delete failed: '+e.message);}});});
       body.querySelector('#rwsNuSave').addEventListener('click',async()=>{
         const username=body.querySelector('#rwsNuUser').value.trim();
         if(!username){this._toast('username required');return;}
@@ -2454,12 +2454,12 @@ class Component extends DCLogic {
   runSlabDemoMerge(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can merge activities.');return;}
     const ids=this._slabDemoSrcIds();
-    if(!ids.length){this._toast&&this._toast('\u6ca1\u6709\u91cd\u540d\u7684\u201cSlab Demolition\u201d\u6d3b\u52a8\uff0c\u65e0\u9700\u5408\u5e76\u3002');return;}
+    if(!ids.length){this._toast&&this._toast('No duplicate \u201cSlab Demolition\u201d activities — nothing to merge.');return;}
     const names=ids.map(id=>{const d=(this._actDefs||[]).find(x=>x.id===id)||{};return (d.label||id);});
-    this._confirmModal('\u627e\u5230 '+ids.length+' \u4e2a\u91cd\u540d\u6d3b\u52a8\uff1a\n'+names.join('\n')
-      +'\n\n\u628a\u5b83\u4eec\u7684\u6708\u5ea6\u8ba1\u5212/\u5b8c\u6210\u91cf\u5e76\u5165\u5185\u7f6e\u7684 Slab Demolition\uff1f',()=>{
+    this._confirmModal('Found '+ids.length+' duplicate activities:\n'+names.join('\n')
+      +'\n\nMerge their monthly plan / done into the built-in Slab Demolition?',()=>{
       const r=this.mergeSlabDemolish(true);
-      if(!r)this._toast&&this._toast('\u6ca1\u6709\u53ef\u5408\u5e76\u7684\u6570\u636e\u3002');
+      if(!r)this._toast&&this._toast('Nothing to merge.');
       else this.buildMetrics&&this.buildMetrics();
     });
   }
@@ -2894,17 +2894,17 @@ class Component extends DCLogic {
     const ov=document.createElement('div');ov.id='__pngSet';
     ov.style.cssText='position:fixed;inset:0;z-index:2147483640;background:rgba(15,23,42,.62);display:flex;flex-direction:column';
     ov.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--panel);color:var(--txt);border-bottom:1px solid var(--line)">
-      <div style="flex:1;font-weight:800;font-size:13px">${this.esc(String(title||''))} \u00b7 ${items.length} \u5f20\uff08\u6bcf\u5c42\u4e00\u5f20\uff09</div>
-      <button class="hbtn primary" id="__psAll" style="padding:7px 16px">\u2b07 \u5168\u90e8\u4e0b\u8f7d</button>
-      <button class="hbtn" id="__psClose">\u5173\u95ed</button></div>
+      <div style="flex:1;font-weight:800;font-size:13px">${this.esc(String(title||''))} \u00b7 ${items.length} images (one per level)</div>
+      <button class="hbtn primary" id="__psAll" style="padding:7px 16px">\u2b07 Download all</button>
+      <button class="hbtn" id="__psClose">Close</button></div>
     <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:18px;align-items:center">
       ${items.map((it,i)=>`<div style="width:100%;max-width:1100px;background:var(--panel);border-radius:10px;padding:10px;box-shadow:0 10px 40px rgba(0,0,0,.35)">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <b style="flex:1;font-size:13px;color:var(--txt)">${this.esc(String(it.lv))}</b>
-          <a class="hbtn" download="${this.esc(String(it.name))}" href="${it.url}" data-i="${i}" style="text-decoration:none;padding:5px 12px">\u2b07 \u4e0b\u8f7d</a></div>
+          <a class="hbtn" download="${this.esc(String(it.name))}" href="${it.url}" data-i="${i}" style="text-decoration:none;padding:5px 12px">\u2b07 Download</a></div>
         <img src="${it.url}" style="width:100%;background:#fff;border-radius:6px">
       </div>`).join('')}
-      <div style="color:#e6edf6;font-size:11px;padding-bottom:10px">\u6bcf\u5f20\u5355\u72ec\u4e0b\u8f7d\uff0c\u6216\u6309\u300c\u5168\u90e8\u4e0b\u8f7d\u300d\u4e00\u6b21\u5b58\u5b8c\u3002\u624b\u673a\u4e0a\u957f\u6309\u56fe\u7247\u4e5f\u80fd\u4fdd\u5b58\u3002</div>
+      <div style="color:#e6edf6;font-size:11px;padding-bottom:10px">Download each image, or use “Download all”. On a phone, long-press an image to save it.</div>
     </div>`;
     document.body.appendChild(ov);
     ov.querySelector('#__psClose').onclick=()=>ov.remove();
@@ -2913,7 +2913,7 @@ class Component extends DCLogic {
     ov.querySelector('#__psAll').onclick=()=>{
       const as=[...ov.querySelectorAll('a[data-i]')];
       as.forEach((a,i)=>setTimeout(()=>a.click(),i*500));
-      this._toast('\u6b63\u5728\u4fdd\u5b58 '+as.length+' \u5f20\u2026');
+      this._toast('Saving '+as.length+' images\u2026');
     };
   }
   _showPngPreview(url,name,n){
@@ -3931,7 +3931,7 @@ class Component extends DCLogic {
                 crit:this.showCrit,dts:this.showDates,dly:this.showDelay,cw:this.showCoreWalls,
                 lf:this.showLifts,ovl:{...this.showOvl},clean:this._cleanMap,
                 reo:this._resExportOnly,rem:this._resExportMonth,men:this.showManpower};
-    this._toast('正在生成 '+lvAll.length+' 张大图（每层一张）…');
+    this._toast('Building '+lvAll.length+' large images (one per level)…');
     const shots=[];
     try{
       for(const lv of lvAll){
@@ -3987,7 +3987,7 @@ class Component extends DCLogic {
       return {lv:s.lv,url:c2.toDataURL('image/png'),
               name:'RWS_P1_'+String(s.lv).replace(/\W+/g,'')+(tag?'_'+tag:'')+(stamp?'_'+stamp:'')+'.png'};
     });
-    this._showPngSet(outs,(mon||'大图'));
+    this._showPngSet(outs,(mon||'Large map'));
   }
   openBigMapExport(){
     if(!this.rwsCanResource()){this.rwsDeny('Not allowed.');return;}
@@ -3999,28 +3999,28 @@ class Component extends DCLogic {
     ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:520px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
-        <b>导出大图</b><button class="hbtn" id="bmX">关闭</button></div>
+        <b>Export large map</b><button class="hbtn" id="bmX">Close</button></div>
       <div style="padding:14px 16px">
-        <div style="font-size:12.5px;color:var(--dim);margin-bottom:12px">每层单独一张，分开下载，不是一张长图。宽度和倍数越大越清晰，文件也越大。</div>
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:12px">One image per level, downloaded separately (not one long image). Larger width and scale are sharper and bigger files.</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;font-size:13px;margin-bottom:12px">
-          <label>月份 <select id="bmMon" class="hbtn">${M.map(m=>`<option value="${esc(m)}"${m===cur?' selected':''}>${esc(m)}</option>`).join('')}</select></label>
-          <label>宽度 <select id="bmW" class="hbtn">${[1600,2000,2400,3000,3600].map(w=>`<option value="${w}"${w===2400?' selected':''}>${w}px</option>`).join('')}</select></label>
-          <label>倍数 <select id="bmS" class="hbtn">${[1,2,3,4].map(x=>`<option value="${x}"${x===2?' selected':''}>${x}×</option>`).join('')}</select></label>
-          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bmClean" checked>干净版（灰底+红）</label>
-          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bmMen"${this.showManpower===false?'':' checked'}>显示人数</label>
+          <label>Month <select id="bmMon" class="hbtn">${M.map(m=>`<option value="${esc(m)}"${m===cur?' selected':''}>${esc(m)}</option>`).join('')}</select></label>
+          <label>Width <select id="bmW" class="hbtn">${[1600,2000,2400,3000,3600].map(w=>`<option value="${w}"${w===2400?' selected':''}>${w}px</option>`).join('')}</select></label>
+          <label>Scale <select id="bmS" class="hbtn">${[1,2,3,4].map(x=>`<option value="${x}"${x===2?' selected':''}>${x}×</option>`).join('')}</select></label>
+          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bmClean" checked>Clean view (grey + red)</label>
+          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="bmMen"${this.showManpower===false?'':' checked'}>Show manpower</label>
         </div>
-        <div style="font-size:12px;color:var(--dim);margin-bottom:6px">楼层</div>
+        <div style="font-size:12px;color:var(--dim);margin-bottom:6px">Levels</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px 10px;margin-bottom:12px">
           ${lvs.map(lv=>`<label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" class="bmLv" value="${esc(lv)}" checked>${esc(lv)}</label>`).join('')}</div>
         <div id="bmMsg" style="font-size:12.5px;color:var(--dim);min-height:18px;margin-bottom:8px"></div>
-        <div style="display:flex;justify-content:flex-end;gap:8px"><button class="hbtn primary" id="bmGo">生成</button></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button class="hbtn primary" id="bmGo">Build</button></div>
       </div></div>`;
     document.body.appendChild(ov);
     ov.querySelector('#bmX').onclick=()=>ov.remove();
     ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
     const est=()=>{const w=+ov.querySelector('#bmW').value,s=+ov.querySelector('#bmS').value;
       const n=[...ov.querySelectorAll('.bmLv')].filter(x=>x.checked).length;
-      ov.querySelector('#bmMsg').textContent=n?('输出 '+n+' 张，每张约 '+(w*s)+' px 宽'):'至少选一个楼层。';};
+      ov.querySelector('#bmMsg').textContent=n?(n+' image(s), about '+(w*s)+' px wide each'):'Pick at least one level.';};
     ov.querySelectorAll('#bmW,#bmS,.bmLv').forEach(x=>x.onchange=est);est();
     ov.querySelector('#bmGo').onclick=()=>{
       const levels=[...ov.querySelectorAll('.bmLv')].filter(x=>x.checked).map(x=>x.value);
@@ -4708,17 +4708,17 @@ class Component extends DCLogic {
         +'<span style="color:var(--dim,#667)"> Top-down only \u2014 act_date has no such link, so this is a site decision.</span></span></label>'):'')
       +(()=>{if(!A.length)return '';const L=A.length-1,f0=S0[L].e,f1=S1[L].e,dl0=this._zpDiff(f0,baseFin),dl1=this._zpDiff(f1,baseFin),gain=this._zpDiff(f0,f1);
         const nf=d=>this._zpFmt(d);let t='';
-        if(dl0<=0&&!st.pred)t='这个 zone 还没到开工时间（第一项 '+esc(A[0].label)+' 计划 '+nf(A[0].bs)+' 才开始，比上面的重启日期晚），所以<b>照现在的安排不会迟</b>：红虚线和灰色计划一样长，每行写「准时」。';
-        else if(dl0>0)t='照现在的人数和进度，从 '+nf(startD)+' 做下去，这个 zone 会在 <b>'+nf(f0)+'</b> 做完，<b style="color:#c2412d">比计划 '+nf(baseFin)+' 迟 '+dl0+' 天</b>。';
-        else t='照现在的安排，这个 zone 会在 '+nf(f0)+' 做完，不比计划 '+nf(baseFin)+' 晚。';
-        if(gain>0)t+=' 按下面表格加 <b>'+A.reduce((n,a)=>n+Math.max(0,(a.n||0)-(a.n0||0)),0)+'</b> 人，可以快 <b style="color:#2e7d4f">'+gain+' 天</b>，在 <b>'+nf(f1)+'</b> 做完'+(dl1>0?'，仍比计划迟 '+dl1+' 天。':(dl1<0?'，比计划早 '+(-dl1)+' 天。':'，刚好赶上计划。'));
-        else t+=' 下面表格没有加人，所以彩色条和虚线一样。';
+        if(dl0<=0&&!st.pred)t='This zone has not reached its start yet (the first activity, '+esc(A[0].label)+', is planned to start '+nf(A[0].bs)+', after the restart date above), so <b>it will not be late on the current set-up</b>: the red dashed bars match the grey plan and every row says “on time”.';
+        else if(dl0>0)t='With the current crew and progress, working on from '+nf(startD)+', this zone finishes on <b>'+nf(f0)+'</b> — <b style="color:#c2412d">'+dl0+' days later than the plan ('+nf(baseFin)+')</b>.';
+        else t='On the current set-up this zone finishes on '+nf(f0)+', no later than the plan ('+nf(baseFin)+').';
+        if(gain>0)t+=' Adding <b>'+A.reduce((n,a)=>n+Math.max(0,(a.n||0)-(a.n0||0)),0)+'</b> men as in the table below saves <b style="color:#2e7d4f">'+gain+' days</b> and finishes on <b>'+nf(f1)+'</b>'+(dl1>0?', still '+dl1+' days behind plan.':(dl1<0?', '+(-dl1)+' days ahead of plan.':', exactly on plan.'));
+        else t+=' No men are added in the table below, so the coloured bars match the dashed ones.';
         return '<div style="font-size:12.5px;line-height:1.55;margin:0 0 10px;padding:9px 11px;background:var(--panel2,#f3f5f7);border-left:3px solid #2F6F7E;border-radius:6px">'+t+'</div>';})()
       +'<div style="overflow-x:auto"><svg id="zpGantt"></svg></div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim,#667);margin-top:8px">'
-      +'<span><svg width="24" height="8" style="vertical-align:middle"><rect width="24" height="6" y="1" rx="1" fill="#8E9BA1"/></svg> 灰：你的计划 (baseline)</span>'
-      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect x="1" y="1" width="22" height="10" rx="2" fill="none" stroke="#c2412d" stroke-dasharray="3 2"/></svg> 红虚线：照现在的人数和进度，从重启日期做下去</span>'
-      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect width="24" height="12" rx="2" fill="#2F6F7E"/></svg> 彩色：按下面表格加人以后</span>'
+      +'<span><svg width="24" height="8" style="vertical-align:middle"><rect width="24" height="6" y="1" rx="1" fill="#8E9BA1"/></svg> Grey: your plan (baseline)</span>'
+      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect x="1" y="1" width="22" height="10" rx="2" fill="none" stroke="#c2412d" stroke-dasharray="3 2"/></svg> Red dashed: current crew and progress, from the restart date</span>'
+      +'<span><svg width="24" height="12" style="vertical-align:middle"><rect width="24" height="12" rx="2" fill="#2F6F7E"/></svg> Coloured: after adding men as in the table below</span>'
       +'<span><svg width="6" height="12" style="vertical-align:middle"><rect width="2" height="12" fill="#c2412d"/></svg> today, '+this._zpFmt(TODAY)+'</span></div></div>';
     h+='<div style="'+CARD+'"><div style="font-weight:700;margin-bottom:4px">Catch-up: crew, output, days recovered</div>'
       +'<div style="font-size:12.5px;color:var(--dim,#667);margin-bottom:10px">Baseline crew comes from the zone manpower typed against the month each activity starts in; where none is typed a trade-size default stands in. Output grows with (crew ratio)<sup>α</sup> — the working face is finite, so output per man falls as the crew grows — and each activity has a floor it will not go below.</div>'
@@ -4867,9 +4867,9 @@ class Component extends DCLogic {
     g+=bar(S1[0].s,S1[LASTi].e,y+4,14,INK||'#18232A');
     const dd0=this._zpDiff(S0[LASTi].e,baseFin),dd1=this._zpDiff(S1[LASTi].e,baseFin);
     /* Words, not signs: "+0d" next to a dashed bar told nobody anything. */
-    const late=d=>d>0?('迟 '+d+' 天'):(d<0?('早 '+(-d)+' 天'):'准时');
-    g+='<text x="'+(x(this._zpAdd(S0[LASTi].e,1))+5)+'" y="'+(y+30)+'" font-size="11" font-weight="700" fill="'+(dd0>0?'#c2412d':C)+'">不加人：'+late(dd0)+'</text>';
-    g+='<text x="'+(x(this._zpAdd(S1[LASTi].e,1))+5)+'" y="'+(y+14)+'" font-size="11" font-weight="700" fill="'+(dd1>0?'#c2412d':'#2e7d4f')+'">加人后：'+late(dd1)+'</text>';
+    const late=d=>d>0?(d+' days late'):(d<0?((-d)+' days early'):'on time');
+    g+='<text x="'+(x(this._zpAdd(S0[LASTi].e,1))+5)+'" y="'+(y+30)+'" font-size="11" font-weight="700" fill="'+(dd0>0?'#c2412d':C)+'">No extra men: '+late(dd0)+'</text>';
+    g+='<text x="'+(x(this._zpAdd(S1[LASTi].e,1))+5)+'" y="'+(y+14)+'" font-size="11" font-weight="700" fill="'+(dd1>0?'#c2412d':'#2e7d4f')+'">With extra men: '+late(dd1)+'</text>';
     A.forEach((a,i)=>{
       y=top+(i+1)*rowH;
       g+='<line x1="0" x2="'+W+'" y1="'+(y+rowH-3)+'" y2="'+(y+rowH-3)+'" stroke="'+LN+'"/>';
@@ -4880,13 +4880,13 @@ class Component extends DCLogic {
       g+=bar(S0[i].s,S0[i].e,y+22,11,'none','stroke="#c2412d" stroke-dasharray="3 2"');
       g+=bar(S1[i].s,S1[i].e,y+4,15,a.c);
       const w1=x(this._zpAdd(S1[i].e,1))-x(S1[i].s),rem=this._zpRemDur(a);
-      const lbl=S1[i].d+' 天'+(S1[i].d<rem?' · 快 '+(rem-S1[i].d)+' 天':'');
+      const lbl=S1[i].d+' days'+(S1[i].d<rem?' · '+(rem-S1[i].d)+' days faster':'');
       g+='<text x="'+(w1>70?x(S1[i].s)+6:x(this._zpAdd(S1[i].e,1))+5)+'" y="'+(y+16)+'" font-size="11" font-family="ui-monospace,monospace" fill="'+(w1>70?'#fff':C)+'">'+lbl+'</text>';
       const sl=this._zpDiff(S0[i].e,a.be);
       g+='<text x="'+(x(this._zpAdd(S0[i].e,1))+5)+'" y="'+(y+32)+'" font-size="10" fill="'+(sl>0?'#c2412d':C)+'">'+late(sl)+'</text>';});
     const tx=x(TODAY);
     g+='<line x1="'+tx+'" x2="'+tx+'" y1="'+(top-10)+'" y2="'+(H-6)+'" stroke="#c2412d" stroke-width="2"/>';
-    g+='<text x="'+(tx+4)+'" y="'+(H-10)+'" font-size="10" fill="#c2412d" font-weight="700">今天</text>';   /* at the foot, clear of the month names */
+    g+='<text x="'+(tx+4)+'" y="'+(H-10)+'" font-size="10" fill="#c2412d" font-weight="700">Today</text>';   /* at the foot, clear of the month names */
     svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('width',W);svg.setAttribute('height',H);
     svg.innerHTML=g;
   }
@@ -5097,25 +5097,25 @@ class Component extends DCLogic {
     ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center';
     const TN={col:'Column',pile:'Pilecap',beam:'Beam',lift:'Lift',stair:'Stair',core:'Core Wall'};
     ov.innerHTML='<div style="background:var(--panel,#fff);color:var(--ink);border-radius:14px;padding:18px 20px;width:min(460px,92vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.25)">'
-      +'<div style="font-weight:700;font-size:15px;margin-bottom:4px">'+esc(lv)+' 已删除的构件 ('+list.length+')</div>'
-      +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:8px">勾选后：<b>恢复</b> = 放回表里；<b>彻底清除</b> = 永久删除，不再出现在这里。</div>'
-      +'<label style="font-size:12px;margin-bottom:4px"><input type="checkbox" id="pgAll"> 全选</label>'
+      +'<div style="font-weight:700;font-size:15px;margin-bottom:4px">'+esc(lv)+' deleted elements ('+list.length+')</div>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin-bottom:8px">Tick, then: <b>Restore</b> = put back in the register; <b>Clear for good</b> = delete permanently, it will not show here again.</div>'
+      +'<label style="font-size:12px;margin-bottom:4px"><input type="checkbox" id="pgAll"> Select all</label>'
       +'<div style="overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px;flex:1">'
       +list.map((r,i)=>'<label style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line);font-size:13px"><input type="checkbox" class="pgOne" data-i="'+i+'">'
-        +'<b style="min-width:90px">'+esc(r.id&&String(r.id).trim()&&r.id!=='-'?r.id:'(空编号 '+(r.id||'')+')')+'</b><span style="color:var(--dim)">'+esc(r.zone)+' · '+esc(TN[r.type]||r.type)+'</span></label>').join('')
+        +'<b style="min-width:90px">'+esc(r.id&&String(r.id).trim()&&r.id!=='-'?r.id:'(blank mark '+(r.id||'')+')')+'</b><span style="color:var(--dim)">'+esc(r.zone)+' · '+esc(TN[r.type]||r.type)+'</span></label>').join('')
       +'</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
-      +'<button class="hbtn" id="pgCancel">取消</button>'
-      +'<button class="hbtn" id="pgGone" style="color:var(--crit)">彻底清除所选</button>'
-      +'<button class="hbtn primary" id="pgRestore">恢复所选</button></div></div>';
+      +'<button class="hbtn" id="pgCancel">Cancel</button>'
+      +'<button class="hbtn" id="pgGone" style="color:var(--crit)">Clear selected for good</button>'
+      +'<button class="hbtn primary" id="pgRestore">Restore selected</button></div></div>';
     document.body.appendChild(ov);
     const close=()=>ov.remove();
     const picked=()=>[...ov.querySelectorAll('.pgOne')].filter(c=>c.checked).map(c=>list[+c.dataset.i]);
     ov.querySelector('#pgAll').onchange=e=>ov.querySelectorAll('.pgOne').forEach(c=>c.checked=e.target.checked);
     ov.querySelector('#pgCancel').onclick=close;ov.onclick=e=>{if(e.target===ov)close();};
-    ov.querySelector('#pgRestore').onclick=()=>{const p=picked();if(!p.length){this._toast('先勾选要恢复的构件');return;}
+    ov.querySelector('#pgRestore').onclick=()=>{const p=picked();if(!p.length){this._toast('Tick the elements to restore first');return;}
       close();this._regPurgedAct(p,'restore');after&&after();};
-    ov.querySelector('#pgGone').onclick=()=>{const p=picked();if(!p.length){this._toast('先勾选要清除的构件');return;}
-      this._confirmModal('永久清除 '+p.length+' 个构件？清除后不能恢复。',()=>{close();this._regPurgedAct(p,'gone');after&&after();});};
+    ov.querySelector('#pgGone').onclick=()=>{const p=picked();if(!p.length){this._toast('Tick the elements to clear first');return;}
+      this._confirmModal('Clear '+p.length+' element(s) for good? This cannot be undone.',()=>{close();this._regPurgedAct(p,'gone');after&&after();});};
   }
   _regRestorePurged(lv){
     const P=this._elemPurge();Object.keys(P).forEach(k=>{if(!lv||k.split('||')[0]===lv)delete P[k];});
@@ -5140,25 +5140,25 @@ class Component extends DCLogic {
     ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:16px';
     const row=(r,i,g,on,extra)=>`<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:12px"><input type="checkbox" data-g="${g}" data-i="${i}" ${on?'checked':''}><b style="min-width:92px">${E(r.id)}</b><span style="color:var(--dim)">${E(r.zone)} · ${E(r.cat)}</span>${extra?'<span style="color:var(--faint)">'+extra+'</span>':''}</label>`;
     ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:620px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3)">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><b>L1 柱子 对照 L2</b><button class="hbtn" id="l2X">关闭</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><b>L1 columns vs L2</b><button class="hbtn" id="l2X">Close</button></div>
       <div style="padding:10px 16px;overflow:auto;flex:1">
-        <div style="font-size:11px;color:var(--dim);margin-bottom:8px">L1 的柱子 = 从 L1 浇到 L2 的柱子，所以每根都应该在 L2 的清单里找得到。编号不一样但其实是同一根的（例如 L2 写法不同），请把勾去掉。</div>
-        <div style="font-weight:800;font-size:12px;margin:6px 0 2px">① L2 没有这根柱子 · ${miss.length} 根（NB 默认勾选；EB / Marine 和原始数据就在 L1 的不勾）</div>
-        ${miss.map((r,i)=>row(r,i,'m',r.cat==='NB'&&!r.base,r.base?'原始图纸数据就在 L1（可能 L2 编号写法不同），请核对':'')).join('')||'<div style="font-size:12px;color:var(--faint)">没有</div>'}
-        <div style="font-weight:800;font-size:12px;margin:12px 0 2px">② L2 上属于别的区域 · ${area.length} 根（默认不勾）</div>
-        ${area.map((r,i)=>row(r,i,'a',false,'L2: '+E(r.l2))).join('')||'<div style="font-size:12px;color:var(--faint)">没有</div>'}
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px">L1 columns are the L1 → L2 lifts, so every one should also be on the L2 list. Untick any that are the same column under a different mark on L2.</div>
+        <div style="font-weight:800;font-size:12px;margin:6px 0 2px">① Not on L2 · ${miss.length} (NB ticked by default; EB / Marine and columns in the original L1 data are not)</div>
+        ${miss.map((r,i)=>row(r,i,'m',r.cat==='NB'&&!r.base,r.base?'In the original L1 data (L2 may use a different mark) — please check':'')).join('')||'<div style="font-size:12px;color:var(--faint)">None</div>'}
+        <div style="font-weight:800;font-size:12px;margin:12px 0 2px">② In another area on L2 · ${area.length} (not ticked by default)</div>
+        ${area.map((r,i)=>row(r,i,'a',false,'L2: '+E(r.l2))).join('')||'<div style="font-size:12px;color:var(--faint)">None</div>'}
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line)"><button class="hbtn" id="l2Go" style="background:#6474df;color:#fff;border-color:#6474df;font-weight:800">取消所选的「计入」</button></div></div>`;
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line)"><button class="hbtn" id="l2Go" style="background:#6474df;color:#fff;border-color:#6474df;font-weight:800">Untick Keep for the selected</button></div></div>`;
     document.body.appendChild(ov);const close=()=>ov.remove();
     ov.querySelector('#l2X').onclick=close;ov.onclick=e=>{if(e.target===ov)close();};
     ov.querySelector('#l2Go').onclick=()=>{const picks=[...ov.querySelectorAll('input[type=checkbox]:checked')].map(i=>(i.dataset.g==='m'?miss:area)[+i.dataset.i]);
-      if(!picks.length){this._toast('没有勾选');return;}
-      this._confirmModal('取消 '+picks.length+' 根 L1 柱子的「计入」？之后在登记表里还能勾回来。',()=>{
+      if(!picks.length){this._toast('Nothing ticked');return;}
+      this._confirmModal('Untick Keep for '+picks.length+' L1 column(s)? You can tick them back in the register later.',()=>{
         const D=this._elemDrop();picks.forEach(r=>{const k=r.lv+'||'+r.zmk+'||col',a=D[k]=D[k]||[];if(!a.some(x=>this._colKey(x)===this._colKey(r.id)))a.push(r.id);});
         try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
         if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',D,null,null);
         this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
-        this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();close();this.render();this._toast('已取消 '+picks.length+' 根');after&&after();});};
+        this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();close();this.render();this._toast('Unticked '+picks.length);after&&after();});};
   }
   _elemDropped(lv,zmk,type,id){
     if(this._elemPurged&&this._elemPurged(lv,zmk,type,id))return true;
@@ -5192,7 +5192,7 @@ class Component extends DCLogic {
         const c=CO.find(x=>this._colKey(x.id)===this._colKey(id));if(c&&c.sz)sz=c.sz;
         if(!sz){const pc=((this._colAdd&&this._colAdd[lv])||[]).find(x=>this._colKey(x.id)===this._colKey(id));if(pc&&pc.sz)sz=pc.sz;}}
       out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',pod:!!z._pod,type,label,id,key,sz,
-                keep:(hid||drp)?'N':'Y',why:hid?'隐藏 hidden':(drp?'剔除 dropped':''),
+                keep:(hid||drp)?'N':'Y',why:hid?'hidden':(drp?'dropped':''),
                 st:this.elemStatus(key),date:this.elemDate(key)||''});};
     (this.DATA.order||[]).forEach(lv=>{
       const L=this.DATA.levels[lv];if(!L)return;
@@ -5226,7 +5226,7 @@ class Component extends DCLogic {
   }
   _regCsv(){
     const rows=this._regRows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-    const lines=[['楼层 Level','分区 Zone','区域 Area','构件 Type','编号 Mark','尺寸 Size','保留 Keep (Y/N)','不计原因 Why','状态 Status','完成日期 Date'].map(q).join(',')];
+    const lines=[['Level','Zone','Area','Type','Mark','Size','Keep (Y/N)','Why','Status','Date'].map(q).join(',')];
     rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.sz,r.keep,r.why,r.st,r.date].map(q).join(',')));
     const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -5242,7 +5242,7 @@ class Component extends DCLogic {
     const find=(...n)=>{for(const x of n){const i=head.findIndex(h=>h===x||h.indexOf(x)===0);if(i>=0)return i;}return -1;};
     const iLv=find('楼层','Level'),iZ=find('分区','Zone'),iT=find('构件','Type'),iId=find('编号','Mark'),iK=find('保留','Keep'),
           iS=find('状态','Status'),iD=find('完成日期','Date');
-    if(iLv<0||iT<0||iId<0||iK<0)return {err:'Missing a column. The header needs 楼层, 分区, 构件, 编号 and 保留 — export once and edit that file.'};
+    if(iLv<0||iT<0||iId<0||iK<0)return {err:'Missing a column. The header needs Level, Zone, Type, Mark and Keep — export once and edit that file.'};
     /* Index the live register so a row can be matched back to its zone even if
        the Zone cell was edited or the sheet reordered. */
     const idx={};this._regRows().forEach(r=>{
@@ -5407,19 +5407,19 @@ class Component extends DCLogic {
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can renumber.');return;}
     const d=this._rgLvDigit(st.lv);if(!d)return;
     const rows=this._regRows().filter(r=>r.lv===st.lv&&r.type===st.type&&/^\d/.test(r.id)&&r.id[0]!==d);
-    if(!rows.length){this._toast('这一层的编号开头已经都是 '+d+' 了。');return;}
+    if(!rows.length){this._toast('Every mark on this level already starts with '+d+'.');return;}
     const have=new Set(this._regRows().filter(r=>r.lv===st.lv&&r.type===st.type).map(r=>this._colKey(r.id)));
     const clash=[],plan=[];
     rows.forEach(r=>{const nid=d+r.id.slice(1);
       if(have.has(this._colKey(nid)))clash.push(r.id+' → '+nid);else plan.push([r,nid]);});
-    const sample=plan.slice(0,3).map(x=>x[0].id+' → '+x[1]).join('、');
-    this._confirmModal('把 '+st.lv+' 的 '+plan.length+' 个编号开头改成 '+d+'？例如 '+sample
-      +(clash.length?('。有 '+clash.length+' 个会撞名，将跳过：'+clash.slice(0,3).join('、')):'')
-      +'。已打的勾和浇筑日期会一起跟过去。',()=>{
+    const sample=plan.slice(0,3).map(x=>x[0].id+' → '+x[1]).join(', ');
+    this._confirmModal('Change the first digit of '+plan.length+' marks on '+st.lv+' to '+d+'? e.g. '+sample
+      +(clash.length?('. '+clash.length+' would clash and will be skipped: '+clash.slice(0,3).join(', ')):'')
+      +'. Ticks and cast dates move with them.',()=>{
       let n=0;plan.forEach(x=>{if(this._regRename(x[0].lv,x[0].zmk,x[0].type,x[0].id,x[1]))n++;});
       this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
       this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
-      this._toast('改了 '+n+' 个编号'+(clash.length?('，跳过 '+clash.length+' 个撞名的'):'')+'。');
+      this._toast('Renamed '+n+' mark(s)'+(clash.length?(', skipped '+clash.length+' clashing'):'')+'.');
       after&&after();});
   }
   openRegisterGrid(){
@@ -5458,15 +5458,15 @@ class Component extends DCLogic {
     let h='';
     h+='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px">'
       +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1 · admin</div>'
-      +'<div style="font-size:24px;font-weight:800;line-height:1.15">构件台账 — 直接在网页上改</div></div>'
+      +'<div style="font-size:24px;font-weight:800;line-height:1.15">Element register</div></div>'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
       +(_adm?'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button>':'')+'<button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
-      +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'全部楼层（贯通构件按层重复）')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
+      +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'All levels (through-elements listed per level)')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
       +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+'</select>'
-      +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'全部区域')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
-      +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','全部分区')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
-      +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="筛选 mark / zone" style="'+IN+';width:170px">'
+      +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'All areas')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
+      +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','All zones')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
+      +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="Filter mark / zone" style="'+IN+';width:170px">'
       +(()=>{
         /* The same column is recorded once on every level it runs through, so a count of rows is
            a count of pours, not of columns.  Both numbers are printed side by side, because
@@ -5475,37 +5475,37 @@ class Component extends DCLogic {
         const base=(matched&&matched.length)?matched:rows;
         const marks=new Set();base.forEach(r=>marks.add(String(r.id||'').trim().toUpperCase()));
         const dup=base.length-marks.size;
-        return '<span style="color:var(--dim)">\u663e\u793a '+rows.length
-          +(matched.length>rows.length?' / \u5171 '+matched.length:'')
-          +' \u00b7 \u8ba1\u5165 '+kept+' \u00b7 \u5df2\u5b8c\u6210 '+done
-          +(dup>0?' \u00b7 <b style="color:var(--txt)">\u4e0d\u540c\u7f16\u53f7 '+marks.size+'</b>':'')
+        return '<span style="color:var(--dim)">Showing '+rows.length
+          +(matched.length>rows.length?' / '+matched.length:'')
+          +' \u00b7 kept '+kept+' \u00b7 done '+done
+          +(dup>0?' \u00b7 <b style="color:var(--txt)">distinct marks '+marks.size+'</b>':'')
           +'</span>'
-          +(dup>0?'<span title="\u4e00\u6839\u8d2f\u901a\u67f1\u5728\u5b83\u7a7f\u8fc7\u7684\u6bcf\u5c42\u5404\u8bb0\u4e00\u6761\uff1a'+base.length
-            +' \u6761 = \u65bd\u5de5\u6b21\u6570\uff0c'+marks.size+' \u4e2a = \u5b9e\u7269\u6839\u6570" style="font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:1px 6px">'
-            +'\u91cd\u590d '+dup+' \u6761 \u00b7 \u8d2f\u901a\u6784\u4ef6</span>':'');
+          +(dup>0?'<span title="A through-column has one row on each level it passes: '+base.length
+            +' rows = pours, '+marks.size+' = physical columns" style="font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:1px 6px">'
+            +dup+' repeated rows \u00b7 through-elements</span>':'');
       })()
-      +(this._rgPrefixable(st)?'<button class="hbtn" id="rgPrefix" title="把这一层的编号开头改成该层的数字，例如 2VB11 → 3VB11">↺ 按楼层改编号</button>':'')
-      +(st.lv==='L1'&&st.type==='col'&&this.rwsIsAdmin()?'<button class="hbtn" id="rgVsL2" title="L1 的柱子要上到 L2 才算 L1 柱子：拿 L2 的柱子清单逐根对照">⇅ 对照 L2</button>':'')
+      +(this._rgPrefixable(st)?'<button class="hbtn" id="rgPrefix" title="Change the first digit of the marks on this level to the level number, e.g. 2VB11 → 3VB11">↺ Renumber to level</button>':'')
+      +(st.lv==='L1'&&st.type==='col'&&this.rwsIsAdmin()?'<button class="hbtn" id="rgVsL2" title="An L1 column must continue to L2: check each one against the L2 column list">⇅ Check vs L2</button>':'')
       +'<span style="flex:1"></span>'
-      +(ALLLV?'<span style="color:var(--dim);font-size:12px">选一个楼层才能新增</span>'
+      +(ALLLV?'<span style="color:var(--dim);font-size:12px">Pick one level to add elements</span>'
         :('<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;border:1px dashed var(--line);border-radius:8px;padding:4px 6px">'
-          +'<b style="font-size:12px;white-space:nowrap">新增到</b>'
-          +'<select id="rgNewZone" class="hbtn" title="新加的构件放进哪个 zone">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
-          +'<input id="rgNewId" placeholder="新编号" style="'+IN+';width:130px">'
-          +'<button class="hbtn primary" id="rgAdd">+ 新增</button></span>'))
+          +'<b style="font-size:12px;white-space:nowrap">Add to</b>'
+          +'<select id="rgNewZone" class="hbtn" title="Zone for the new element">'+zones.map(z=>opt(z.mk||z.lid,'',(z.label||z.mk)+' · '+(z.cat||'NB'))).join('')+'</select>'
+          +'<input id="rgNewId" placeholder="New mark" style="'+IN+';width:130px">'
+          +'<button class="hbtn primary" id="rgAdd">+ Add</button></span>'))
       +(()=>{const P=this._elemPurge();let n=0;Object.keys(P).forEach(k=>{if(k.split('||')[0]===st.lv)n+=P[k].length;});
-        return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="恢复或永久清除这一层删掉的构件">已删除 '+n+' · 恢复/清除</button>':'';})()+'</div>';
-    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">改一格存一格，自动同步给所有账号。<b>计入</b> 取消勾 = 这个构件不再算进任何统计（地图、Zone 清单、Report、磁贴），但图纸数据不动，随时勾回来。改 <b>分区</b> = 把它搬到那个 zone，已打的勾和浇筑日期一起搬过去。</div>';
+        return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="Restore or permanently clear elements deleted on this level">Deleted '+n+' · restore / clear</button>':'';})()+'</div>';
+    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Each cell saves as you change it and syncs to every account. Untick <b>Keep</b> = the element no longer counts anywhere (map, zone list, Report, tiles); the drawing data is untouched and you can tick it back any time. Change <b>Zone</b> = move it to that zone; ticks and cast dates move with it. <b>%</b> = progress of a column / core wall / lift / staircase — the same figure as in the zone panel.</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +(ALLLV?TH('楼层'):'')+TH('编号 Mark')+TH('尺寸 Size')+TH('分区 Zone')+TH('区域')+TH('计入 Keep')+TH('状态 Status')+TH('浇筑日期')+TH('')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="9" style="padding:26px;text-align:center;color:var(--dim)">这里没有构件，用上面的框新增。</td></tr>';
+      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="10" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
     rows.forEach(r=>{
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
         +(ALLLV?'<td style="padding:5px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>'+esc(r.lv)+'</b></td>':'')
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:150px;font-weight:700">'
           +((r.type==='core'||r.type==='lift'||r.type==='stair')
-            ?' <select class="rgKind" '+d+' title="\u6539\u6210\u53e6\u4e00\u7c7b\uff1a\u6240\u6709\u697c\u5c42\u4e00\u8d77\u6539\uff0c\u52fe\u3001\u6d47\u7b51\u65e5\u671f\u3001\u6d47\u7b51 % \u4e00\u8d77\u5e26\u8fc7\u53bb" style="'+IN+';width:auto;margin-left:4px">'
+            ?' <select class="rgKind" '+d+' title="Change the type: changed on every level, with ticks, cast dates and pour % carried over" style="'+IN+';width:auto;margin-left:4px">'
               +[['core','Core Wall'],['lift','Lift'],['stair','Staircase']].map(([v,l])=>'<option value="'+v+'"'+(v===r.type?' selected':'')+'>'+l+'</option>').join('')+'</select>':'')
           +'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
@@ -5516,6 +5516,11 @@ class Component extends DCLogic {
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'
           +['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+(()=>{
+            /* Same % as the zone panel: columns under Column, core walls / lifts / stairs under Core/Lift/Stair. */
+            const pa=r.type==='col'?'col':((r.type==='core'||r.type==='lift'||r.type==='stair')?'ls':null);if(!pa)return '<span style="color:var(--faint)">—</span>';
+            const v=this.elemPourPct(r.lv,r.zmk,pa,r.type,r.id);
+            return '<input type="number" min="0" max="100" step="1" class="rgPct" '+d+' data-a="'+pa+'" value="'+(v==null?'':v)+'" placeholder="%" style="'+IN+';width:62px">';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit)">✕</button></td>'
         +'</tr>';});
@@ -5548,7 +5553,7 @@ class Component extends DCLogic {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
         <b>Element register</b><button class="hbtn" id="regX">Close</button></div>
       <div style="padding:14px 16px">
-        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Export every column, pile cap, beam, lift, stair and core the app knows about, set <b>保留 Keep</b> to <b>N</b> on anything that should not count, and bring the sheet back. <b>状态 Status</b> (done / wip / todo) and <b>完成日期 Date</b> come out live and go back in, so the same sheet is how you check progress and how you correct it. Dropped elements disappear from the map, the Zone lists, the Report and Number check. The drawing data is never changed — the list of what to ignore lives in settings and syncs to everyone.</div>
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Export every column, pile cap, beam, lift, stair and core the app knows about, set <b>Keep</b> to <b>N</b> on anything that should not count, and bring the sheet back. <b>Status</b> (done / wip / todo) and <b>Date</b> come out live and go back in, so the same sheet is how you check progress and how you correct it. Dropped elements disappear from the map, the Zone lists, the Report and Number check. The drawing data is never changed — the list of what to ignore lives in settings and syncs to everyone.</div>
         ${n?`<div style="font-size:12.5px;color:#b7791f;margin-bottom:10px">${n} element${n===1?'':'s'} currently dropped. Importing replaces that list; import a sheet with every Keep set to Y to clear it.</div>`:''}
         <div style="display:flex;gap:8px;margin-bottom:10px"><button class="hbtn primary" id="regDl">⬇ Export register</button></div>
         <input type="file" id="regFile" accept=".csv,text/csv" style="margin-bottom:10px">
@@ -5593,12 +5598,12 @@ class Component extends DCLogic {
       +'<b>'+rows.length+' element'+(rows.length===1?'':'s')+'</b>'
       +'<span style="flex:1"></span>'
       +'<select class="ncNewType" style="'+IN+'">'+types.map(t=>opt(t,types[0],({col:'Column',pile:'Pilecap',beam:'Beam',lift:'Lift',stair:'Stair',core:'Core Wall'})[t]||t)).join('')+'</select>'
-      +'<input class="ncNewId" placeholder="新编号" style="'+IN+';width:120px">'
-      +'<button class="hbtn ncAdd" data-lv="'+esc(lv)+'" data-zmk="'+esc(zmk)+'">+ 新增</button></div>';
+      +'<input class="ncNewId" placeholder="New mark" style="'+IN+';width:120px">'
+      +'<button class="hbtn ncAdd" data-lv="'+esc(lv)+'" data-zmk="'+esc(zmk)+'">+ Add</button></div>';
     if(!rows.length)h+='<div style="color:var(--dim);font-size:12.5px">No element here yet.</div>';
     else{
       h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>'
-        +['编号 Mark','尺寸 Size','分区 Zone','计入 Keep','状态 Status','浇筑日期 Date',''].map(t=>'<th style="text-align:left;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>').join('')
+        +['Mark','Size','Zone','Keep','Status','Cast date',''].map(t=>'<th style="text-align:left;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>').join('')
         +'</tr></thead><tbody>';
       rows.forEach(r=>{
         const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
@@ -5623,14 +5628,15 @@ class Component extends DCLogic {
     root.querySelectorAll('.rgZone').forEach(i=>i.onchange=e=>{const a=at(e);this._regMove(a.lv,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgKind').forEach(i=>i.onchange=e=>{const a=at(e),to=e.target.value;
       const nm={core:'Core Wall',lift:'Lift',stair:'Staircase'};
-      this._confirmModal('\u628a '+a.id+' \u6539\u6210 '+nm[to]+'\uff1f\n\u6240\u6709\u697c\u5c42\u7684 '+a.id+' \u90fd\u4f1a\u4e00\u8d77\u6539\uff0c\u52fe\u3001\u6d47\u7b51\u65e5\u671f\u548c\u6d47\u7b51 % \u4e00\u8d77\u5e26\u8fc7\u53bb\u3002',
+      this._confirmModal('Change '+a.id+' to '+nm[to]+'?\n'+a.id+' changes on every level, with ticks, cast dates and pour % carried over.',
         ()=>{this._regRetype(a.lv,a.zmk,a.type,a.id,to);after();},
         ()=>{e.target.value=a.type;});});
     root.querySelectorAll('.rgKeep').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetKeep(a.lv,a.zmk,a.type,a.id,e.target.checked);after();});
     root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgPct').forEach(i=>i.onchange=e=>{const a=at(e);this.setElemPourPct(a.lv,a.zmk,e.target.dataset.a,a.type,a.id,e.target.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();after();});
     root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgDel').forEach(b=>b.onclick=e=>{const a=at(e);
-      this._confirmModal('彻底删除 "'+a.id+'"（'+a.lv+'）？\n它会从表、地图清单和所有统计里消失，状态和日期一起清掉。\n删错了可以点上方「已删除」恢复。',()=>{
+      this._confirmModal('Delete "'+a.id+'" ('+a.lv+')?\nIt leaves the register, the map lists and every count, with its status and date.\nDeleted by mistake? Use “Deleted” above to restore it.',()=>{
         this._regPurge(a.lv,a.zmk,a.type,a.id);after();});});
     root.querySelectorAll('.rgRestore').forEach(b=>b.onclick=e=>this._openPurgedModal(e.target.dataset.lv,after));
     root.querySelectorAll('.ncAdd').forEach(b=>b.onclick=e=>{
@@ -5680,13 +5686,13 @@ class Component extends DCLogic {
         +TD(v.bad?'<b style="color:#c2412d">'+v.bad+'</b>':'<span style="color:#2e7d4f">0</span>')+'</tr>';});
     h+='</tbody></table></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px;margin-bottom:10px">'
-      +'<label><input type="checkbox" id="ncBad"'+(this._ncOnlyBad?' checked':'')+'> 只看对不上的</label>'
-      +'<select id="ncLv" class="hbtn">'+opt('all',this._ncLv,'全部楼层')+(this.DATA.order||[]).map(x=>opt(x,this._ncLv)).join('')+'</select>'
-      +'<select id="ncCat" class="hbtn">'+opt('all',this._ncCat,'全部区域')+['NB','EB','MA'].map(x=>opt(x,this._ncCat)).join('')+'</select>'
-      +'<select id="ncAid" class="hbtn">'+opt('all',this._ncAid||'all','全部活动')
+      +'<label><input type="checkbox" id="ncBad"'+(this._ncOnlyBad?' checked':'')+'> Mismatches only</label>'
+      +'<select id="ncLv" class="hbtn">'+opt('all',this._ncLv,'All levels')+(this.DATA.order||[]).map(x=>opt(x,this._ncLv)).join('')+'</select>'
+      +'<select id="ncCat" class="hbtn">'+opt('all',this._ncCat,'All areas')+['NB','EB','MA'].map(x=>opt(x,this._ncCat)).join('')+'</select>'
+      +'<select id="ncAid" class="hbtn">'+opt('all',this._ncAid||'all','All activities')
         +(()=>{const seen=[];all.forEach(r=>{if(!seen.some(x=>x[0]===r.aid))seen.push([r.aid,r.label]);});
                return seen.map(x=>opt(x[0],this._ncAid||'all',x[1])).join('');})()+'</select>'
-      +'<span style="color:var(--dim)">显示 '+rows.length+' / 共 '+all.length+' 行 · '+bad.length+' 行对不上</span></div>';
+      +'<span style="color:var(--dim)">Showing '+rows.length+' / '+all.length+' rows · '+bad.length+' mismatched</span></div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
       +TH('Level')+TH('Zone')+TH('Area')+TH('Activity')+TH('Register',1)+TH('Activity',1)+TH('Elements',1)+TH('Ticked',1)+TH('Counted done',1)+TH('Difference',1)+TH('')+'</tr></thead><tbody>';
     if(!rows.length)h+='<tr><td colspan="11" style="padding:26px;text-align:center;color:var(--dim)">Nothing disagrees here.</td></tr>';
@@ -5701,8 +5707,8 @@ class Component extends DCLogic {
         +TD((r.ticked!==r.counted?'<b style="color:#c2412d">'+r.counted+'</b>':String(r.counted))
             +(r.outside?'<div style="font-size:11px;color:#c2412d">'+r.outside+' outside the month list</div>':''))
         +TD('act '+col(d)+' · el '+col(de)+(r.ticked!==r.counted?'<div style="font-size:11px;color:#c2412d">done '+col(r.counted-r.ticked)+'</div>':''))
-        +TD('<button class="hbtn ncEdit" data-k="'+esc(r.lv+'|'+r.zmk+'|'+r.aid)+'">'+(this._ncOpen===r.lv+'|'+r.zmk+'|'+r.aid?'\u25be \u6536\u8d77':'\u25b8 \u7f16\u8f91')+'</button>'
-            +' <button class="hbtn ncGo" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'">\u5730\u56fe</button>','right')
+        +TD('<button class="hbtn ncEdit" data-k="'+esc(r.lv+'|'+r.zmk+'|'+r.aid)+'">'+(this._ncOpen===r.lv+'|'+r.zmk+'|'+r.aid?'\u25be Close':'\u25b8 Edit')+'</button>'
+            +' <button class="hbtn ncGo" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'">Map</button>','right')
         +'</tr>';
       if(this._ncOpen===r.lv+'|'+r.zmk+'|'+r.aid)
         h+='<tr><td colspan="11" style="padding:0;border-bottom:1px solid var(--line)">'+this._ncEditHtml(r.lv,r.zmk,r.aid)+'</td></tr>';});
@@ -5979,7 +5985,7 @@ class Component extends DCLogic {
     let ov=this.root.querySelector('#lookAheadOverlay'); if(!ov){ov=document.createElement('div');ov.id='lookAheadOverlay';this.root.appendChild(ov);}
     ov.style.cssText='position:fixed;inset:0;z-index:210;background:var(--bg);overflow:auto;padding:22px 26px 60px';
     const close=()=>{ov.style.display='none';};
-    if(!cats.length){ ov.innerHTML=`<div style="max-width:640px;margin:0 auto"><div style="display:flex;justify-content:flex-end"><button class="hbtn" id="laClose">Close ✕</button></div><div style="text-align:center;color:var(--dim);margin-top:60px;font-size:15px">你的账号没有可查看的 Report。</div></div>`; ov.style.display='block'; const c0=ov.querySelector('#laClose'); if(c0)c0.onclick=close; return; }
+    if(!cats.length){ ov.innerHTML=`<div style="max-width:640px;margin:0 auto"><div style="display:flex;justify-content:flex-end"><button class="hbtn" id="laClose">Close ✕</button></div><div style="text-align:center;color:var(--dim);margin-top:60px;font-size:15px">Your account has no Report to view.</div></div>`; ov.style.display='block'; const c0=ov.querySelector('#laClose'); if(c0)c0.onclick=close; return; }
     if(this._reportCombined){this._renderCombinedReport(ov,cats,close);return;}
     if(!this._reportCat||cats.indexOf(this._reportCat)<0)this._reportCat=cats[0];
     const cat=this._reportCat, def=defs[cat],admin=this.rwsIsAdmin(),canReportEdit=false,editing=false;   /* live only \u2014 the Report is no longer editable */
@@ -5997,7 +6003,7 @@ class Component extends DCLogic {
         +`<td style="background:#f4dbdf;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:37%"><div style="font-size:13px">${tgt}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px;line-height:1.35">${planSub}<br>Complete by ${this.esc(by)}</div>${planEdit}</td>`
         +`<td style="background:#f8e9ec;color:#2b1114;text-align:center;padding:10px 8px;vertical-align:middle;width:36%"><div style="font-size:13px">${A.pct}%</div><div style="font-size:9.5px;color:#6d3b40;margin-top:3px">${actSub}</div>${actEdit}</td>`
         +`</tr>`+(this._cmtOpen===rc.key?`<tr class="rpt-cmt-wrap" ${rmeta}><td colspan="3" style="background:#fff;padding:8px 10px">${this._cmtPanel(rc.lv,rc.zmk,rc.aid,cat)}</td></tr>`:''); }).join('');
-    const makeTable=(lv)=>{const rows=makeRows(this._liveReportRows(cat,[lv]))||`<tr><td colspan="3" style="background:#f4dbdf;color:#6d1327;text-align:center;padding:18px 8px;font-size:11px">当前 HTML 数据源里还没有 ${this.esc(cat+' '+lv)} Structure Activity 数据。</td></tr>`;return `<section style="min-width:0"><div style="font-size:14px;font-weight:900;color:#6d1327;margin:0 0 5px 5px">${this.esc(lv)} Structure</div><div style="background:#efe9df;padding:4px;border-radius:5px;width:100%"><table style="width:100%;border-collapse:separate;border-spacing:4px;font-family:'Segoe UI',Arial,sans-serif"><thead><tr>`
+    const makeTable=(lv)=>{const rows=makeRows(this._liveReportRows(cat,[lv]))||`<tr><td colspan="3" style="background:#f4dbdf;color:#6d1327;text-align:center;padding:18px 8px;font-size:11px">No ${this.esc(cat+' '+lv)} Structure Activity data in the current source yet.</td></tr>`;return `<section style="min-width:0"><div style="font-size:14px;font-weight:900;color:#6d1327;margin:0 0 5px 5px">${this.esc(lv)} Structure</div><div style="background:#efe9df;padding:4px;border-radius:5px;width:100%"><table style="width:100%;border-collapse:separate;border-spacing:4px;font-family:'Segoe UI',Arial,sans-serif"><thead><tr>`
       +`<th style="background:#6d1327;color:#fff;padding:11px 8px;font-size:11px;font-weight:800;text-align:center">Activity</th>`
       +`<th style="background:#6d1327;color:#fff;padding:11px 8px;font-size:11px;font-weight:800;text-align:center;line-height:1.25">CJY’s Catch-Up<br>${this.esc(this._reportDateLabel(this._reportToday()))}<small style="display:block;font-size:8px;font-weight:600;margin-top:3px;opacity:.82">Plan due ÷ level total</small></th>`
       +`<th style="background:#6d1327;color:#fff;padding:11px 8px;font-size:11px;font-weight:800;text-align:center">Actual<small style="display:block;font-size:8px;font-weight:600;margin-top:3px;opacity:.82">Done ÷ same level total</small></th>`
@@ -6291,7 +6297,7 @@ class Component extends DCLogic {
         _topDates+=`<text x="${cx.toFixed(0)}" y="${(cy+_gs*0.36).toFixed(0)}" text-anchor="middle" font-size="${_gs.toFixed(0)}px" fill="#6b7486" style="font-weight:950;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:${(_gs*0.3).toFixed(0)}px">${this.fmt(_mzHere)}</text>`;}
       if(this.showDelay){const _dd=this._zoneDelayDays(this.curLevel,z);if(_dd!=null){const _dv=this._delayView(_dd),_df=fs*0.68;_topDates+=`<text class="zname" style="font-size:${_df.toFixed(0)}px;font-weight:900;fill:${_dv.c};stroke:#ffffff;stroke-width:${Math.max(320,_df*0.22).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.85).toFixed(0)}">${this.esc(_dv.txt)}</text>`;}}
       if(this.showRpVsAc){const _rp=this._rpAugPct(this.curLevel,z);if(_rp!=null){const _ac=this._rpActualPct(this.curLevel,z),_gap=_ac-_rp,_gc=_gap>=0?'#218a5c':'#c8102e',_rf=fs*0.54,_rt=`RP ${Math.round(_rp)}% · AC ${_ac}% · ${_gap>=0?'+':''}${Math.round(_gap)}%`;_topDates+=`<text class="zname" style="font-size:${_rf.toFixed(0)}px;font-weight:900;fill:${_gc};stroke:#fff;stroke-width:${Math.max(340,_rf*0.2).toFixed(0)};paint-order:stroke" x="${cx.toFixed(0)}" y="${(cy+fs*0.92).toFixed(0)}">${this.esc(_rt)}</text>`;}}
-      if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>填了 Done 但缺总量/计划 — 请补上 Total 或 Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
+      if(!_focusOnly&&this.rwsIsAdmin()&&this._zoneNeedScope(this.curLevel,z)){const _wr=Math.max(fs*0.85,300),_wx=cx+fs*2.3,_wy=cy-fs*0.7;s+=`<circle class="needscopemk" cx="${_wx.toFixed(0)}" cy="${_wy.toFixed(0)}" r="${_wr.toFixed(0)}" fill="#e11d2a" stroke="#fff" stroke-width="${(_wr*0.24).toFixed(0)}"><title>Done entered but no total / plan — add a Total or Plan</title></circle><text x="${_wx.toFixed(0)}" y="${(_wy+_wr*0.55).toFixed(0)}" font-size="${(_wr*1.45).toFixed(0)}px" text-anchor="middle" fill="#fff" style="font-weight:900;pointer-events:none">!</text>`;}
       /* 开工标记改为标签变橘(见上方 zstart), 不再画橘点 */
       /* 延误标记改为标签变红(见上方 zdelay), 不再画红点 */
       const sub=fs*0.62;
@@ -6791,7 +6797,7 @@ class Component extends DCLogic {
     p.style.display='flex';
     const _nHid=((this._appCfg&&this._appCfg.hideCols&&this._appCfg.hideCols[this.curLevel])||[]).length;
     const _adminOpen=this._editToolsOpen||this._placingCol||this._hidingCol||this._drawingCore||this._drawingLift||this._drawingAcc||this._underlayAdjust;
-    const _editToolsStr=this.rwsIsAdmin()?`<span class="szchip ${this._placingCol?'on':''}" data-k="__place" style="${this._placingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._placingCol?'● 放置中·点地图':'＋ 放置柱子'}</span><span class="szchip ${this._hidingCol?'on':''}" data-k="__hidecol" style="${this._hidingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._hidingCol?'● 点柱子隐藏/恢复':'⊘ 隐藏柱子'}${_nHid?' ('+_nHid+')':''}</span>${(this.placedCols(this.curLevel).length||Object.keys(this._colAdd||{}).length)?`<span class="szchip" data-k="__listcol" title="List every column you placed on this level and remove or rename it by name">≡ 柱子清单</span><span class="szchip" data-k="__expcol">⬇ 导出柱子</span><span class="szchip" data-k="__impcol" title="Bring an edited 导出柱子 sheet back in">⬆ 导入柱子</span>`:''}${this._drawingCore?`<span class="szchip on" data-k="__corefin" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 完成 (${(this._coreBuf||[]).length})</span><span class="szchip" data-k="__coreundo">↶ 撤销</span><span class="szchip" data-k="__corecancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawcore">▱ 画 Core Wall</span>`}${this._drawingLift?`<span class="szchip on" style="border-color:#1d4ed8;color:#1d4ed8;background:rgba(29,78,216,.12)">画 Staircase: 点3下(一条边+宽度)</span><span class="szchip" data-k="__liftcancel">取消</span>`:`<span class="szchip" data-k="__drawlift">▭ 画 Staircase(可斜)</span>`}${this._drawingAcc?`<span class="szchip on" data-k="__accfin" style="border-color:#1e3a8a;color:#1e3a8a;background:rgba(30,58,138,.12)">✓ 完成 Access (${(this._accBuf||[]).length}点)</span><span class="szchip" data-k="__accundo">↶ 撤销</span><span class="szchip" data-k="__acccancel">✕ 取消</span>`:`<span class="szchip" data-k="__drawacc">➵ 画 Access(箭头线)</span>`}${(()=>{const _u=this._curUnderlay();return !_u?`<span class="szchip" data-k="__ulload">🖼 载入底图</span>`:(this._underlayAdjust?`<span class="szchip on" data-k="__uladj" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ 底图完成</span><span style="font-size:9px;color:var(--faint);align-self:center">滚轮缩放·Shift只缩宽·Alt只缩高·拖动移动</span>${this._ulAligning?`<span class="szchip on" style="border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)">对齐中 (${(this._ulAlignPts||[]).length}/4)</span><span class="szchip" data-k="__ulaligncancel">取消对齐</span>`:`<span class="szchip" data-k="__ulalign" style="border-color:#5b6bd6;color:#5b6bd6">🎯 两点对齐</span>`}<span class="szchip" data-k="__ulop-">透−</span><span class="szchip" data-k="__ulop+">透+</span><span class="szchip" data-k="__ulrot-">转−</span><span class="szchip" data-k="__ulrot+">转+</span><span class="szchip" data-k="__ulrm">移除底图</span>`:`<span class="szchip" data-k="__uladj">🖼 底图·调整</span>`);})()}`:'';
+    const _editToolsStr=this.rwsIsAdmin()?`<span class="szchip ${this._placingCol?'on':''}" data-k="__place" style="${this._placingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._placingCol?'● Placing · click the map':'＋ Place column'}</span><span class="szchip ${this._hidingCol?'on':''}" data-k="__hidecol" style="${this._hidingCol?'border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)':''}">${this._hidingCol?'● Click a column to hide / show':'⊘ Hide columns'}${_nHid?' ('+_nHid+')':''}</span>${(this.placedCols(this.curLevel).length||Object.keys(this._colAdd||{}).length)?`<span class="szchip" data-k="__listcol" title="List every column you placed on this level and remove or rename it by name">≡ Column list</span><span class="szchip" data-k="__expcol">⬇ Export columns</span><span class="szchip" data-k="__impcol" title="Bring an edited Export columns sheet back in">⬆ Import columns</span>`:''}${this._drawingCore?`<span class="szchip on" data-k="__corefin" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ Finish (${(this._coreBuf||[]).length})</span><span class="szchip" data-k="__coreundo">↶ Undo</span><span class="szchip" data-k="__corecancel">✕ Cancel</span>`:`<span class="szchip" data-k="__drawcore">▱ Draw Core Wall</span>`}${this._drawingLift?`<span class="szchip on" style="border-color:#1d4ed8;color:#1d4ed8;background:rgba(29,78,216,.12)">Draw Staircase: 3 clicks (one edge + width)</span><span class="szchip" data-k="__liftcancel">Cancel</span>`:`<span class="szchip" data-k="__drawlift">▭ Draw Staircase (can be angled)</span>`}${this._drawingAcc?`<span class="szchip on" data-k="__accfin" style="border-color:#1e3a8a;color:#1e3a8a;background:rgba(30,58,138,.12)">✓ Finish Access (${(this._accBuf||[]).length} pts)</span><span class="szchip" data-k="__accundo">↶ Undo</span><span class="szchip" data-k="__acccancel">✕ Cancel</span>`:`<span class="szchip" data-k="__drawacc">➵ Draw Access (arrow line)</span>`}${(()=>{const _u=this._curUnderlay();return !_u?`<span class="szchip" data-k="__ulload">🖼 Load underlay</span>`:(this._underlayAdjust?`<span class="szchip on" data-k="__uladj" style="border-color:#218a5c;color:#218a5c;background:rgba(33,138,92,.12)">✓ Underlay done</span><span style="font-size:9px;color:var(--faint);align-self:center">Wheel = scale · Shift = width only · Alt = height only · drag = move</span>${this._ulAligning?`<span class="szchip on" style="border-color:#c8102e;color:#c8102e;background:rgba(200,16,46,.12)">Aligning (${(this._ulAlignPts||[]).length}/4)</span><span class="szchip" data-k="__ulaligncancel">Cancel align</span>`:`<span class="szchip" data-k="__ulalign" style="border-color:#5b6bd6;color:#5b6bd6">🎯 Two-point align</span>`}<span class="szchip" data-k="__ulop-">Opacity−</span><span class="szchip" data-k="__ulop+">Opacity+</span><span class="szchip" data-k="__ulrot-">Rotate−</span><span class="szchip" data-k="__ulrot+">Rotate+</span><span class="szchip" data-k="__ulrm">Remove underlay</span>`:`<span class="szchip" data-k="__uladj">🖼 Underlay · adjust</span>`);})()}`:'';
     const _editBtn=this.rwsIsAdmin()?`<span style="width:1px;height:16px;background:var(--line);margin:0 4px"></span><span class="szchip ${_adminOpen?'on':''}" data-k="__edittoggle" style="${_adminOpen?'border-color:#5b6bd6;color:#5b6bd6;background:rgba(91,107,214,.12)':''}">✎ Edit${_adminOpen?' ✕':''}</span>`:'';
     const _adminTools=_editBtn+(_adminOpen?_editToolsStr:'');
     p.innerHTML=(_hasMarine?`<span class="szttl">Marine sub-zones</span><span class="szchip ${this.showSubZC?'on':''}" data-k="ZC">Top slab</span><span class="szchip ${this.showSubC?'on':''}" data-k="C">Bottom slab</span><span class="szchip ${this.showSubP?'on':''}" data-k="P">Podium</span>`:`<span class="szttl">Edit · ${this.esc(this._lvName?this._lvName(this.curLevel):this.curLevel)}</span>`)+_adminTools;
@@ -7093,7 +7099,7 @@ class Component extends DCLogic {
   _coreUndo(){if(this._coreBuf&&this._coreBuf.length){this._coreBuf.pop();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}}
   _coreCancel(){this._coreBuf=[];this._drawingCore=false;if(this.svg)this.svg.style.cursor='';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   _saveCoreWalls(){this._reconcileZoneCores();try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','coreWalls',this._appCfg.coreWalls||{},null,null);}
-  _coreFinish(){if(!this._coreBuf||this._coreBuf.length<3){this._toast('至少点 3 个点围成一块 / need ≥3 points');return;}
+  _coreFinish(){if(!this._coreBuf||this._coreBuf.length<3){this._toast('Need at least 3 points');return;}
     const lv=this.curLevel,L=this.DATA.levels[lv];const pts=this._coreBuf.slice();
     const cx=pts.reduce((a,p)=>a+p[0],0)/pts.length, cy=pts.reduce((a,p)=>a+p[1],0)/pts.length;
     let zoneLabel='';const z=(L.zones||[]).find(zz=>zz.ring&&this.ptIn(zz.ring,cx,cy));if(z)zoneLabel=z.label;const zmk=z?(z.mk||z.lid):'';
@@ -7102,16 +7108,16 @@ class Component extends DCLogic {
     const done2=()=>{this._saveCoreWalls();this._coreBuf=[];this._drawingCore=false;if(this.svg)this.svg.style.cursor='';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();};
     /* 只填名字, 按名字自动匹配数据(CW 编号→整组 lift/stair, 或直接对上元素 id) */
     const save=(v)=>{arr.push({id:(v||'').trim()||defId,pts,zone:zoneLabel});done2();};
-    if(this._inputModal)this._inputModal({title:'Core Wall 名称 / name',label:'编号(按名字自动匹配数据, 如 CW3B)',placeholder:defId,ok:'保存',onOk:save});else save(defId);}
-  _delCoreWall(lv,idx){this._confirmModal('删除这道 Core Wall?',()=>{const arr=(this._appCfg&&this._appCfg.coreWalls&&this._appCfg.coreWalls[lv])||[];if(idx>=0&&idx<arr.length){arr.splice(idx,1);this._saveCoreWalls();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});}
+    if(this._inputModal)this._inputModal({title:'Core Wall name',label:'Mark (matched to the data by name, e.g. CW3B)',placeholder:defId,ok:'Save',onOk:save});else save(defId);}
+  _delCoreWall(lv,idx){this._confirmModal('Delete this Core Wall?',()=>{const arr=(this._appCfg&&this._appCfg.coreWalls&&this._appCfg.coreWalls[lv])||[];if(idx>=0&&idx<arr.length){arr.splice(idx,1);this._saveCoreWalls();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});}
   /* ---- 在图上画 Lift(两点画矩形, admin) —— 存 settings, 云端同步 ---- */
   toggleDrawLift(){if(!this.rwsIsAdmin())return;this._drawingLift=!this._drawingLift;this._liftBuf=[];if(this._drawingLift){this._placingCol=false;this._hidingCol=false;this._drawingCore=false;}if(this.svg)this.svg.style.cursor=this._drawingLift?'crosshair':'';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   _liftClickAt(clientX,clientY){if(!this._drawingLift||!this.rwsIsAdmin())return;const lv=this.curLevel,L=this.DATA.levels[lv];if(!L)return;const H=L.h;let sx,sy;
     try{const pt=this.svg.createSVGPoint();pt.x=clientX;pt.y=clientY;const p=pt.matrixTransform(this.svg.getScreenCTM().inverse());sx=p.x;sy=p.y;}
     catch(e){const r=this.svg.getBoundingClientRect();sx=this.vb.x+(clientX-r.left)/r.width*this.vb.w;sy=this.vb.y+(clientY-r.top)/r.height*this.vb.h;}
     this._liftBuf=this._liftBuf||[];this._liftBuf.push([sx,H-sy]);
-    if(this._liftBuf.length===1){this._toast('② 点这条边的另一端(定方向和长度, 可斜)');this.render();return;}
-    if(this._liftBuf.length===2){this._toast('③ 再点一下定宽度(往侧边点)');this.render();return;}
+    if(this._liftBuf.length===1){this._toast('② Click the other end of this edge (sets direction and length; can be angled)');this.render();return;}
+    if(this._liftBuf.length===2){this._toast('③ Click once more for the width (to the side)');this.render();return;}
     /* 三点定斜矩形: A,B 是一条边; 第三点决定垂直方向的宽度 */
     const a=this._liftBuf[0],b=this._liftBuf[1],c=this._liftBuf[2];
     const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy)||1;const ux=dx/len,uy=dy/len;const px=-uy,py=ux;   // 垂直单位向量
@@ -7122,15 +7128,15 @@ class Component extends DCLogic {
     const done2=()=>{this._saveLifts();this._liftBuf=[];this._drawingLift=false;if(this.svg)this.svg.style.cursor='';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();};
     /* 只填名字, 按名字自动匹配 staircase 数据 */
     const save=(v)=>{arr.push({id:(v||'').trim()||defId,pts:rectPts,zone:zoneLabel});done2();};
-    if(this._inputModal)this._inputModal({title:'Staircase 名称 / name',label:'编号(按名字自动匹配数据, 如 P1-ST-01B)',placeholder:defId,ok:'保存',onOk:save});else save(defId);}
+    if(this._inputModal)this._inputModal({title:'Staircase name',label:'Mark (matched to the data by name, e.g. P1-ST-01B)',placeholder:defId,ok:'Save',onOk:save});else save(defId);}
   _liftCancel(){this._liftBuf=[];this._drawingLift=false;if(this.svg)this.svg.style.cursor='';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   _saveLifts(){this._reconcileZoneStairs();try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','lifts',this._appCfg.lifts||{},null,null);}
   /* ---- 在图上画 Access(带箭头的折线, 可多点拐弯, admin) —— 存 settings, 云端同步 ---- */
   toggleDrawAcc(){if(!this.rwsIsAdmin())return;this._drawingAcc=!this._drawingAcc;this._accBuf=[];
     if(this._drawingAcc){this._placingCol=false;this._hidingCol=false;this._drawingCore=false;this._drawingLift=false;
       const lv=this.curLevel,mon=this._accMon(),o=this._accLevelObj(lv);
-      if(!(o[mon]&&o[mon].length)){const p=this._accPrevArr(lv,mon);if(p){o[mon]=p.arr.map(w=>({pts:(w.pts||[]).map(q=>q.slice())}));this._saveAccess();this._toast&&this._toast('已复制 '+p.mon+' 的路线到 '+mon+' · 拖动圆点微调');}else{this._toast&&this._toast('点地图逐点画线(可拐弯), 点完按 ✓ 完成');}}
-      else this._toast&&this._toast('拖动圆点微调 · 继续点地图可加新线 · 点线可删');}
+      if(!(o[mon]&&o[mon].length)){const p=this._accPrevArr(lv,mon);if(p){o[mon]=p.arr.map(w=>({pts:(w.pts||[]).map(q=>q.slice())}));this._saveAccess();this._toast&&this._toast('Copied the '+p.mon+' route to '+mon+' · drag the dots to adjust');}else{this._toast&&this._toast('Click the map point by point (can turn); press ✓ Finish when done');}}
+      else this._toast&&this._toast('Drag the dots to adjust · click the map to add a new line · click a line to delete it');}
     if(this.svg)this.svg.style.cursor=this._drawingAcc?'crosshair':'';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   _accClickAt(clientX,clientY){if(!this._drawingAcc||!this.rwsIsAdmin())return;const lv=this.curLevel,L=this.DATA.levels[lv];if(!L)return;const H=L.h;let sx,sy;
     try{const pt=this.svg.createSVGPoint();pt.x=clientX;pt.y=clientY;const p=pt.matrixTransform(this.svg.getScreenCTM().inverse());sx=p.x;sy=p.y;}
@@ -7145,11 +7151,11 @@ class Component extends DCLogic {
   _accArr(lv,mon){return this._accLevelObj(lv)[mon||this._accMon()]||[];}
   _accPrevArr(lv,mon){const o=this._accLevelObj(lv);const i=this.ACT_MONTHS.indexOf(mon);for(let j=i-1;j>=0;j--){const a=o[this.ACT_MONTHS[j]];if(a&&a.length)return {mon:this.ACT_MONTHS[j],arr:a};}return null;}
   _accDisplay(lv,mon){const own=this._accArr(lv,mon);if(own&&own.length)return {arr:own,inherited:false,src:mon};const p=this._accPrevArr(lv,mon);if(p)return {arr:p.arr,inherited:true,src:p.mon};return {arr:[],inherited:false,src:mon};}
-  _accFinish(){if(!this._accBuf||this._accBuf.length<2){this._toast&&this._toast('至少点 2 个点画一条线 / need ≥2 points');return;}
+  _accFinish(){if(!this._accBuf||this._accBuf.length<2){this._toast&&this._toast('Need at least 2 points for a line');return;}
     const lv=this.curLevel,mon=this._accMon();const pts=this._accBuf.slice();
     const o=this._accLevelObj(lv);const arr=o[mon]=o[mon]||[];
     arr.push({pts});this._saveAccess();this._accBuf=[];this._drawingAcc=false;if(this.svg)this.svg.style.cursor='';this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
-  _delAccess(lv,idx){const mon=this._accMon();this._confirmModal('删除这条 Access 线('+mon+')?',()=>{const arr=this._accArr(lv,mon);if(idx>=0&&idx<arr.length){arr.splice(idx,1);this._saveAccess();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});}
+  _delAccess(lv,idx){const mon=this._accMon();this._confirmModal('Delete this Access line ('+mon+')?',()=>{const arr=this._accArr(lv,mon);if(idx>=0&&idx<arr.length){arr.splice(idx,1);this._saveAccess();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});}
   _accArrowSVG(projPts,color,dash,cls,dataAttr){ if(!projPts||projPts.length<2)return '';
     let out=`<polyline${cls?' class="'+cls+'"':''}${dataAttr||''} points="${projPts.map(r=>r[0].toFixed(1)+','+r[1].toFixed(1)).join(' ')}" fill="none" stroke="${color}" stroke-width="640" stroke-linejoin="round" stroke-linecap="round"${dash?' stroke-dasharray="1600,900"':''} style="pointer-events:stroke;cursor:pointer"/>`;
     const S=2900,W=1550,GAP=(this._accArrowGap||11000);   // 箭头大小 + 间距(整条线上每隔 GAP 一个)
@@ -7159,7 +7165,7 @@ class Component extends DCLogic {
     const a=projPts[projPts.length-2],b=projPts[projPts.length-1];const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy)||1;out+=arw(b[0],b[1],dx/len,dy/len);   // 末端一定有一个
     const s0=projPts[0];out+=`<circle cx="${s0[0].toFixed(1)}" cy="${s0[1].toFixed(1)}" r="1900" fill="${color}" stroke="#ffffff" stroke-width="450" style="pointer-events:none"/>`;   // 起点大圆点
     return out;}
-  _delLift(lv,idx){this._confirmModal('删除这个 Staircase?',()=>{const arr=(this._appCfg&&this._appCfg.lifts&&this._appCfg.lifts[lv])||[];if(idx>=0&&idx<arr.length){arr.splice(idx,1);this._saveLifts();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});}
+  _delLift(lv,idx){this._confirmModal('Delete this Staircase?',()=>{const arr=(this._appCfg&&this._appCfg.lifts&&this._appCfg.lifts[lv])||[];if(idx>=0&&idx<arr.length){arr.splice(idx,1);this._saveLifts();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});}
   /* 画完形状时: 从所在分区的现有 lift/stair/core 里选一条挂到这个形状上(链接) */
   _pickLinkModal(lv,zmk,zoneLabel,onPick,onFree){
     const z=((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
@@ -7170,8 +7176,8 @@ class Component extends DCLogic {
     Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||');if(p[0]!==lv||p[1]!==zmk||this._catAct({code:p[2]})!=='ls')return;(this._elemAdd[k]||[]).forEach(id=>items.push({type:p[2],id,sub:'Lift/Stair list'}));});
     const old=document.getElementById('__pickModal');if(old)old.remove();
     const ov=document.createElement('div');ov.id='__pickModal';ov.style.cssText='position:fixed;inset:0;background:rgba(15,20,30,.45);z-index:2147483601;display:flex;align-items:center;justify-content:center';
-    const rows=items.length?items.map((it,i)=>`<div class="__pk" data-i="${i}" style="cursor:pointer;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;display:flex;justify-content:space-between;gap:10px;font-size:12px"><span><b>${this.esc(it.id)}</b> <span style="color:var(--faint);font-size:10px">${it.type}</span></span><span style="color:var(--faint);font-size:10px">${this.esc(it.sub)}</span></div>`).join(''):'<div style="color:var(--faint);font-size:12px;padding:6px 2px">这个区没有 lift/stair/core 数据可链接</div>';
-    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:18px 20px;width:min(360px,92vw);max-height:78vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.35)"><div style="font-weight:800;font-size:14px;margin-bottom:4px">链接到已有数据</div><div style="font-size:10.5px;color:var(--faint);margin-bottom:10px">分区 ${this.esc(zoneLabel||lv)} · 选一条挂到这个形状上</div>${rows}<div style="display:flex;justify-content:space-between;gap:8px;margin-top:12px"><button id="__pk_free" class="hbtn" style="padding:7px 12px">自己命名(不链接)</button><button id="__pk_cancel" class="hbtn" style="padding:7px 12px">取消</button></div></div>`;
+    const rows=items.length?items.map((it,i)=>`<div class="__pk" data-i="${i}" style="cursor:pointer;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:5px;display:flex;justify-content:space-between;gap:10px;font-size:12px"><span><b>${this.esc(it.id)}</b> <span style="color:var(--faint);font-size:10px">${it.type}</span></span><span style="color:var(--faint);font-size:10px">${this.esc(it.sub)}</span></div>`).join(''):'<div style="color:var(--faint);font-size:12px;padding:6px 2px">No lift / stair / core data in this zone to link</div>';
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:18px 20px;width:min(360px,92vw);max-height:78vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.35)"><div style="font-weight:800;font-size:14px;margin-bottom:4px">Link to existing data</div><div style="font-size:10.5px;color:var(--faint);margin-bottom:10px">Zone ${this.esc(zoneLabel||lv)} · pick one to attach to this shape</div>${rows}<div style="display:flex;justify-content:space-between;gap:8px;margin-top:12px"><button id="__pk_free" class="hbtn" style="padding:7px 12px">Own name (no link)</button><button id="__pk_cancel" class="hbtn" style="padding:7px 12px">Cancel</button></div></div>`;
     document.body.appendChild(ov);const close=()=>ov.remove();
     ov.addEventListener('click',e=>{if(e.target===ov)close();});
     ov.querySelector('#__pk_cancel').addEventListener('click',close);
@@ -7186,7 +7192,7 @@ class Component extends DCLogic {
   _idSameGroup(a,b){const A=this._idAliasSet(a),B=this._idAliasSet(b);for(const x of A)if(B.has(x))return true;return false;}
   /* 元素 id → 它所属的 Core Wall 编号(反查 CW_GROUPS, 含拼写变体) */
   _cwOf(id){if(!id)return '';if(!this.__cwRev){this.__cwRev={};const G=(typeof window!=='undefined'&&window.CW_GROUPS)||{};for(const cw in G){const g=G[cw]||{};[...(g.lifts||[]),...(g.stairs||[]),...(g.cores||[])].forEach(x=>{if(!this.__cwRev[x])this.__cwRev[x]=cw;});}}return this.__cwRev[id]||'';}
-  _cwTag(id){const cw=this._cwOf(id);return cw?`<span class="cwtag" title="属于核心筒 ${this.esc(cw)}" style="display:inline-block;background:rgba(34,197,94,.16);color:#15803d;border:1px solid rgba(34,197,94,.55);border-radius:5px;padding:0 5px;font-size:9px;font-weight:800;margin-left:6px;vertical-align:middle">${this.esc(cw)}</span>`:'';}
+  _cwTag(id){const cw=this._cwOf(id);return cw?`<span class="cwtag" title="Part of core wall ${this.esc(cw)}" style="display:inline-block;background:rgba(34,197,94,.16);color:#15803d;border:1px solid rgba(34,197,94,.55);border-radius:5px;padding:0 5px;font-size:9px;font-weight:800;margin-left:6px;vertical-align:middle">${this.esc(cw)}</span>`:'';}
   /* 按名字自动匹配数据: 扫【整层所有区】找这个 CW 组的成员(查 window.CW_GROUPS)或名字直接对上的元素 id。
      不再只看形状重心落在哪个区 —— 画偏一点也能对上。 */
   _autoLinks(w,lv){if(w&&w.links&&w.links.length)return w.links;if(w&&w.link)return[w.link];
@@ -7261,7 +7267,7 @@ class Component extends DCLogic {
     /* Staircase 可能从 L1 图形跨层显示，但点击必须留在当前楼层。当前层重新按
        图形位置找 Zone；Marine L1 则进入 Podium 的 P 区 Staircase list。 */
     if(kind==='stair'){
-      const links=this._stairLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;if(!link||!target){this._toast&&this._toast('当前楼层没有找到这个 Staircase 对应的 Zone');return;}const id=link.id;
+      const links=this._stairLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;if(!link||!target){this._toast&&this._toast('No zone for this Staircase on this level');return;}const id=link.id;
       if(target.sub){this.selectSubzone(target.sub.kind,target.sub.i);setTimeout(()=>this._focusSideElement(target.lv,target.zmk,'stair',id),80);return;}
       this._openLink({lv:target.lv,zmk:target.zmk,type:'stair',id});return;
     }
@@ -7272,9 +7278,9 @@ class Component extends DCLogic {
       const links=this._coreLinksForLevel(w,this.curLevel),link=links[0],target=link&&link.target;
       if(target&&target.sub){this.selectSubzone(target.sub.kind,target.sub.i);setTimeout(()=>this._focusSideElement(target.lv,target.zmk,'core',link.id),80);return;}
       if(link){this._openLink(link);return;}
-      this._toast&&this._toast('当前楼层没有找到这个 Core Wall 对应的 Zone');return;
+      this._toast&&this._toast('No zone for this Core Wall on this level');return;
     }
-    const ls=this._shapeLinks(w,lv);if(!ls.length){this._toast&&this._toast('名字 "'+this._shapeLabel(w)+'" 没对上数据 / no match');return;}
+    const ls=this._shapeLinks(w,lv);if(!ls.length){this._toast&&this._toast('Name "'+this._shapeLabel(w)+'" does not match any data');return;}
     /* Core Wall 保留原来的按名字匹配逻辑。 */
     this._openLink(ls[0]);}
   /* 楼层名 → 序号(B2最低). L4=…, 'M'夹层+0.5, 忽略'(Shaft only)'等括注 */
@@ -7295,13 +7301,13 @@ class Component extends DCLogic {
   }
   _shapeZmk(w,lv){lv=lv||this.curLevel;const L=this.DATA.levels[lv];if(!L||!w.pts||!w.pts.length)return '';const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;let z=(L.zones||[]).find(zz=>zz.ring&&this.ptIn(zz.ring,cx,cy));if(!z&&w.zone)z=(L.zones||[]).find(zz=>zz.label===w.zone);return z?(z.mk||z.lid):'';}
   _relinkShape(kind,idx,srcLv){const lv=srcLv||this.curLevel;const arr=this._shapeArr(kind,lv);const w=arr[idx];if(!w)return;const zmk=this._shapeZmk(w,lv);const z=((this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);const zoneLabel=z?z.label:(w.zone||'');const saveFn=()=>{if(kind==='core')this._saveCoreWalls();else this._saveLifts();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();};
-    this._pickLinkModal(lv,zmk,zoneLabel,(it)=>{w.link={lv,zmk,type:it.type,id:it.id};w.id=it.id;saveFn();},()=>{if(this._inputModal)this._inputModal({title:'名称 / name',label:'编号',placeholder:w.id||'',ok:'保存',onOk:(v)=>{w.id=(v||'').trim()||w.id;delete w.link;saveFn();}});});}
+    this._pickLinkModal(lv,zmk,zoneLabel,(it)=>{w.link={lv,zmk,type:it.type,id:it.id};w.id=it.id;saveFn();},()=>{if(this._inputModal)this._inputModal({title:'Name',label:'Mark',placeholder:w.id||'',ok:'Save',onOk:(v)=>{w.id=(v||'').trim()||w.id;delete w.link;saveFn();}});});}
   _shapeMenu(kind,idx,srcLv){const lv=srcLv||this.curLevel;const arr=this._shapeArr(kind,lv);const w=arr[idx];if(!w)return;const old=document.getElementById('__shapeMenu');if(old)old.remove();const ov=document.createElement('div');ov.id='__shapeMenu';ov.style.cssText='position:fixed;inset:0;background:rgba(15,20,30,.4);z-index:2147483601;display:flex;align-items:center;justify-content:center';
     const _nlk=this._shapeLinks(w,lv).length;
-    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(300px,90vw);box-shadow:0 18px 50px rgba(0,0,0,.35)"><div style="font-weight:800;font-size:13px;margin-bottom:4px">${this.esc(this._shapeLabel(w))} · ${kind==='core'?'Core Wall':'Staircase'}</div><div style="font-size:10.5px;color:var(--faint);margin-bottom:12px">${_nlk?('按名字匹配到 '+_nlk+' 项数据'):'名字没对上数据 — 改成正确编号即可自动匹配'}</div><div style="display:flex;flex-direction:column;gap:8px"><button class="hbtn" id="__sm_conv" style="padding:8px 12px">\u21c4 \u8f6c\u6210 ${kind==='core'?'Lift / Staircase':'Core Wall'}</button><button class="hbtn" id="__sm_ren" style="padding:8px">改名 / rename</button><button class="hbtn" id="__sm_del" style="padding:8px;color:var(--crit)">删除</button><button class="hbtn" id="__sm_cancel" style="padding:8px">取消</button></div></div>`;
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(300px,90vw);box-shadow:0 18px 50px rgba(0,0,0,.35)"><div style="font-weight:800;font-size:13px;margin-bottom:4px">${this.esc(this._shapeLabel(w))} · ${kind==='core'?'Core Wall':'Staircase'}</div><div style="font-size:10.5px;color:var(--faint);margin-bottom:12px">${_nlk?('Matched '+_nlk+' item(s) by name'):'Name does not match any data — rename it to the right mark to match'}</div><div style="display:flex;flex-direction:column;gap:8px"><button class="hbtn" id="__sm_conv" style="padding:8px 12px">\u21c4 Convert to ${kind==='core'?'Lift / Staircase':'Core Wall'}</button><button class="hbtn" id="__sm_ren" style="padding:8px">Rename</button><button class="hbtn" id="__sm_del" style="padding:8px;color:var(--crit)">Delete</button><button class="hbtn" id="__sm_cancel" style="padding:8px">Cancel</button></div></div>`;
     document.body.appendChild(ov);const close=()=>ov.remove();ov.addEventListener('click',e=>{if(e.target===ov)close();});
     ov.querySelector('#__sm_cancel').addEventListener('click',close);
-    ov.querySelector('#__sm_ren').addEventListener('click',()=>{close();if(this._inputModal)this._inputModal({title:'改名 / rename',label:'编号(按名字自动匹配数据)',placeholder:w.id||'',ok:'保存',onOk:(v)=>{w.id=(v||'').trim()||w.id;delete w.link;delete w.links;if(kind==='core')this._saveCoreWalls();else this._saveLifts();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});});
+    ov.querySelector('#__sm_ren').addEventListener('click',()=>{close();if(this._inputModal)this._inputModal({title:'Rename',label:'Mark (matched to the data by name)',placeholder:w.id||'',ok:'Save',onOk:(v)=>{w.id=(v||'').trim()||w.id;delete w.link;delete w.links;if(kind==='core')this._saveCoreWalls();else this._saveLifts();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}});});
     ov.querySelector('#__sm_del').addEventListener('click',()=>{close();if(kind==='core')this._delCoreWall(lv,idx);else this._delLift(lv,idx);});
     {const _cv=ov.querySelector('#__sm_conv');if(_cv)_cv.addEventListener('click',()=>{close();this._convertShape(kind,idx,lv);});}}
   /* A shape drawn as a core wall that is really a lift shaft (or the other way round) is moved
@@ -7313,7 +7319,7 @@ class Component extends DCLogic {
     const from=this._shapeArr(kind,lv),w=from&&from[idx];
     if(!w)return;
     const to=(kind==='core')?'lift':'core',toName=(to==='core')?'Core Wall':'Lift / Staircase';
-    this._confirmModal('\u628a '+this.esc(this._shapeLabel(w))+' \u8f6c\u6210 '+toName+'\uff1f\n\u8f6e\u5ed3\u3001\u540d\u79f0\u548c\u697c\u5c42\u5173\u8054\u90fd\u4e0d\u53d8\u3002',()=>{
+    this._confirmModal('Convert '+this.esc(this._shapeLabel(w))+' to '+toName+'?\nOutline, name and level links stay the same.',()=>{
       const cur=this._shapeArr(kind,lv);const i=cur.indexOf(w);if(i<0)return;
       cur.splice(i,1);
       this._appCfg=this._appCfg||{};
@@ -7350,13 +7356,13 @@ class Component extends DCLogic {
     this._saveUnderlay();this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   /* 两点对齐: 底图/地图各点两个对应点, 自动算缩放+旋转+平移(相似变换) */
   _svgPt(clientX,clientY){try{const pt=this.svg.createSVGPoint();pt.x=clientX;pt.y=clientY;const p=pt.matrixTransform(this.svg.getScreenCTM().inverse());return [p.x,p.y];}catch(e){const r=this.svg.getBoundingClientRect();return [this.vb.x+(clientX-r.left)/r.width*this.vb.w,this.vb.y+(clientY-r.top)/r.height*this.vb.h];}}
-  startUlAlign(){if(!this._curUnderlay())return;this._ulAligning=true;this._underlayAdjust=true;this._ulAlignPts=[];this._toast('① 在底图上点一个能认出的特征点(交点/柱位等)');this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
+  startUlAlign(){if(!this._curUnderlay())return;this._ulAligning=true;this._underlayAdjust=true;this._ulAlignPts=[];this._toast('① Click a point you can recognise on the underlay (grid crossing, column, …)');this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   _ulAlignCancel(){this._ulAligning=false;this._ulAlignPts=[];this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   _ulAlignClick(clientX,clientY){if(!this._ulAligning)return;this._ulAlignPts=this._ulAlignPts||[];this._ulAlignPts.push(this._svgPt(clientX,clientY));const n=this._ulAlignPts.length;
-    if(n===1)this._toast('② 在地图上点这个特征点"应该在"的位置');
-    else if(n===2)this._toast('③ 在底图上点第二个特征点');
-    else if(n===3)this._toast('④ 在地图上点第二个点应该在的位置');
-    else if(n>=4){const a=this._ulAlignPts;this._ulApplyAlign(a[0],a[1],a[2],a[3]);this._ulAligning=false;this._ulAlignPts=[];this._toast('对齐完成 ✓');this.refreshSubzPanel&&this.refreshSubzPanel();}
+    if(n===1)this._toast('② Click where that point should be on the map');
+    else if(n===2)this._toast('③ Click a second point on the underlay');
+    else if(n===3)this._toast('④ Click where the second point should be on the map');
+    else if(n>=4){const a=this._ulAlignPts;this._ulApplyAlign(a[0],a[1],a[2],a[3]);this._ulAligning=false;this._ulAlignPts=[];this._toast('Aligned ✓');this.refreshSubzPanel&&this.refreshSubzPanel();}
     this.render();}
   _ulApplyAlign(p1,q1,p2,q2){const u=this._curUnderlay();if(!u)return;
     const dp=Math.hypot(p2[0]-p1[0],p2[1]-p1[1])||1;const s=Math.hypot(q2[0]-q1[0],q2[1]-q1[1])/dp;
@@ -7395,7 +7401,7 @@ class Component extends DCLogic {
     const col={id:defId,x:dx,y:dy,zone:zoneLabel,sz:'',crit:false,placed:true};
     arr.push(col);this.savePlacedCols();this.render();
     // 让你自己填柱号(默认 defId, 直接确定=用默认)
-    if(this._inputModal)this._inputModal({title:'柱号 / Column mark',label:'这根柱子的编号('+(zoneLabel||'?')+')',placeholder:defId,ok:'确定',onOk:(v)=>{v=(v||'').trim();if(v){col.id=v;this.savePlacedCols();this.render();}}});
+    if(this._inputModal)this._inputModal({title:'Column mark',label:'Mark of this column ('+(zoneLabel||'?')+')',placeholder:defId,ok:'OK',onOk:(v)=>{v=(v||'').trim();if(v){col.id=v;this.savePlacedCols();this.render();}}});
   }
   /* Clicking the map to remove a placed column only works if you hit within a
      couple of metres of it, which is hopeless where two sit on top of each
@@ -7429,7 +7435,7 @@ class Component extends DCLogic {
     const HR=this._hiddenColRows();
     const hiddenBlock=`<div style="${HR.length?'background:color-mix(in srgb,#c2412d 8%,transparent);border:1px solid color-mix(in srgb,#c2412d 30%,transparent);border-radius:9px;padding:10px 12px;margin:0 0 14px':'margin:0 0 10px'}">
       <b style="font-size:13px">Hidden columns${HR.length?' \u00b7 '+HR.length:''}</b>${this._hideUndoCount()?`<button class="hbtn" id="pcUndo" type="button" style="float:right">\u21ba Undo last change (${this._hideUndoCount()} kept)</button>`:''}
-      <div style="font-size:12px;color:var(--dim);padding:5px 0 8px">Hidden with <b>\u2298 \u9690\u85cf\u67f1\u5b50</b>. Nobody sees these on the map or in a Zone's column list, on any account \u2014 this is the only place they can be found again.</div>
+      <div style="font-size:12px;color:var(--dim);padding:5px 0 8px">Hidden with <b>\u2298 Hide columns</b>. Nobody sees these on the map or in a Zone's column list, on any account \u2014 this is the only place they can be found again.</div>
       ${HR.length?`<table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>${['Level','Column','Zone','Source',''].map(t=>`<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:5px 8px;border-bottom:1px solid var(--line)">${t}</th>`).join('')}</tr></thead>
         <tbody>${HR.map(r=>`<tr data-hlv="${esc(r.lv)}" data-hid="${esc(r.id)}">
@@ -7512,7 +7518,7 @@ class Component extends DCLogic {
           iId=find('柱号','Column','Mark','id'),iX=find('x','X'),iY=find('y','Y'),
           iSz=find('尺寸','Size','size'),iC=find('关键路径','Critical','crit');
     if(iLv<0||iId<0||iX<0||iY<0)
-      return {err:'Missing a column. The header needs at least 楼层, 柱号, x and y — export once and edit that file.'};
+      return {err:'Missing a column. The header needs at least Level, Column, x and y — export once and edit that file.'};
     const order=this.DATA.order||[],next={},bad=[];
     let added=0,moved=0,renamed=0,kept=0;
     const base=replace?{}:JSON.parse(JSON.stringify(this._colAdd||{}));
@@ -7583,7 +7589,7 @@ class Component extends DCLogic {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
         <b>Import placed columns</b><button class="hbtn" id="pcImpX">Close</button></div>
       <div style="padding:14px 16px">
-        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Take the sheet from <b>⬇ 导出柱子</b>, edit it, bring it back. Columns are matched by level and mark, so an edited export moves and renames instead of duplicating. Header needed: <code>楼层, 分区, 柱号, x, y, 尺寸, 关键路径</code>.</div>
+        <div style="font-size:12.5px;color:var(--dim);margin-bottom:10px">Take the sheet from <b>⬇ Export columns</b>, edit it, bring it back. Columns are matched by level and mark, so an edited export moves and renames instead of duplicating. Header needed: <code>Level, Zone, Column, x, y, Size, Critical</code>.</div>
         <input type="file" id="pcImpFile" accept=".csv,text/csv" style="margin-bottom:10px">
         <textarea id="pcImpTxt" placeholder="…or paste the sheet here" style="width:100%;height:150px;font:12px ui-monospace,Menlo,monospace;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink)"></textarea>
         <label style="display:flex;gap:7px;align-items:center;font-size:12.5px;margin:10px 0"><input type="checkbox" id="pcImpRep"> Replace every placed column with this file <span style="color:var(--crit)">(anything not in the file is deleted)</span></label>
@@ -7610,8 +7616,8 @@ class Component extends DCLogic {
       if(rep)this._confirmModal('Replace every placed column with this file? Anything not in it is deleted.',run);else run();};
   }
   exportPlacedCols(){
-    const rows=[['楼层','分区','柱号','x','y','尺寸','关键路径']];
-    Object.keys(this._colAdd||{}).forEach(lv=>this._colAdd[lv].forEach(c=>rows.push([lv,c.zone||'',c.id,Math.round(c.x),Math.round(c.y),c.sz||'',c.crit?'是':'否'])));
+    const rows=[['Level','Zone','Column','x','y','Size','Critical']];
+    Object.keys(this._colAdd||{}).forEach(lv=>this._colAdd[lv].forEach(c=>rows.push([lv,c.zone||'',c.id,Math.round(c.x),Math.round(c.y),c.sz||'',c.crit?'yes':'no'])));
     const esc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
     const blob=new Blob(['﻿'+rows.map(r=>r.map(esc).join(',')).join('\r\n')],{type:'text/csv'});
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='placed_columns_'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},400);
@@ -7667,7 +7673,7 @@ class Component extends DCLogic {
       const idHtml=this._idSpanMaybeCol(id,displayId,z,lv);
       const cwTag=(type==='lift'||type==='stair')?this._cwTag(id):'';
       const _isPour=(type==='core'||type==='lift'||type==='stair'||type==='col'),_pa=type==='col'?'col':'ls',_zmk=z.mk||z.lid,_coveredCore=(type==='lift'||type==='stair')?this._lsMemberCore(z,id):'',_pv=(_isPour&&!_coveredCore)?this.elemPourPct(lv,_zmk,_pa,type,id):null,_canPour=_isPour&&!_coveredCore&&(this.rwsIsAdmin()||this.rwsScopeOk(lv,_zmk));
-      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(_coveredCore)}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="${type==='col'?'Progress of this column (e.g. rebar / formwork done, not yet cast)':'Three-pour progress for this individual item'}"><span>${type==='col'?'进度':'Pour'}</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="${_pa}" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
+      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(_coveredCore)}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="${type==='col'?'Progress of this column (e.g. rebar / formwork done, not yet cast)':'Three-pour progress for this individual item'}"><span>${type==='col'?'Progress':'Pour'}</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="${_pa}" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
       return `<div class="idrow ${crit?'crit':''}">${idHtml}${cwTag}<span class="meta">${metaFn?metaFn(x):''}</span>${_pourCtl}${this.elChip(key)}${dc}</div>`;}).join('');}
 
   /* ---------- schedule-record (ZP) integration — enriches the detail panel only; map unchanged ---------- */
@@ -7873,7 +7879,7 @@ class Component extends DCLogic {
       return `<tr><td style="${td};font-weight:800">${this.esc(r.lab)}</td><td style="${td}">${rg(r.g.ps,r.g.pe)}</td><td style="${td}">${rg(r.g.ss,r.g.se)}</td><td style="${td};color:${ac};font-weight:800">${at}</td><td style="${td}">${this._psaDelayHtml(r.g.pe,r.g.se)}</td></tr>`;}).join('');
     const src=[...new Set(rows.map(r=>r.g.src).filter(Boolean))].join(' · ');
     return `<div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 10px;background:var(--panel)">
-      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:900;letter-spacing:.03em">P / S / A<span style="font-weight:600;color:var(--dim);font-size:9.5px">Plan · Site · Actual</span><span style="flex:1"></span><span class="allbtn psa-open" data-lv="${this.esc(lv)}" data-cat="${this.esc(z.cat||'NB')}" style="color:var(--accent);cursor:pointer;font-size:10px;font-weight:800">${admin?'✎ 表格':'表格'}</span></div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:900;letter-spacing:.03em">P / S / A<span style="font-weight:600;color:var(--dim);font-size:9.5px">Plan · Site · Actual</span><span style="flex:1"></span><span class="allbtn psa-open" data-lv="${this.esc(lv)}" data-cat="${this.esc(z.cat||'NB')}" style="color:var(--accent);cursor:pointer;font-size:10px;font-weight:800">${admin?'✎ Table':'Table'}</span></div>
       <table style="width:100%;border-collapse:collapse;font-size:10.5px;margin-top:4px"><thead><tr style="color:var(--faint);font-size:9px;text-transform:uppercase"><th style="text-align:left;padding:3px 6px"></th><th style="text-align:left;padding:3px 6px">P · Plan</th><th style="text-align:left;padding:3px 6px">S · Site</th><th style="text-align:left;padding:3px 6px">A · Actual</th><th style="text-align:left;padding:3px 6px">Delay</th></tr></thead><tbody>${body}</tbody></table>
       <div style="font-size:9px;color:var(--faint);margin-top:4px">P = this app's plan · S = ${src?this.esc(src):'site programme'} · A = work recorded here</div></div>`;}
   openPsaTable(lv0,cat0){
@@ -7924,15 +7930,15 @@ class Component extends DCLogic {
       ov.innerHTML=`<div style="max-width:1220px;margin:0 auto">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><b style="font-size:18px">📅 P / S / A dates</b>
           <span style="display:flex;gap:4px">${seg}</span>
-          <label style="font-size:11px;color:var(--dim);font-weight:700">楼层 <select id="psaLv" style="${SEL}"><option value="all"${multiLv?' selected':''}>All</option>${lvs.map(l=>`<option${l===this._psaLv?' selected':''}>${esc(l)}</option>`).join('')}</select></label>
+          <label style="font-size:11px;color:var(--dim);font-weight:700">Level <select id="psaLv" style="${SEL}"><option value="all"${multiLv?' selected':''}>All</option>${lvs.map(l=>`<option${l===this._psaLv?' selected':''}>${esc(l)}</option>`).join('')}</select></label>
           <label style="font-size:11px;color:var(--dim);font-weight:700">Zone <select id="psaZone" style="${SEL}"><option value="all">All</option>${zlabs.map(l=>`<option${l===this._psaZone?' selected':''}>${esc(l)}</option>`).join('')}</select></label>
-          <label style="font-size:12px"><input type="checkbox" id="psaOnly"${this._psaOnly?' checked':''}> 只看有日期的 zone</label>
-          <label style="font-size:12px"><input type="checkbox" id="psaMap"${this._psaOn()?' checked':''}> 地图上显示</label>
+          <label style="font-size:12px"><input type="checkbox" id="psaOnly"${this._psaOnly?' checked':''}> Only zones with dates</label>
+          <label style="font-size:12px"><input type="checkbox" id="psaMap"${this._psaOn()?' checked':''}> Show on map</label>
           <span style="flex:1"></span><button class="hbtn" id="psaCsv">⬇ CSV</button><button class="hbtn" id="psaClose">Close ✕</button></div>
         <div style="font-size:11px;color:var(--dim);margin-bottom:8px">P = Plan, this app's own activity dates (change them on the zone card) · S = Site, from the Podium schedule 5 Oct, the B1 / B2 site reports and (Marine) the KH Zone C critical-path and podium schedules 19 Sep — editable here · A = Actual, read from the done dates and done quantities already recorded in this app.${admin?' Red border = typed here; typing the source value back removes the override.':''} <b>${zs.length}</b> zone${zs.length===1?'':'s'} shown.</div>
         <table style="width:100%;border-collapse:collapse;font-size:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px"><thead><tr>
           ${multiLv?`<th style="${th}">Level</th>`:''}<th style="${th}">Zone</th><th style="${th}">Activity</th><th style="${th}">P start</th><th style="${th}">P end</th><th style="${th}">S start</th><th style="${th}">S end</th><th style="${th}" title="S end − P end · + = site later than plan">Delay</th><th style="${th}">A · Actual</th><th style="${th}">Source</th></tr></thead>
-          <tbody>${rows||`<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--faint)">Nothing matches these filters${this._psaOnly?' — untick "只看有日期的 zone" to see every zone':''}.</td></tr>`}</tbody></table></div>`;
+          <tbody>${rows||`<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--faint)">Nothing matches these filters${this._psaOnly?' — untick "Only zones with dates" to see every zone':''}.</td></tr>`}</tbody></table></div>`;
       ov.querySelector('#psaClose').onclick=()=>{ov.remove();this.render();};
       ov.querySelectorAll('.psa-cat').forEach(b=>b.onclick=()=>{this._psaCat=b.dataset.c;this._psaZone='all';draw();});
       ov.querySelector('#psaLv').onchange=e=>{this._psaLv=e.target.value;this._psaZone='all';draw();};
@@ -7963,12 +7969,12 @@ class Component extends DCLogic {
     const rows=Object.values(by).map(r=>{const unit=r.a.unit||this._actUnit(r.a.id),pourPct=r.pourCount?Math.round(r.pourSum/r.pourCount):null,scopePct=pourPct!=null?pourPct:(r.total>0?Math.min(100,Math.round(r.cum/r.total*100)):null),monthPct=r.hasPlan&&r.monthPlan>0?Math.min(100,Math.round(r.monthDone/r.monthPlan*100)):null,has=r.total>0||r.cum>0||r.hasPlan||r.hasDone||pourPct!=null;if(!has)return null;const monthTxt=r.hasPlan?`${fmtN(r.monthDone)} / ${fmtN(r.monthPlan)} ${this.esc(unit)} = ${monthPct||0}%`:(r.hasDone?`${fmtN(r.monthDone)} ${this.esc(unit)} done`:'No work entered'),over=r.total>0&&r.cum>r.total,after=r.cumAll-r.cum,scopeTxt=(pourPct!=null?`${r.pourCount} item${r.pourCount===1?'':'s'} pouring avg = ${pourPct}%`:(r.total>0?`${fmtN(r.cum)} / ${fmtN(r.total)} ${this.esc(unit)} = ${over?Math.round(r.cum/r.total*100):scopePct}%${r.missing?` · ${r.missing} missing total`:''}`:'Total not set'))
         /* Where the cumulative figure comes from, so a wrong month or a double entry can be found. */
         +(()=>{const ks=Object.keys(r.byM);let h='';
-          if(over)h+=`<div style="color:var(--crit);font-size:9.5px;font-weight:800">⚠ 完成量超出总量 ${fmtN(r.cum-r.total)} ${this.esc(unit)}</div>`;
-          const ek=Object.keys(r.early);if(ek.length)h+=`<div style="color:var(--crit);font-size:9.5px;font-weight:800">⚠ 计划开始前就填了完成：${ek.map(m=>this.esc(m)+' '+fmtN(r.early[m])).join(' · ')}</div>`;
-          if(ks.length&&!(pourPct!=null))h+=`<div style="color:var(--dim);font-size:9px;font-weight:600">完成记录：${ks.map(m=>this.esc(m)+' '+fmtN(r.byM[m])).join(' · ')}</div>`;
-          if(after>0)h+=`<div style="color:var(--dim);font-size:9px;font-weight:600">${this.esc(sm)} 之后还完成 ${fmtN(after)} ${this.esc(unit)}（未计入上面的累计）</div>`;
+          if(over)h+=`<div style="color:var(--crit);font-size:9.5px;font-weight:800">⚠ Done exceeds total by ${fmtN(r.cum-r.total)} ${this.esc(unit)}</div>`;
+          const ek=Object.keys(r.early);if(ek.length)h+=`<div style="color:var(--crit);font-size:9.5px;font-weight:800">⚠ Done entered before the planned start: ${ek.map(m=>this.esc(m)+' '+fmtN(r.early[m])).join(' · ')}</div>`;
+          if(ks.length&&!(pourPct!=null))h+=`<div style="color:var(--dim);font-size:9px;font-weight:600">Done records: ${ks.map(m=>this.esc(m)+' '+fmtN(r.byM[m])).join(' · ')}</div>`;
+          if(after>0)h+=`<div style="color:var(--dim);font-size:9px;font-weight:600">${fmtN(after)} ${this.esc(unit)} more done after ${this.esc(sm)} (not in the total above)</div>`;
           return h;})();return {...r,scopePct,monthTxt,scopeTxt};}).filter(Boolean);
-    const controls=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px"><button class="hbtn admin-agg-mode${this._adminAggMode?' primary':''}" style="padding:4px 9px;font-size:9.5px">${this._adminAggMode?'✓ 大区多选中':'＋ 大区多选'}</button><span style="font-size:9px;color:var(--dim)">${multi?`已选 ${zones.length} 个 Zone`:'当前单个 Zone'}</span>${this._adminAggSet&&this._adminAggSet.size?'<button class="hbtn admin-agg-clear" style="padding:4px 8px;font-size:9px">清空多选</button>':''}</div>`;
+    const controls=`<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px"><button class="hbtn admin-agg-mode${this._adminAggMode?' primary':''}" style="padding:4px 9px;font-size:9.5px">${this._adminAggMode?'✓ Multi-zone on':'＋ Multi-zone'}</button><span style="font-size:9px;color:var(--dim)">${multi?`${zones.length} zones selected`:'This zone only'}</span>${this._adminAggSet&&this._adminAggSet.size?'<button class="hbtn admin-agg-clear" style="padding:4px 8px;font-size:9px">Clear selection</button>':''}</div>`;
     if(!rows.length)return `<div style="border:1px solid #f0c36a;background:#fff9e8;border-radius:10px;padding:10px 12px;margin:0 0 10px"><div style="font-size:11px;font-weight:900;color:#875400">ADMIN · ${multi?'MULTI-ZONE':'ZONE'} TOTAL-SCOPE PROGRESS</div>${controls}<div style="font-size:10px;color:var(--dim);margin-top:6px">${this.esc(lv)} · no activity totals or completed quantities yet.</div></div>`;
     const W=this._pw(),phase={};rows.forEach(r=>{const p=this._actPhase(r.a.id,lv);if(p&&r.scopePct!=null)(phase[p]=phase[p]||[]).push(r.scopePct/100);});const present=Object.keys(phase).filter(k=>(W[k]||0)>0);let overall=null;if(present.length){let n=0,d=0;present.forEach(k=>{const avg=phase[k].reduce((x,y)=>x+y,0)/phase[k].length;n+=avg*W[k];d+=W[k];});if(d)overall=Math.min(100,Math.round(n/d*100));}if(overall==null){const rr=rows.filter(r=>r.scopePct!=null);if(rr.length)overall=Math.round(rr.reduce((n,r)=>n+r.scopePct,0)/rr.length);}
     const body=rows.map(r=>{const pc=r.scopePct==null?'var(--faint)':this.progColor(r.scopePct);return `<div style="display:grid;grid-template-columns:minmax(105px,1fr) minmax(145px,1.35fr) minmax(175px,1.6fr);gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(120,130,150,.18);font-size:10.5px"><b>${this.esc(r.a.label)}</b><span><small style="display:block;color:var(--faint);font-size:8px;text-transform:uppercase">${this.esc(sm)} plan</small>${r.monthTxt}</span><span style="color:${pc};font-weight:800"><small style="display:block;color:var(--faint);font-size:8px;text-transform:uppercase">Full Zone scope</small>${r.scopeTxt}</span></div>`;}).join('');
@@ -8031,13 +8037,13 @@ class Component extends DCLogic {
       const _coreListHtml='';  /* Core/Lift/Stair 已统一到 ls 活动清单(见 _actElemSec) */
       const _days=this._actDayList(lv,zmk,a.id);   /* 每日工人数: 手动按天录入, C=木工 R=铁工 */
       const _dayRows=_days.map(dt=>{ const c=this.actDayRes(lv,zmk,a.id,'c',dt), r=this.actDayRes(lv,zmk,a.id,'r',dt);
-        if(canEdit) return `<div style="display:flex;align-items:center;gap:5px;margin:2px 0"><span style="font-size:11px;font-family:'IBM Plex Mono',monospace;min-width:74px">${this._fmtD(dt)}</span><span class="am2">C</span><input class="actday-in" data-a="${a.id}" data-dt="${dt}" data-w="c" value="${c==null?'':c}" style="width:38px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 3px;font-size:12px;font-family:inherit;color:var(--txt)"><span class="am2">R</span><input class="actday-in" data-a="${a.id}" data-dt="${dt}" data-w="r" value="${r==null?'':r}" style="width:38px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 3px;font-size:12px;font-family:inherit;color:var(--txt)"><span style="font-size:10.5px;color:var(--faint)">=${(c||0)+(r||0)}</span><span class="actday-lock" data-a="${a.id}" data-dt="${dt}" title="锁定/解锁这天工人数 — 锁了 Import 不会覆盖" style="cursor:pointer;font-size:11px;margin-left:1px">${(this.isEdited('manpower',lv+'||'+zmk+'||'+a.id+'||dc||'+dt)||this.isEdited('manpower',lv+'||'+zmk+'||'+a.id+'||dr||'+dt))?'🔒':'🔓'}</span><span class="lnk actday-del" data-a="${a.id}" data-dt="${dt}" title="删除这天" style="color:var(--crit);cursor:pointer;font-weight:800">✕</span></div>`;
+        if(canEdit) return `<div style="display:flex;align-items:center;gap:5px;margin:2px 0"><span style="font-size:11px;font-family:'IBM Plex Mono',monospace;min-width:74px">${this._fmtD(dt)}</span><span class="am2">C</span><input class="actday-in" data-a="${a.id}" data-dt="${dt}" data-w="c" value="${c==null?'':c}" style="width:38px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 3px;font-size:12px;font-family:inherit;color:var(--txt)"><span class="am2">R</span><input class="actday-in" data-a="${a.id}" data-dt="${dt}" data-w="r" value="${r==null?'':r}" style="width:38px;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 3px;font-size:12px;font-family:inherit;color:var(--txt)"><span style="font-size:10.5px;color:var(--faint)">=${(c||0)+(r||0)}</span><span class="actday-lock" data-a="${a.id}" data-dt="${dt}" title="Lock / unlock this day's workers — a locked day is not overwritten by Import" style="cursor:pointer;font-size:11px;margin-left:1px">${(this.isEdited('manpower',lv+'||'+zmk+'||'+a.id+'||dc||'+dt)||this.isEdited('manpower',lv+'||'+zmk+'||'+a.id+'||dr||'+dt))?'🔒':'🔓'}</span><span class="lnk actday-del" data-a="${a.id}" data-dt="${dt}" title="Delete this day" style="color:var(--crit);cursor:pointer;font-weight:800">✕</span></div>`;
         return `<div style="font-size:11px;margin:1px 0"><b style="font-family:'IBM Plex Mono',monospace">${this._fmtD(dt)}</b> · C ${c==null?'—':c} · R ${r==null?'—':r} · Total <b>${(c||0)+(r||0)}</b></div>`; }).join('');
       const _addRow=canEdit?`<div style="display:flex;align-items:center;gap:5px;margin-top:4px"><input type="date" class="actday-add-dt" data-a="${a.id}" style="font-size:11px;padding:2px 4px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--txt);font-family:inherit"><span class="am2">C</span><input class="actday-add-c" data-a="${a.id}" placeholder="0" style="width:34px;text-align:center;border:1px dashed var(--accent);border-radius:5px;padding:1px 3px;font-size:12px;background:var(--panel);color:var(--accent);font-family:inherit"><span class="am2">R</span><input class="actday-add-r" data-a="${a.id}" placeholder="0" style="width:34px;text-align:center;border:1px dashed var(--accent);border-radius:5px;padding:1px 3px;font-size:12px;background:var(--panel);color:var(--accent);font-family:inherit"><span class="lnk actday-addbtn" data-a="${a.id}" style="color:var(--accent);cursor:pointer;font-weight:700;font-size:11px">+ Add day</span></div>`:'';
       const _dayTotal=_days.reduce((n,dt)=>n+(this.actDayRes(lv,zmk,a.id,'c',dt)||0)+(this.actDayRes(lv,zmk,a.id,'r',dt)||0),0);
-      const _enteredRows=_dayRows?`<details class="sec" data-sec="workers:${this.esc(a.id)}" style="margin:1px 0 4px"><summary class="t" style="margin:0;display:flex;align-items:center"><span title="已录入的每日工人数，可展开或收起">👷 Daily workers entered</span><span style="margin-left:auto;text-transform:none">${_days.length} days · ${_dayTotal} man-days</span></summary><div class="actsub" style="display:flex;flex-direction:column;align-items:stretch;gap:0;margin:6px 0 0 17px">${_dayRows}</div></details>`:'';
+      const _enteredRows=_dayRows?`<details class="sec" data-sec="workers:${this.esc(a.id)}" style="margin:1px 0 4px"><summary class="t" style="margin:0;display:flex;align-items:center"><span title="Daily workers entered — click to expand or collapse">👷 Daily workers entered</span><span style="margin-left:auto;text-transform:none">${_days.length} days · ${_dayTotal} man-days</span></summary><div class="actsub" style="display:flex;flex-direction:column;align-items:stretch;gap:0;margin:6px 0 0 17px">${_dayRows}</div></details>`:'';
       const _resRow=(canEdit||_dayRows)?`<div class="actres" style="margin:1px 0 8px 2px">${_enteredRows}${canEdit?`<div class="actsub" style="margin:2px 0 0 17px">${_addRow}</div>`:''}</div>`:'';
-      return `<div class="actcard ${hidden?'act-off':''}${_noWorkThisMonth?' act-nowork':''}"><div class="actrow">${chk}<span class="actlbl">${a.label}${(admin&&(total==null||total<=0)&&cumThrough>0)?' <span class="needscopetag" title="填了 Done, 但这个活动没有总量、也没有任何月份的计划 → 算不出百分比。请补一个总量(Total)或计划量(Plan)。" style="background:#fdecec;color:#c8102e;border:1px solid #f3b5b5;border-radius:6px;padding:1px 6px;font-size:9px;font-weight:800;margin-left:4px">⚠ 缺总量/计划</span>':''}${_noWorkThisMonth?' <span class="noworktag" title="No planned or done quantity for '+this.esc(sm)+' — this activity isn\'t scheduled for this zone this month">— no work this month</span>':''}${(admin&&hidden)?' <span class="hiddentag">hidden from users</span>':''}${(a.custom&&admin)?' <span class="lnk actdel" data-a="'+a.id+'" style="color:var(--crit);cursor:pointer" title="Delete custom activity">✕</span>':''}</span><span class="actbar"><i style="width:${Math.min(pct||0,100)}%;background:${bc}"></i></span><span class="actpct" style="color:${bc}">${pct==null?'—':pct+'%'}</span>${this._cmtBtn(lv,zmk,a.id)}${this._updBadge(lv,zmk,a.id)}</div>`+
+      return `<div class="actcard ${hidden?'act-off':''}${_noWorkThisMonth?' act-nowork':''}"><div class="actrow">${chk}<span class="actlbl">${a.label}${(admin&&(total==null||total<=0)&&cumThrough>0)?' <span class="needscopetag" title="Done is entered but this activity has no total and no monthly plan, so no % can be worked out. Add a Total or a Plan." style="background:#fdecec;color:#c8102e;border:1px solid #f3b5b5;border-radius:6px;padding:1px 6px;font-size:9px;font-weight:800;margin-left:4px">⚠ No total / plan</span>':''}${_noWorkThisMonth?' <span class="noworktag" title="No planned or done quantity for '+this.esc(sm)+' — this activity isn\'t scheduled for this zone this month">— no work this month</span>':''}${(admin&&hidden)?' <span class="hiddentag">hidden from users</span>':''}${(a.custom&&admin)?' <span class="lnk actdel" data-a="'+a.id+'" style="color:var(--crit);cursor:pointer" title="Delete custom activity">✕</span>':''}</span><span class="actbar"><i style="width:${Math.min(pct||0,100)}%;background:${bc}"></i></span><span class="actpct" style="color:${bc}">${pct==null?'—':pct+'%'}</span>${this._cmtBtn(lv,zmk,a.id)}${this._updBadge(lv,zmk,a.id)}</div>`+
         (a.info?`<div class="actinfotext">&#9432; ${this.esc(a.info)}</div>`:``)+
         pourRow+`<div class="actsub"><span class="am">${sm}</span><span class="am2">Plan</span>${planCell}${_ub}${_editBadge(_planEdited)}${this._lockIco('act_plan',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="asep">|</span><span class="am2">Done</span>${doneCell}${_ub}${_editBadge(_doneEdited)}${this._lockIco('act_done_m',lv+'||'+zmk+'||'+a.id+'||'+sm)}<span class="acum">${sm}: ${this.fmt(cg.done)}${plan==null?'':' / '+this.fmt(plan)} ${this.esc(_u)}</span></div>`+_castQuick+_resRow+actDateLine+carryLine+mn+this._cmtPanel(lv,zmk,a.id)+_coreListHtml+this._actElemSecFull(lv,z,a.id)+'</div>';
     }).join('');
@@ -8198,7 +8204,7 @@ class Component extends DCLogic {
      sb.querySelectorAll('.actday-in').forEach(el=>{el.addEventListener('change',()=>{this.setActDayRes(_zk[0],_zk[1],el.dataset.a,el.dataset.w,el.dataset.dt,el.value,z);this._actRerender(z);});el.addEventListener('keydown',e=>{if(e.key==='Enter')el.blur();});});
      sb.querySelectorAll('.actday-del').forEach(el=>{el.addEventListener('click',()=>{const dt=el.dataset.dt,aid=el.dataset.a;this.setActDayRes(_zk[0],_zk[1],aid,'c',dt,'',z);this.setActDayRes(_zk[0],_zk[1],aid,'r',dt,'',z);this._actRerender(z);});});
      sb.querySelectorAll('.actday-lock').forEach(el=>{el.addEventListener('click',ev=>{ev.stopPropagation();if(!this.rwsIsAdmin())return;const dt=el.dataset.dt,aid=el.dataset.a;const ck=_zk[0]+'||'+_zk[1]+'||'+aid+'||dc||'+dt, rk=_zk[0]+'||'+_zk[1]+'||'+aid+'||dr||'+dt;const on=this.isEdited('manpower',ck)||this.isEdited('manpower',rk);if(on){this.unmarkEdited('manpower',ck);this.unmarkEdited('manpower',rk);}else{this.markEdited('manpower',ck);this.markEdited('manpower',rk);}this._actRerender(z);});});
-     sb.querySelectorAll('.actday-addbtn').forEach(el=>{el.addEventListener('click',()=>{const aid=el.dataset.a,box=el.closest('.actres');if(!box)return;const dt=(box.querySelector('.actday-add-dt')||{}).value,c=(box.querySelector('.actday-add-c')||{}).value,r=(box.querySelector('.actday-add-r')||{}).value;if(!/^\d{4}-\d{2}-\d{2}$/.test(dt||'')){this._toast&&this._toast('先选日期 / pick a date');return;}this.setActDayRes(_zk[0],_zk[1],aid,'c',dt,c,z);this.setActDayRes(_zk[0],_zk[1],aid,'r',dt,r,z);this._actRerender(z);});});
+     sb.querySelectorAll('.actday-addbtn').forEach(el=>{el.addEventListener('click',()=>{const aid=el.dataset.a,box=el.closest('.actres');if(!box)return;const dt=(box.querySelector('.actday-add-dt')||{}).value,c=(box.querySelector('.actday-add-c')||{}).value,r=(box.querySelector('.actday-add-r')||{}).value;if(!/^\d{4}-\d{2}-\d{2}$/.test(dt||'')){this._toast&&this._toast('Pick a date first');return;}this.setActDayRes(_zk[0],_zk[1],aid,'c',dt,c,z);this.setActDayRes(_zk[0],_zk[1],aid,'r',dt,r,z);this._actRerender(z);});});
      sb.querySelectorAll('.actcmt-btn').forEach(el=>el.addEventListener('click',ev=>{ev.stopPropagation();const key=_zk[0]+'||'+_zk[1]+'||'+el.dataset.a;this._cmtOpen=(this._cmtOpen===key)?null:key;this._actRerender(z);}));
      sb.querySelectorAll('.cmt-send').forEach(el=>el.addEventListener('click',()=>{const box=el.closest('.cmtpanel'),inp=box&&box.querySelector('.cmt-in[data-a="'+el.dataset.a+'"]'),to=box&&box.querySelector('.cmt-to-select[data-a="'+el.dataset.a+'"]');if(inp){this.addActCmt(_zk[0],_zk[1],el.dataset.a,inp.value,to&&to.value);}}));
      sb.querySelectorAll('.cmt-in').forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter'){const box=el.closest('.cmtpanel'),to=box&&box.querySelector('.cmt-to-select[data-a="'+el.dataset.a+'"]');this.addActCmt(_zk[0],_zk[1],el.dataset.a,el.value,to&&to.value);}}));
@@ -8875,14 +8881,14 @@ class Component extends DCLogic {
   async rwsMaybeDailyExport(){if(!this.rwsIsAdmin())return;const today=new Date().toISOString().slice(0,10);let last='';try{last=localStorage.getItem('rws_last_daily_export')||'';}catch(e){}if(last===today)return;try{const d=await this.buildFullExport();this._downloadJson(d,'RWS_P1_CJ_daily_'+today+'.json');localStorage.setItem('rws_last_daily_export',today);}catch(e){console.warn('[rws] daily export failed',e);}}
   /* ---------- 进度快照(云端存 / 历史回看) ---------- */
   async rwsSaveSnapshot(label,silent){
-    const s=(typeof rwsGetSession==='function')&&rwsGetSession(); if(!s){this._toast&&this._toast('请先登录');return false;}
-    if(this._snapView){this._toast&&this._toast('正在看历史, 先返回实时再存');return false;}
-    try{const state=await rwsGetState(s.token);const lbl=label||('存档 '+new Date().toISOString().slice(0,10));const r=await rwsSnapshotSave(lbl,state);
-      if(r&&r.ok){if(!silent)this._toast&&this._toast('✓ 已存快照');return true;}
-      if(!silent)this._toast&&this._toast('存快照失败'+((r&&r.error&&r.error.message)?(': '+r.error.message):''));}
-    catch(e){if(!silent)this._toast&&this._toast('存快照失败');}
+    const s=(typeof rwsGetSession==='function')&&rwsGetSession(); if(!s){this._toast&&this._toast('Please sign in first');return false;}
+    if(this._snapView){this._toast&&this._toast('Viewing history — go back to live before saving');return false;}
+    try{const state=await rwsGetState(s.token);const lbl=label||('Snapshot '+new Date().toISOString().slice(0,10));const r=await rwsSnapshotSave(lbl,state);
+      if(r&&r.ok){if(!silent)this._toast&&this._toast('✓ Snapshot saved');return true;}
+      if(!silent)this._toast&&this._toast('Snapshot failed'+((r&&r.error&&r.error.message)?(': '+r.error.message):''));}
+    catch(e){if(!silent)this._toast&&this._toast('Snapshot failed');}
     return false;}
-  async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;/* A weekly check does not need asking every 30 seconds: once an hour is plenty. */if(this._rwsSnapChkAt&&Date.now()-this._rwsSnapChkAt<3600000)return;this._rwsSnapChkAt=Date.now();try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('每周自动',true);}catch(e){}}
+  async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;/* A weekly check does not need asking every 30 seconds: once an hour is plenty. */if(this._rwsSnapChkAt&&Date.now()-this._rwsSnapChkAt<3600000)return;this._rwsSnapChkAt=Date.now();try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('Weekly auto',true);}catch(e){}}
   _applyStateForView(st){st=st||{};
     if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);try{this._adoptPlacedCols();}catch(_e){}try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();}catch(_e2){console.error('reconcile after pull',_e2);}}try{this._migrateLW8();}catch(_e){}
     this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
@@ -8898,10 +8904,10 @@ class Component extends DCLogic {
     const acts=(this._actList?this._actList(lv,z):[]).filter(a=>a.custom||this._actApplies(a.id,lv,z));
     const rows=[];
     acts.forEach(a=>{const snap=sumStore(this._actDoneM||{},a.id),live=sumStore((this._snapLive.done)||{},a.id);const sv=snap||0,lvv=live||0;if(sv!==lvv){const d=lvv-sv;rows.push(`<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:2px 0"><span>${this.esc(a.label)}</span><span><b>${this.fmt(sv)}</b> → <b style="color:var(--accent)">${this.fmt(lvv)}</b> <span style="color:${d>=0?'var(--done)':'var(--crit)'};font-weight:700">(${d>=0?'+':''}${this.fmt(d)})</span></span></div>`);}});
-    const sm=this._snapView.taken_at?this._fmtD(String(this._snapView.taken_at).slice(0,10)):'快照';
-    if(!rows.length)return `<div style="border:1px solid #7c3aed;border-radius:9px;padding:7px 10px;margin-bottom:10px;background:rgba(124,58,237,.06);font-size:11px;color:var(--dim)">📊 与现在对比:这个区从 <b>${this.esc(sm)}</b> 到现在<b>没有变化</b></div>`;
-    return `<div style="border:1px solid #7c3aed;border-radius:9px;padding:8px 10px;margin-bottom:10px;background:rgba(124,58,237,.06)"><div style="font-weight:800;font-size:11.5px;color:#7c3aed;margin-bottom:5px">📊 与现在对比 · ${this.esc(sm)} → 现在(累计完成量)</div>${rows.join('')}</div>`;}
-  async rwsViewSnapshot(id){const r=await rwsSnapshotGet(id);if(!r||!r.ok||!r.data){this._toast&&this._toast('读取快照失败');return;}const snap=r.data;
+    const sm=this._snapView.taken_at?this._fmtD(String(this._snapView.taken_at).slice(0,10)):'Snapshot';
+    if(!rows.length)return `<div style="border:1px solid #7c3aed;border-radius:9px;padding:7px 10px;margin-bottom:10px;background:rgba(124,58,237,.06);font-size:11px;color:var(--dim)">📊 Compared with now: <b>no change</b> in this zone since <b>${this.esc(sm)}</b></div>`;
+    return `<div style="border:1px solid #7c3aed;border-radius:9px;padding:8px 10px;margin-bottom:10px;background:rgba(124,58,237,.06)"><div style="font-weight:800;font-size:11.5px;color:#7c3aed;margin-bottom:5px">📊 Compared with now · ${this.esc(sm)} → now (cumulative done)</div>${rows.join('')}</div>`;}
+  async rwsViewSnapshot(id){const r=await rwsSnapshotGet(id);if(!r||!r.ok||!r.data){this._toast&&this._toast('Could not load the snapshot');return;}const snap=r.data;
     this._snapView={id:snap.id,taken_at:snap.taken_at,label:snap.label};
     this._snapLive={done:{...(this._actDoneM||{})},slab:{...(this._zpOv||{})}};   /* 先存一份"现在"的完成量, 用于逐区对比 */
     if(this._livePollId){clearInterval(this._livePollId);this._livePollId=null;}
@@ -8912,25 +8918,25 @@ class Component extends DCLogic {
   rwsExitSnapshot(){this._snapView=null;this._snapBanner(false);try{location.reload();}catch(e){this.rwsAfterLogin&&this.rwsAfterLogin();}}
   _snapBanner(show){let b=document.getElementById('__snapBanner');if(!show){if(b)b.remove();document.body.classList.remove('snapview');return;}const sv=this._snapView||{};const when=sv.taken_at?this._fmtD(String(sv.taken_at).slice(0,10)):'';
     if(!b){b=document.createElement('div');b.id='__snapBanner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483000;background:#7c3aed;color:#fff;font-size:12.5px;font-weight:700;padding:7px 14px;display:flex;align-items:center;justify-content:center;gap:14px;box-shadow:0 2px 10px rgba(0,0,0,.25)';document.body.appendChild(b);}
-    b.innerHTML=`🕓 正在查看历史快照:<b>${this.esc(when)}${sv.label?' · '+this.esc(sv.label):''}</b>(只读, 改动不会保存)<button id="__snapExit" style="background:#fff;color:#7c3aed;border:0;border-radius:7px;padding:4px 12px;font-weight:800;cursor:pointer">返回实时 ▸</button>`;
+    b.innerHTML=`🕓 Viewing snapshot: <b>${this.esc(when)}${sv.label?' · '+this.esc(sv.label):''}</b> (read-only, changes are not saved)<button id="__snapExit" style="background:#fff;color:#7c3aed;border:0;border-radius:7px;padding:4px 12px;font-weight:800;cursor:pointer">Back to live ▸</button>`;
     document.body.classList.add('snapview');const ex=b.querySelector('#__snapExit');if(ex)ex.addEventListener('click',()=>this.rwsExitSnapshot());}
-  async rwsOpenHistory(){if(!this.rwsCanSnapshot()){this._toast&&this._toast('没有查看历史快照的权限');return;}const old=document.getElementById('__snapHist');if(old)old.remove();const ov=document.createElement('div');ov.id='__snapHist';ov.style.cssText='position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:2147483200;display:flex;align-items:center;justify-content:center;padding:24px';
-    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;width:min(560px,96vw);max-height:86vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)"><div style="font-size:14px;font-weight:800">🕓 进度快照 / History</div><div style="display:flex;gap:8px">${this.rwsIsAdmin()?'<button class="hbtn primary" id="__snapNew" style="padding:6px 12px">📸 存当前</button>':''}<button class="hbtn" id="__snapClose" style="padding:6px 12px">关闭</button></div></div><div id="__snapBody" style="overflow:auto;padding:12px 16px"><div class="empty">加载中…</div></div></div>`;
+  async rwsOpenHistory(){if(!this.rwsCanSnapshot()){this._toast&&this._toast('No permission to view snapshots');return;}const old=document.getElementById('__snapHist');if(old)old.remove();const ov=document.createElement('div');ov.id='__snapHist';ov.style.cssText='position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:2147483200;display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;width:min(560px,96vw);max-height:86vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4)"><div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)"><div style="font-size:14px;font-weight:800">🕓 History</div><div style="display:flex;gap:8px">${this.rwsIsAdmin()?'<button class="hbtn primary" id="__snapNew" style="padding:6px 12px">📸 Save now</button>':''}<button class="hbtn" id="__snapClose" style="padding:6px 12px">Close</button></div></div><div id="__snapBody" style="overflow:auto;padding:12px 16px"><div class="empty">Loading…</div></div></div>`;
     document.body.appendChild(ov);ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});ov.querySelector('#__snapClose').addEventListener('click',()=>ov.remove());
-    const nb=ov.querySelector('#__snapNew');if(nb)nb.addEventListener('click',async()=>{nb.disabled=true;nb.textContent='存中…';const ok=await this.rwsSaveSnapshot();nb.disabled=false;nb.textContent='📸 存当前';if(ok)this.rwsOpenHistory();});
+    const nb=ov.querySelector('#__snapNew');if(nb)nb.addEventListener('click',async()=>{nb.disabled=true;nb.textContent='Saving…';const ok=await this.rwsSaveSnapshot();nb.disabled=false;nb.textContent='📸 Save now';if(ok)this.rwsOpenHistory();});
     const body=ov.querySelector('#__snapBody');
     try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];
-      if(!list.length){body.innerHTML='<div class="empty">还没有快照。'+(this.rwsIsAdmin()?'点右上"📸 存当前"存第一个。':'')+'</div>';return;}
-      body.innerHTML=list.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px"><div><b style="font-size:12.5px">${this.esc(this._fmtD(String(s.taken_at).slice(0,10)))}</b> <span style="color:var(--faint);font-size:10.5px">${this.esc(String(s.taken_at).slice(11,16))}</span>${s.label?' <span style="font-size:10.5px;color:var(--dim)">· '+this.esc(s.label)+'</span>':''}</div><div style="display:flex;gap:6px"><button class="hbtn __snapView" data-id="${s.id}" style="padding:5px 12px">查看</button>${this.rwsIsAdmin()?'<button class="hbtn __snapDel" data-id="'+s.id+'" style="padding:5px 10px;color:var(--crit)">删</button>':''}</div></div>`).join('');
+      if(!list.length){body.innerHTML='<div class="empty">No snapshots yet.'+(this.rwsIsAdmin()?' Press "📸 Save now" (top right) to save the first one.':'')+'</div>';return;}
+      body.innerHTML=list.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px"><div><b style="font-size:12.5px">${this.esc(this._fmtD(String(s.taken_at).slice(0,10)))}</b> <span style="color:var(--faint);font-size:10.5px">${this.esc(String(s.taken_at).slice(11,16))}</span>${s.label?' <span style="font-size:10.5px;color:var(--dim)">· '+this.esc(s.label)+'</span>':''}</div><div style="display:flex;gap:6px"><button class="hbtn __snapView" data-id="${s.id}" style="padding:5px 12px">View</button>${this.rwsIsAdmin()?'<button class="hbtn __snapDel" data-id="'+s.id+'" style="padding:5px 10px;color:var(--crit)">Delete</button>':''}</div></div>`).join('');
       body.querySelectorAll('.__snapView').forEach(el=>el.addEventListener('click',()=>this.rwsViewSnapshot(+el.dataset.id)));
-      body.querySelectorAll('.__snapDel').forEach(el=>el.addEventListener('click',()=>{this._confirmModal&&this._confirmModal('删除这个快照?',async()=>{await rwsSnapshotDelete(+el.dataset.id);this.rwsOpenHistory();});}));
-    }catch(e){body.innerHTML='<div class="empty">加载失败</div>';}}
+      body.querySelectorAll('.__snapDel').forEach(el=>el.addEventListener('click',()=>{this._confirmModal&&this._confirmModal('Delete this snapshot?',async()=>{await rwsSnapshotDelete(+el.dataset.id);this.rwsOpenHistory();});}));
+    }catch(e){body.innerHTML='<div class="empty">Failed to load</div>';}}
   snapshot(){return {v:2,project:'RWS P1 CJ',savedAt:new Date().toISOString(),elem:this.elem,elemDate:this._elemDate,updates:this.updates,zpOv:this._zpOv,crit:this._critOv,actTotal:this._actTotal,actPlan:this._actPlan,actDoneM:this._actDoneM,actHidden:this._actHidden,actDefs:this._actDefs,catAdd:this._catAdd,elemAdd:this._elemAdd,editedKeys:this._editedKeys,actDate:this._actDate,colMonth:this._colMonth,settings:this._appCfg||{},zoneDelay:(this._appCfg&&this._appCfg.zoneDelay)||{},actCmt:this._actCmt};}
   async saveLock(){
     if(this._locking)return; this._locking=true; setTimeout(()=>{this._locking=false;},4000);
     const isExt=u=>!u||/^(https?:)?\/\//i.test(u)||/^data:/i.test(u);
     try{
-      if(this._toast)this._toast('打包中…(内联样式与脚本)');
+      if(this._toast)this._toast('Packing… (inlining styles and scripts)');
       const root=document.documentElement.cloneNode(true);
       /* 只读标记: 放 <head> 最前, 先于所有脚本执行 → 打开即只读(不登录/不连云/不能编辑) */
       try{const _flag=document.createElement('script');_flag.textContent='window.__RWS_LOCKED_VIEW=1;';const _hd=root.querySelector('head');if(_hd)_hd.insertBefore(_flag,_hd.firstChild);else root.insertBefore(_flag,root.firstChild);const _b=root.querySelector('#__roBanner');if(_b)_b.remove();}catch(e){}
@@ -8947,8 +8953,8 @@ class Component extends DCLogic {
       const blob=new Blob([html],{type:'text/html'});const url=URL.createObjectURL(blob);const a=document.createElement('a');
       a.href=url;a.download=`RWS_P1_CJ_Tracker_${stamp}.html`;document.body.appendChild(a);a.click();
       setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},800);
-      if(this._toast)this._toast('已保存自包含 HTML');
-    }catch(e){if(this._toast)this._toast('保存失败: '+(e&&e.message||e));this._locking=false;}
+      if(this._toast)this._toast('Saved a self-contained HTML');
+    }catch(e){if(this._toast)this._toast('Save failed: '+(e&&e.message||e));this._locking=false;}
   }
   buildLabelMap(){this.labelMap={};this.DATA.order.forEach(lv=>this.DATA.levels[lv].zones.forEach(z=>{this.labelMap[lv+'||'+z.label]=(z.mk||('_'+z.lid));}));}
   loadLock(file){

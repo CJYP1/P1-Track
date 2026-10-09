@@ -121,7 +121,7 @@ function rwsNotifyFail(r){
        the shared zone permission, show one useful warning instead of stacking identical toasts. */
     if (m === _rwsLastFailMsg && now - _rwsLastFailAt < 2500) return;
     _rwsLastFailMsg = m; _rwsLastFailAt = now;
-    window.__rwsApp._toast('⚠ 未同步 / not saved: ' + m);
+    window.__rwsApp._toast('⚠ Not saved: ' + m);
   }
 }
 async function rwsSyncKV(store, key, value, level, zoneMk){
