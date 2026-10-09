@@ -5222,6 +5222,13 @@ class Component extends DCLogic {
     {const S=this.SUBZONES&&this.SUBZONES.L1;((S&&S.P)||[]).forEach(e=>{const zmk='L1|'+e.label,z={mk:zmk,label:e.label,cat:'MA',_pod:true};
       ((this._marineCol&&this._marineCol[e.label])||[]).forEach(c=>{const id=typeof c==='string'?c:(c&&c.id);if(id)add('L1',z,zmk,'col','Column',id);});
       (this._elemDrop()['L1||'+zmk+'||col']||[]).forEach(id=>add('L1',z,zmk,'col','Column',id));});}
+    /* Items added with "+ … List" in the zone panel live in their own store (_elemAdd), keyed by the
+       activity's item category (cst~mbeam …).  They were missing from the register. */
+    {const T={col:'col',pile:'pile',mbeam:'beam',cbeam:'cbeam',act_corewall:'core',ls:'lift'},LBL={};this._regTypes().forEach(([t,a,l])=>LBL[t]=l);
+      Object.keys(this._elemAdd||{}).forEach(k=>{const q=k.split('||');if(q.length!==3)return;const [lv,zmk,code]=q,act=this._catAct({code}),type=T[act];if(!type)return;
+        const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>String(x.mk||x.lid)===zmk)||{mk:zmk,label:String(zmk).replace(/^L1\|/,''),cat:this.zoneCat(lv,zmk)||'MA'};
+        (this._elemAdd[k]||[]).forEach(id=>{const key=lv+'||'+zmk+'||'+code+'||'+id;if(seen.has(key))return;seen.add(key);
+          out.push({lv,zone:z.label||zmk,zmk,cat:z.cat||'NB',custom:true,code,type,label:LBL[type]||type,id,key,sz:'',keep:'Y',why:'',st:this.elemStatus(key),date:this.elemDate(key)||''});});});}
     return out;
   }
   _regCsv(){
@@ -5372,18 +5379,17 @@ class Component extends DCLogic {
     this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
   }
   _regSetStatus(lv,zmk,type,id,st){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change status here.');return;}
-    const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return;
-    const key=this.ekey(lv,z,type,id);
+    if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can change status here.');return;}
+    /* Key built straight from the row, so Podium P zones and items added in the zone panel work too. */
+    const key=lv+'||'+zmk+'||'+type+'||'+id;
     if(st==='todo')delete this.elem[key];else this.elem[key]=st;
     if(typeof rwsSyncElementStatus==='function')rwsSyncElementStatus(key,st);
     this._syncElemDate(key,st);
     this.saveElem&&this.saveElem();this.commitElem&&this.commitElem();
   }
   _regSetDate(lv,zmk,type,id,iso){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change dates here.');return;}
-    const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return;
-    this.setElemDate(this.ekey(lv,z,type,id),iso||'');
+    if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can change dates here.');return;}
+    this.setElemDate(lv+'||'+zmk+'||'+type+'||'+id,iso||'');
   }
   _regMove(lv,type,id,zoneLabel){
     if(!this._regCan()||!this._regZoneOk(lv,zoneLabel)){this.rwsDeny('Only admin can move elements outside your area.');return;}
@@ -5500,25 +5506,25 @@ class Component extends DCLogic {
       +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
     if(!rows.length)h+='<tr><td colspan="10" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
     rows.forEach(r=>{
-      const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.type)+'" data-id="'+esc(r.id)+'"';
+      const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.custom?r.code:r.type)+'" data-id="'+esc(r.id)+'"'+(r.custom?' data-custom="1"':'');
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
         +(ALLLV?'<td style="padding:5px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>'+esc(r.lv)+'</b></td>':'')
-        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap"><input class="rgId" '+d+' value="'+esc(r.id)+'" style="'+IN+';width:150px;font-weight:700">'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap"><input class="rgId" '+d+' value="'+esc(r.id)+'"'+(r.custom?' readonly title="Added in the zone panel (+ List) — rename it there"':'')+' style="'+IN+';width:150px;font-weight:700">'+(r.custom?' <span style="font-size:10px;color:var(--faint)">added in zone</span>':'')
           +((r.type==='core'||r.type==='lift'||r.type==='stair')
             ?' <select class="rgKind" '+d+' title="Change the type: changed on every level, with ticks, cast dates and pour % carried over" style="'+IN+';width:auto;margin-left:4px">'
               +[['core','Core Wall'],['lift','Lift'],['stair','Staircase']].map(([v,l])=>'<option value="'+v+'"'+(v===r.type?' selected':'')+'>'+l+'</option>').join('')+'</select>':'')
           +'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
-          +(ALLLV||r.pod?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>')+'</td>'
+          +(ALLLV||r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
-        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'+(r.custom?'<span style="color:var(--faint)">—</span>':'<input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>')
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'
           +['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+(()=>{
             /* Same % as the zone panel: columns under Column, core walls / lifts / stairs under Core/Lift/Stair. */
-            const pa=r.type==='col'?'col':((r.type==='core'||r.type==='lift'||r.type==='stair')?'ls':null);if(!pa)return '<span style="color:var(--faint)">—</span>';
+            const pa=r.custom?null:r.type==='col'?'col':((r.type==='core'||r.type==='lift'||r.type==='stair')?'ls':null);if(!pa)return '<span style="color:var(--faint)">—</span>';
             const v=this.elemPourPct(r.lv,r.zmk,pa,r.type,r.id);
             return '<input type="number" min="0" max="100" step="1" class="rgPct" '+d+' data-a="'+pa+'" value="'+(v==null?'':v)+'" placeholder="%" style="'+IN+';width:62px">';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
@@ -5636,6 +5642,7 @@ class Component extends DCLogic {
     root.querySelectorAll('.rgPct').forEach(i=>i.onchange=e=>{const a=at(e);this.setElemPourPct(a.lv,a.zmk,e.target.dataset.a,a.type,a.id,e.target.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();after();});
     root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgDel').forEach(b=>b.onclick=e=>{const a=at(e);
+      if(e.target.dataset.custom){this._confirmModal('Delete '+a.id+'?',()=>{this.delCustomItem(a.lv,a.zmk,a.type,a.id);after();});return;}
       this._confirmModal('Delete "'+a.id+'" ('+a.lv+')?\nIt leaves the register, the map lists and every count, with its status and date.\nDeleted by mistake? Use “Deleted” above to restore it.',()=>{
         this._regPurge(a.lv,a.zmk,a.type,a.id);after();});});
     root.querySelectorAll('.rgRestore').forEach(b=>b.onclick=e=>this._openPurgedModal(e.target.dataset.lv,after));
