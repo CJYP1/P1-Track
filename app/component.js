@@ -350,10 +350,39 @@ class Component extends DCLogic {
       zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
     });
     try{this._applyElemNew();}catch(e){console.error('elem new',e);}
+    try{this._pinColArea();}catch(e){console.error('pin col area',e);}
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
     try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
     try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
     try{this._rehomeOrphanElems();}catch(e){console.error('rehome elems',e);}
+  }
+  /* A column keeps one area all the way up: the area of the lowest level it appears on.  Zone
+     boundaries differ from level to level, so a column on an area seam could land in an EB or
+     Marine zone upstairs (WF-B2C64: NB up to L1, EB 4.1CIST on L2) — the NB count upstairs then
+     lost it.  Such a column is moved to the nearest zone of its own area on that level (within
+     ~15 m).  Manual register moves are applied after this and still win. */
+  _pinColArea(){
+    const home={},segD=(px,py,a,b)=>{const dx=b[0]-a[0],dy=b[1]-a[1],L=dx*dx+dy*dy;let t=L?((px-a[0])*dx+(py-a[1])*dy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-a[0]-t*dx,py-a[1]-t*dy);};
+    this._colAreaPinned=[];
+    (this.DATA.order||[]).forEach(lv=>{
+      const zones=((this.DATA.levels[lv]||{}).zones)||[],pts={};
+      ((this.COLUMNS&&this.COLUMNS[lv])||[]).forEach(c=>{if(c&&c.x!=null)pts[this._colKey(c.id)]=c;});
+      const moves=[];
+      zones.forEach(z=>{const cat=z.cat||'NB';(z.cols||[]).forEach(x=>{const id=typeof x==='string'?x:x.id,k=this._colKey(id);
+        if(home[k]==null){home[k]=cat;return;}
+        if(home[k]!==cat)moves.push({z,x,id,k,want:home[k]});});});
+      /* areas seen on this level count as home for columns first seen here */
+      zones.forEach(z=>(z.cols||[]).forEach(x=>{const k=this._colKey(typeof x==='string'?x:x.id);if(home[k]==null)home[k]=z.cat||'NB';}));
+      if(lv==='L5')return;   /* L5 transfer slab has its own zoning; left as drawn */
+      moves.forEach(m=>{const c=pts[m.k];if(!c)return;let best=null,bd=15000;
+        zones.forEach(z2=>{if((z2.cat||'NB')!==m.want||!z2.ring||z2.ring.length<3)return;const r=z2.ring;
+          const d=this.ptIn(r,c.x,c.y)?0:Math.min(...r.map((q,i)=>segD(c.x,c.y,q,r[(i+1)%r.length])));if(d<bd){bd=d;best=z2;}});
+        if(!best)return;
+        m.z.cols=m.z.cols.filter(x=>x!==m.x);best.cols=best.cols||[];
+        if(!best.cols.some(x=>this._colKey(typeof x==='string'?x:x.id)===m.k))best.cols.push(m.x);
+        c.zone=best.label;this._colAreaPinned.push(lv+' '+m.id+': '+m.z.label+' → '+best.label);});
+      zones.forEach(z=>{if(z.counts)z.counts.columns=(z.cols||[]).length;});
+    });
   }
   /* A status / completion date is stored against level + zone + element.  The zone lists are
      rebuilt from where each element sits on the map, so an element can end up in a different zone
