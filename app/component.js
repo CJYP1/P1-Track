@@ -5542,8 +5542,8 @@ class Component extends DCLogic {
         return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="Restore or permanently clear elements deleted on this level">Deleted '+n+' · restore / clear</button>':'';})()+'</div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Each cell saves as you change it and syncs to every account. Untick <b>Keep</b> = the element no longer counts anywhere (map, zone list, Report, tiles); the drawing data is untouched and you can tick it back any time. Change <b>Zone</b> = move it to that zone; ticks and cast dates move with it. <b>%</b> = progress of the element — the same figure as in the zone panel.</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('% updated')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="11" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
+      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('% updated')+TH('Cast date')+TH('Plan finish')+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="12" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
     rows.forEach(r=>{
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.custom?r.code:r.type)+'" data-id="'+esc(r.id)+'"'+(r.custom?' data-custom="1"':'');
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
@@ -5572,6 +5572,15 @@ class Component extends DCLogic {
             if(!last)return '<span style="color:var(--faint)">—</span>';
             return '<a href="#" class="rgPctHist" '+d+' data-a="'+pa+'" title="'+esc((last.by?'by '+last.by+' · ':'')+'click for every earlier value')+'" style="color:var(--accent);text-decoration:none">'+esc(last.d?(this._fmtD?this._fmtD(last.d):last.d):'—')+(h.length>1?' <span style="color:var(--faint)">('+h.length+')</span>':'')+'</a>';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px">'+(()=>{
+            /* Plan finish = the finish date of this element's activity in its zone (Activities → Dates),
+               else the zone's plan end.  Red when it is past and the element is not done, or it was cast late. */
+            const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'act_corewall',lift:'ls',stair:'ls'})[r.type];
+            let pe=aid?(this._actDateOf(r.lv,r.zmk,aid)||{}).end:'';if(!pe&&r.type==='core')pe=(this._actDateOf(r.lv,r.zmk,'ls')||{}).end;
+            let src='activity';if(!pe){pe=((this._zdate||{})[r.lv+'||'+r.zmk]||{}).end||'';src='zone';}
+            if(!pe)return '<span style="color:var(--faint)">—</span>';
+            const iso=this._dISO?this._dISO(pe):pe,today=this.todayISOStr(),late=(r.st!=='done'&&iso<today)||(r.st==='done'&&r.date&&r.date>iso);
+            return '<span title="'+(src==='zone'?'Zone plan end (no activity date set)':'Plan finish of this activity in the zone')+(late?(r.st==='done'?' · cast after plan':' · past plan, not done'):'')+'" style="'+(late?'color:var(--crit);font-weight:700':'')+'">'+esc(this._fmtD?this._fmtD(iso):iso)+(src==='zone'?' <span style="color:var(--faint);font-size:10px">zone</span>':'')+'</span>';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit)">✕</button></td>'
         +'</tr>';});
     h+='</tbody></table></div>';
