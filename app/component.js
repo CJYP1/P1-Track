@@ -362,6 +362,7 @@ class Component extends DCLogic {
     try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
     try{this._stripPodiumDupes();}catch(e){console.error('podium dupes',e);}
     try{this._rehomeOrphanElems();}catch(e){console.error('rehome elems',e);}
+    try{this._pctFixTodo();}catch(e){console.error('pct fix',e);}
   }
   /* L1 columns in Marine's podium ledger belong to their P zone only.  A register add or move
      could still put one into an NB zone too (WF-1C60 in P11 and in M-SLAB 5), so it was counted
@@ -838,7 +839,26 @@ class Component extends DCLogic {
       if(!h.length&&prev!=null)h.push({d:'',v:prev,by:''});
       if(h.length&&h[h.length-1].d===e.d)h[h.length-1]=e;else h.push(e);
       this._manpower[hk]=h;if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',hk,h,lv,zmk);}
-    try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);}
+    try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);
+    this._pctSyncStatus(lv,zmk,type,id,v);}
+  /* Status follows the %: 1–99 % on a "todo" element makes it "wip"; 100 % makes it "done" (cast date =
+     today if none is set, and it can be changed).  A todo with 45 % in the register made no sense. */
+  _pctSyncStatus(lv,zmk,type,id,v){
+    if(v==null)return;const key=lv+'||'+zmk+'||'+type+'||'+id,cur=this.elemStatus(key);let to=null;
+    if(v>=100&&cur!=='done')to='done';else if(v>0&&v<100&&cur==='todo')to='wip';
+    if(!to)return;this.elem=this.elem||{};this.elem[key]=to;
+    if(typeof rwsSyncElementStatus==='function')try{rwsSyncElementStatus(key,to);}catch(e){}
+    if(to==='done'){if(!this.elemDate(key))this.setElemDate(key,this.todayISOStr());}
+    this.saveElem&&this.saveElem();
+  }
+  /* One pass over % already entered before the rule above: 1–99 % still on "todo" → "wip". */
+  _pctFixTodo(){
+    if(!(this.rwsIsAdmin&&this.rwsIsAdmin()))return;let n=0;this.elem=this.elem||{};
+    Object.keys(this._manpower||{}).forEach(k=>{const q=k.split('||');if(q.length!==6||q[3]!=='pour_elem')return;const v=Number(this._manpower[k]);if(!(v>0&&v<100))return;
+      let id;try{id=decodeURIComponent(q[5]);}catch(e){id=q[5];}const key=q[0]+'||'+q[1]+'||'+q[4]+'||'+id;
+      if(this.elemStatus(key)==='todo'){this.elem[key]='wip';n++;if(typeof rwsSyncElementStatus==='function')try{rwsSyncElementStatus(key,'wip');}catch(e){}}});
+    if(n){this.saveElem&&this.saveElem();console.info('[P1] '+n+' element(s) with a % set to wip');}
+  }
   elemPourHist(lv,zmk,aid,type,id){const h=(this._manpower||{})[this._elemPourKey(lv,zmk,aid,type,id)+'||h'];return Array.isArray(h)?h:[];}
   _openPourHist(lv,zmk,aid,type,id){
     const h=this.elemPourHist(lv,zmk,aid,type,id),E=s=>this.esc(String(s==null?'':s)),old=document.getElementById('__pctHist');if(old)old.remove();
