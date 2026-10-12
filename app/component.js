@@ -5565,6 +5565,10 @@ class Component extends DCLogic {
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+(()=>{
             /* Same % as the zone panel: columns under Column, core walls / lifts / stairs under Core/Lift/Stair. */
             const pa=r.custom?null:this._pourAidOfType(r.type);if(!pa)return '<span style="color:var(--faint)">—</span>';
+            /* A lift / staircase inside a core wall has no % of its own in the zone panel ("Included in CWxx");
+               it follows the core wall, so show that figure here instead of an empty box. */
+            if(r.type==='lift'||r.type==='stair'){const zz=(((this.DATA.levels[r.lv]||{}).zones)||[]).find(x=>String(x.mk||x.lid)===String(r.zmk));const cw=zz&&this._lsMemberCore?this._lsMemberCore(zz,r.id):'';
+              if(cw){const cv=this.elemPourPct(r.lv,r.zmk,'ls','core',cw);return '<span title="Inside core wall '+esc(cw)+' — its progress is the core wall\'s %, entered on the '+esc(cw)+' row" style="color:var(--dim);font-size:11.5px">'+(cv==null?'—':cv+'%')+' <span style="color:var(--faint)">in '+esc(cw)+'</span></span>';}}
             const v=this.elemPourPct(r.lv,r.zmk,pa,r.type,r.id);
             return '<input type="number" min="0" max="100" step="1" class="rgPct" '+d+' data-a="'+pa+'" value="'+(v==null?'':v)+'" placeholder="%" style="'+IN+';width:62px">';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px">'+(()=>{
