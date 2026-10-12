@@ -5185,6 +5185,18 @@ class Component extends DCLogic {
      of every count, but they have to stay visible here or there would be no way
      to put one back. */
   /* Register access: admin everywhere; NB / EB / MA accounts in their own area(s). */
+  /* Put a column that is already on one level onto another level as well, at the same position
+     on the plan, so it is drawn on that level's map and lands in the zone it falls in there. */
+  _regCopyColToLevel(lv,id,to){
+    if(!to||to===lv)return;
+    const k=this._colKey(id),find=L=>((this.COLUMNS&&this.COLUMNS[L])||[]).concat(this.placedCols?this.placedCols(L):[]).find(c=>c&&this._colKey(c.id)===k);
+    const src=find(lv);if(!src||src.x==null){this._toast('No map position for '+id+' on '+lv+' — place it on the '+to+' map instead.');return;}
+    if(find(to)){this._toast(id+' is already on '+to+'.');return;}
+    const zone=this._colZoneAt(to,src,6000);
+    if(!this.rwsIsAdmin()&&!(zone&&this._regZoneOk(to,zone))){this.rwsDeny('Outside your area on '+to+'.');return;}
+    this._colAdd=this._colAdd||{};(this._colAdd[to]=this._colAdd[to]||[]).push({id:src.id,x:src.x,y:src.y,sz:src.sz||'',crit:!!src.crit,zone:zone||'',thru:false});
+    this.savePlacedCols();this._toast(id+' added to '+to+(zone?' · '+zone:'')+'.');
+  }
   _regCan(){return this.rwsIsAdmin()||['NB','EB','MA'].some(c=>this.rwsHasScope(c));}
   _regOk(lv,zmk){return this.rwsIsAdmin()||(this._regCan()&&this.rwsScopeOk(lv,zmk));}
   _regZoneOk(lv,label){if(this.rwsIsAdmin())return true;const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>(x.label||x.mk)===label||String(x.mk||x.lid)===String(label));return !!z&&this.rwsScopeOk(lv,z.mk||z.lid);}
@@ -5519,6 +5531,7 @@ class Component extends DCLogic {
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
         +(ALLLV?'<td style="padding:5px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>'+esc(r.lv)+'</b></td>':'')
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap"><input class="rgId" '+d+' value="'+esc(r.id)+'"'+(r.custom?' readonly title="Added in the zone panel (+ List) — rename it there"':'')+' style="'+IN+';width:150px;font-weight:700">'+(r.custom?' <span style="font-size:10px;color:var(--faint)">added in zone</span>':'')
+          +(r.type==='col'&&!ALLLV&&!r.custom&&!r.pod?' <select class="rgCopyLv" '+d+' title="Also put this column on another level (same position on the plan)" style="'+IN+';width:auto;margin-left:4px"><option value="">+ level</option>'+(this.DATA.order||[]).filter(x=>x!==r.lv).map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('')+'</select>':'')
           +((r.type==='core'||r.type==='lift'||r.type==='stair')
             ?' <select class="rgKind" '+d+' title="Change the type: changed on every level, with ticks, cast dates and pour % carried over" style="'+IN+';width:auto;margin-left:4px">'
               +[['core','Core Wall'],['lift','Lift'],['stair','Staircase']].map(([v,l])=>'<option value="'+v+'"'+(v===r.type?' selected':'')+'>'+l+'</option>').join('')+'</select>':'')
@@ -5648,6 +5661,7 @@ class Component extends DCLogic {
         ()=>{e.target.value=a.type;});});
     root.querySelectorAll('.rgKeep').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetKeep(a.lv,a.zmk,a.type,a.id,e.target.checked);after();});
     root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgCopyLv').forEach(i=>i.onchange=e=>{const a=at(e),to=e.target.value;if(!to)return;this._regCopyColToLevel(a.lv,a.id,to);after();});
     root.querySelectorAll('.rgPct').forEach(i=>i.onchange=e=>{const a=at(e);this.setElemPourPct(a.lv,a.zmk,e.target.dataset.a,a.type,a.id,e.target.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();after();});
     root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgDel').forEach(b=>b.onclick=e=>{const a=at(e);
@@ -7086,7 +7100,7 @@ class Component extends DCLogic {
     this._appCfg=this._appCfg||{};
     this._appCfg.placedCols=this._colAdd||{};
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
-    if(this.rwsIsAdmin&&this.rwsIsAdmin()&&typeof rwsSyncKV==='function')
+    if(((this.rwsIsAdmin&&this.rwsIsAdmin())||(this._regCan&&this._regCan()))&&typeof rwsSyncKV==='function')
       rwsSyncKV('settings','placedCols',this._colAdd||{},null,null);
   }
   /* Take whatever the cloud settings carry; a browser that has its own local
