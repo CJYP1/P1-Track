@@ -2675,7 +2675,9 @@ class Component extends DCLogic {
     (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid,d=(this._actDate||{})[lv+'||'+zmk+'||'+aid]||{};let any=false,zt=0,zp=0;
       this.ACT_MONTHS.forEach(m=>{const q=this.actPlan(lv,zmk,aid,m);if(q==null)return;any=true;zt+=(+q||0);zp+=(+q||0)*this._reportPlanFraction(m,d.start,d.end,asOf);});
       /* Catch-Up 只能来自明确填写的月度 Plan。Total 是分母，不能把没有 Plan 的余量自动补成“计划已到期”。 */
-      total+=zt;planned+=zp;if(d.end&&(!end||d.end>end))end=d.end;});});
+      total+=zt;planned+=zp;
+      /* Same finish date the Element register shows (activity finish, else zone plan end). */
+      const de=d.end||(this._elemAct(aid)&&any?(((this._zdate||{})[lv+'||'+zmk]||{}).end||''):'');if(de&&(!end||de>end))end=de;});});
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
     const elems={},isPour=aid==='ls'||aid==='act_corewall'||this._pctAid(aid),refs=[];let refs0Typed=false;
@@ -5215,6 +5217,14 @@ class Component extends DCLogic {
     this._colAdd=this._colAdd||{};(this._colAdd[to]=this._colAdd[to]||[]).push({id:src.id,x:src.x,y:src.y,sz:src.sz||'',crit:!!src.crit,zone:zone||'',thru:false});
     this.savePlacedCols();this._toast(id+' added to '+to+(zone?' · '+zone:'')+'.');
   }
+  /* Plan finish of one element = its activity's finish date in the zone, else the zone plan end.
+     Used by the register, its CSV and the Report link, so all three show the same date. */
+  _elemPlanFinish(lv,zmk,type){
+    const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'act_corewall',lift:'ls',stair:'ls'})[type];
+    let pe=aid?(this._actDateOf(lv,zmk,aid)||{}).end:'';if(!pe&&type==='core')pe=(this._actDateOf(lv,zmk,'ls')||{}).end;
+    let src='activity';if(!pe){pe=((this._zdate||{})[lv+'||'+zmk]||{}).end||'';src='zone';}
+    return pe?{d:this._dISO?this._dISO(pe):pe,src}:null;
+  }
   _regCan(){return this.rwsIsAdmin()||['NB','EB','MA'].some(c=>this.rwsHasScope(c));}
   _regOk(lv,zmk){return this.rwsIsAdmin()||(this._regCan()&&this.rwsScopeOk(lv,zmk));}
   _regZoneOk(lv,label){if(this.rwsIsAdmin())return true;const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>(x.label||x.mk)===label||String(x.mk||x.lid)===String(label));return !!z&&this.rwsScopeOk(lv,z.mk||z.lid);}
@@ -5272,8 +5282,11 @@ class Component extends DCLogic {
   }
   _regCsv(){
     const rows=this._regRows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-    const lines=[['Level','Zone','Area','Type','Mark','Size','Keep (Y/N)','Why','Status','Date'].map(q).join(',')];
-    rows.forEach(r=>lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.sz,r.keep,r.why,r.st,r.date].map(q).join(',')));
+    const lines=[['Level','Zone','Area','Type','Mark','Size','Keep (Y/N)','Why','Status','Date','%','% updated','Plan finish','Late'].map(q).join(',')];
+    const today=this.todayISOStr();
+    rows.forEach(r=>{const pa=r.custom?null:this._pourAidOfType(r.type),pct=pa?this.elemPourPct(r.lv,r.zmk,pa,r.type,r.id):null,h=pa?this.elemPourHist(r.lv,r.zmk,pa,r.type,r.id):[],hu=h.length?h[h.length-1].d:'';
+      const pf=this._elemPlanFinish(r.lv,r.zmk,r.type),pd=pf?pf.d:'',late=pd&&((r.st!=='done'&&pd<today)||(r.st==='done'&&r.date&&r.date>pd))?'Y':'';
+      lines.push([r.lv,r.zone,r.cat,r.label,r.id,r.sz,r.keep,r.why,r.st,r.date,pct==null?'':pct,hu,pd,late].map(q).join(','));});
     const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='RWS_P1_element_register.csv';document.body.appendChild(a);a.click();
@@ -5579,11 +5592,9 @@ class Component extends DCLogic {
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px">'+(()=>{
             /* Plan finish = the finish date of this element's activity in its zone (Activities → Dates),
                else the zone's plan end.  Red when it is past and the element is not done, or it was cast late. */
-            const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'act_corewall',lift:'ls',stair:'ls'})[r.type];
-            let pe=aid?(this._actDateOf(r.lv,r.zmk,aid)||{}).end:'';if(!pe&&r.type==='core')pe=(this._actDateOf(r.lv,r.zmk,'ls')||{}).end;
-            let src='activity';if(!pe){pe=((this._zdate||{})[r.lv+'||'+r.zmk]||{}).end||'';src='zone';}
-            if(!pe)return '<span style="color:var(--faint)">—</span>';
-            const iso=this._dISO?this._dISO(pe):pe,today=this.todayISOStr(),late=(r.st!=='done'&&iso<today)||(r.st==='done'&&r.date&&r.date>iso);
+            const pf=this._elemPlanFinish(r.lv,r.zmk,r.type);
+            if(!pf)return '<span style="color:var(--faint)">—</span>';
+            const iso=pf.d,src=pf.src,today=this.todayISOStr(),late=(r.st!=='done'&&iso<today)||(r.st==='done'&&r.date&&r.date>iso);
             return '<span title="'+(src==='zone'?'Zone plan end (no activity date set)':'Plan finish of this activity in the zone')+(late?(r.st==='done'?' · cast after plan':' · past plan, not done'):'')+'" style="'+(late?'color:var(--crit);font-weight:700':'')+'">'+esc(this._fmtD?this._fmtD(iso):iso)+(src==='zone'?' <span style="color:var(--faint);font-size:10px">zone</span>':'')+'</span>';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit)">✕</button></td>'
         +'</tr>';});
@@ -6091,7 +6102,7 @@ class Component extends DCLogic {
     const cat=this._reportCat, def=defs[cat],admin=this.rwsIsAdmin(),canReportEdit=false,editing=false;   /* live only \u2014 the Report is no longer editable */
     /* Report 只显示整数；原始计划/完成数量仍保留在数据源中。 */
     const fmtN=n=>String(Math.round(Number(n)||0));
-    const makeRows=(reportRows)=>reportRows.map(r=>{ const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=A.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const _itemsTip=(liveA.items&&liveA.items.length)?this.esc(liveA.items.slice().sort().join('\n')):'';const _openTip=(liveA.open&&liveA.open.length)?this.esc(liveA.open.join('\n')):'';const actSub=liveA.pour?`${A.pct}% pouring · <span style="text-decoration:underline dotted;cursor:help" title="${_itemsTip}">${fmtN(den)} item${Math.round(den)===1?'':'s'}</span>`:(`(${fmtN(A.done)}/`+(_itemsTip?`<span style="text-decoration:underline dotted;cursor:help" title="Counted here:\n${_itemsTip}">${fmtN(den)}</span>`:fmtN(den))+`${unit})`+(_openTip?`<br><span style="text-decoration:underline dotted;cursor:help;color:#9b1c2e" title="Not complete:\n${_openTip}">${liveA.open.length} zone${liveA.open.length===1?'':'s'} not complete</span>`:'')),planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—',inp='width:70px;padding:5px 6px;border:1px solid #cbaeb4;border-radius:5px;text-align:center;font:700 12px Segoe UI;background:#fff;color:#2b1114';
+    const makeRows=(reportRows)=>reportRows.map(r=>{ const liveA=r.actual||this._catchupActual(r.levels,r.aid,cat,r.filter),liveP=r.plan||this._catchupPlan(r.levels,r.aid,cat,r.filter),liveTotal=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,liveA,liveP),ev=this._reportEditedValues(cat,r,liveA,liveP,liveTotal),A=ev.A,P=ev.P,den=A.total,tgt=den>0?Math.min(100,Math.round(P.planned/den*100)):0,unit=r.unit?(' '+r.unit):''; const _itemsTip=(liveA.items&&liveA.items.length)?this.esc(liveA.items.slice().sort().join('\n')):'';const _openTip=(liveA.open&&liveA.open.length)?this.esc(liveA.open.join('\n')):'';const _regA=`class="rpt-reg" data-lv="${this.esc((r.levels||[])[0]||'')}" data-aid="${this.esc(r.aid)}" data-cat="${this.esc(cat)}"`,actSub=liveA.pour?`${A.pct}% pouring · <span ${_regA} style="text-decoration:underline dotted;cursor:pointer" title="${_itemsTip}\n\nClick to open these in the Element register">${fmtN(den)} item${Math.round(den)===1?'':'s'}</span>`:(`(${fmtN(A.done)}/`+(_itemsTip?`<span ${_regA} style="text-decoration:underline dotted;cursor:pointer" title="Counted here:\n${_itemsTip}\n\nClick to open these in the Element register">${fmtN(den)}</span>`:fmtN(den))+`${unit})`+(_openTip?`<br><span style="text-decoration:underline dotted;cursor:help;color:#9b1c2e" title="Not complete:\n${_openTip}">${liveA.open.length} zone${liveA.open.length===1?'':'s'} not complete</span>`:'')),planSub=`(${fmtN(P.planned)}/${fmtN(den)}${unit} planned to date)`,by=P.end?this._fmtDShort(P.end):'—',inp='width:70px;padding:5px 6px;border:1px solid #cbaeb4;border-radius:5px;text-align:center;font:700 12px Segoe UI;background:#fff;color:#2b1114';
       const rc=this._reportCmtCtx(cat,r),rmeta=`data-cat="${this.esc(cat)}" data-lv="${this.esc(rc.lv)}" data-zmk="${this.esc(rc.zmk)}" data-a="${this.esc(rc.aid)}" data-raid="${this.esc(rc.reportAid)}" data-label="${this.esc(rc.label)}"`;
       /* Staircase / Core wall figures are derived from each element's pour progress, but the
          Report still has to be correctable by hand — a typed figure overrides the derived one. */
@@ -6134,6 +6145,10 @@ class Component extends DCLogic {
     ov.querySelectorAll('.rpt-cmt-wrap .cmt-doneToggle').forEach(b=>b.onclick=()=>{this._cmtShowDone=!this._cmtShowDone;this.openLookAhead();});
     const eb=ov.querySelector('#rptEdit');if(eb)eb.onclick=()=>{this._reportEditing=true;this.openLookAhead();};
     const cb=ov.querySelector('#rptCancel');if(cb)cb.onclick=()=>{this._reportEditing=false;this.openLookAhead();};
+    ov.querySelectorAll('.rpt-reg').forEach(b=>b.onclick=e=>{e.stopPropagation();
+      if(!(this._regCan&&this._regCan())){this.rwsDeny('No access to the Element register.');return;}
+      const t=({col:'col',pile:'pile',mbeam:'beam',cbeam:'cbeam',ls:'core',act_corewall:'core'})[b.dataset.aid]||'col';
+      this._rg=Object.assign(this._rg||{},{lv:b.dataset.lv||this.curLevel,type:t,cat:b.dataset.cat||'all',zone:'__all',q:''});this.openRegisterGrid();});
     ov.querySelectorAll('.rpt-live').forEach(b=>b.onclick=()=>{const tr=b.closest('tr');tr.dataset.useLive='1';/* fills the boxes; Save still stores and syncs them */tr.querySelectorAll('.rpt-edit').forEach(i=>i.value=i.dataset.live||'0');b.style.background='#fff';b.style.color='#6d1327';});
     const sb=ov.querySelector('#rptSave');if(sb)sb.onclick=()=>{if(!this.rwsCanEditReport(cat)){this.rwsDeny('You do not have Report Edit permission for this area.');return;}const cfg=this._appCfg||{},all={...(cfg.reportOverrides||{}),...(cfg['reportOverrides:'+cat]||{})};let bad=null;ov.querySelectorAll('tr[data-rkey]').forEach(tr=>{if(bad)return;const vals={},live={};tr.querySelectorAll('.rpt-edit').forEach(i=>{const raw=i.value.trim(),n=Number(raw);if(raw===''||!Number.isInteger(n)||n<0){bad=i;return;}vals[i.dataset.field]=n;live[i.dataset.field]=Math.max(0,Math.round(Number(i.dataset.live)||0));});if(bad)return;const key=tr.dataset.rkey;/* Whatever is in the boxes when Save is pressed is what gets stored and synced — including the
    figures 'Use live' just pulled in.  Dropping the row because it happens to match the live
