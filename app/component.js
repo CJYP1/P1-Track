@@ -1845,7 +1845,7 @@ class Component extends DCLogic {
   }
   rwsRenderUserBar(){
     const info=this.root.querySelector('#rwsUserInfo'), lo=this.root.querySelector('#rwsLogoutBtn'), ab=this.root.querySelector('#rwsAdminBtn'), jb=this.root.querySelector('#exportJson'), hb=this.root.querySelector('#rwsHistoryBtn'), rb=this.root.querySelector('#openResource');
-    const adminOnly=['#saveLock','#exportXls','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList','#openTodayUpd'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
+    const adminOnly=['#saveLock','#exportXls','#exportSeed','#openTable','#exportJson','#rwsChangesBtn','#openMonthlySummary','#openDelayAdmin','#openSchedImport','#openZoneProg','#openNumChk','#openColList','#openTodayUpd'].map(s=>this.root.querySelector(s)).filter(Boolean);   /* 区域 Manpower 表给所有登录用户查看；旧 Activity 汇总 tabs 仍只给 admin */
     const manpowerBtn=this.root.querySelector('#openManpower');
     const sched=this.root.querySelector('#openSched');   /* Construction Schedule: 任何登录用户都能看(非 admin 只读) */
     const u=this._rwsUser;
@@ -5978,6 +5978,40 @@ class Component extends DCLogic {
     await pptx.writeFile({fileName:'P1_'+cat+'_Report_'+this.todayISOStr()+'.pptx'});
     this._toast&&this._toast('PowerPoint exported');
   }
+  /* The data as it stands now, in the same layout as data-csv/fixed/zone-activity/<level>.csv
+     (the files the base data was loaded from): one sheet per level, same column headers, so a
+     sheet can be edited and saved back as that level's CSV.  Done for columns / beams / pile caps
+     / core walls is the count of ticked elements by cast month, as the app shows it. */
+  exportSeedXls(){
+    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can export this.');return;}
+    const x=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const S=v=>`<Cell><Data ss:Type="String">${x(v)}</Data></Cell>`,N=v=>v==null||v===''?'<Cell/>':`<Cell><Data ss:Type="Number">${Math.round(Number(v)*1000)/1000}</Data></Cell>`;
+    const M=this.ACT_MONTHS||[],order=this.DATA.order||[],lab={};(this._actMeta()||[]).forEach(a=>lab[a.id]=a.label);(this.customCats&&this.customCats()||[]).forEach(c=>{if(!lab[c.code])lab[c.code]=c.label||c.code;});
+    const trip=new Set(),add=k=>{const q=String(k).split('||');if(q.length>=3)trip.add(q[0]+'||'+q[1]+'||'+q[2]);};
+    Object.keys(this._actPlan||{}).forEach(add);Object.keys(this._actDoneM||{}).forEach(add);Object.keys(this._actDate||{}).forEach(add);
+    order.forEach(lv=>(((this.DATA.levels[lv]||{}).zones)||[]).forEach(z=>{const zmk=z.mk||z.lid;['col','pile','mbeam','cbeam','ls','act_corewall'].forEach(aid=>{if(M.some(m=>this.actDoneMonth(lv,zmk,aid,m)!=null))trip.add(lv+'||'+zmk+'||'+aid);});}));
+    const byLv={};
+    [...trip].forEach(t=>{const [lv,zmk,aid]=t.split('||');const d=this._actDateOf(lv,zmk,aid)||{},rows=[];
+      M.forEach(m=>{const p=this.actPlan(lv,zmk,aid,m),dn=this.actDoneMonth(lv,zmk,aid,m);if(p==null&&dn==null)return;rows.push([lv,zmk,aid,lab[aid]||aid,m,p,dn,d.start||'',d.end||'']);});
+      if(!rows.length&&(d.start||d.end))rows.push([lv,zmk,aid,lab[aid]||aid,'',null,null,d.start||'',d.end||'']);
+      (byLv[lv]=byLv[lv]||[]).push(...rows);});
+    const mi=m=>{const i=M.indexOf(m);return i<0?999:i;};
+    const head=['楼层','分区','活动','活动名称(参考)','月份','计划量','完成量','活动开始','活动结束'];
+    const lvs=order.filter(l=>byLv[l]).concat(Object.keys(byLv).filter(l=>order.indexOf(l)<0));
+    if(!lvs.length){this._toast('No activity data to export.');return;}
+    const sheets=lvs.map(lv=>{const rows=byLv[lv].sort((a,b)=>String(a[1]).localeCompare(String(b[1]),undefined,{numeric:true})||String(a[2]).localeCompare(String(b[2]))||mi(a[4])-mi(b[4]));
+      return `<Worksheet ss:Name="${x(lv)}"><Table>`+[60,120,80,170,70,70,70,90,90].map(w=>`<Column ss:Width="${w}"/>`).join('')
+        +`<Row ss:StyleID="h">${head.map(S).join('')}</Row>`
+        +rows.map(r=>`<Row>${S(r[0])}${S(r[1])}${S(r[2])}${S(r[3])}${S(r[4])}${N(r[5])}${N(r[6])}${S(r[7])}${S(r[8])}</Row>`).join('')
+        +`</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane></WorksheetOptions></Worksheet>`;});
+    const xml=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>`
+      +`<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`
+      +`<Styles><Style ss:ID="Default"><Font ss:FontName="Arial" ss:Size="10"/></Style><Style ss:ID="h"><Font ss:FontName="Arial" ss:Bold="1"/><Interior ss:Color="#E8EAF6" ss:Pattern="Solid"/></Style></Styles>`
+      +sheets.join('')+`</Workbook>`;
+    const blob=new Blob([xml],{type:'application/vnd.ms-excel'}),u=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=u;a.download='P1_zone-activity_'+this.todayISOStr()+'.xls';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),3000);
+    this._toast('Exported '+lvs.length+' level sheet(s).');
+  }
   exportReportXls(cat){
     const defs=this._reportDefs(),def=defs[cat];if(!def)return;
     const x=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -8753,6 +8787,7 @@ class Component extends DCLogic {
     const _zlc=document.getElementById('zlookupClose');if(_zlc)_zlc.addEventListener('click',()=>{const m=document.getElementById('zlookupModal');if(m)m.style.display='none';});
     const _zlm=document.getElementById('zlookupModal');if(_zlm)_zlm.addEventListener('click',e=>{if(e.target===_zlm)_zlm.style.display='none';});
     this.root.querySelector('#exportXls').addEventListener('click',()=>this.exportExcel());
+    {const es=this.root.querySelector('#exportSeed');if(es)es.addEventListener('click',()=>this.exportSeedXls());}
     this.root.querySelector('#exportJson').addEventListener('click',()=>this.exportFullJson());
     this.root.querySelector('#saveLock').addEventListener('click',()=>this.saveLock());
     const _cc=this.root.querySelector('#rwsClearCache'); if(_cc) _cc.addEventListener('click',()=>{
