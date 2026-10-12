@@ -503,7 +503,9 @@ class Component extends DCLogic {
       const zk=z.mk||z.lid,ok=this._elemPourKey(L,zk,'ls',from,id),nk=this._elemPourKey(L,zk,'ls',to,id);
       if(this._manpower&&this._manpower[ok]!=null){
         if(this._manpower[nk]==null)this._manpower[nk]=this._manpower[ok];delete this._manpower[ok];
-        if(typeof rwsSyncKV==='function'){rwsSyncKV('manpower',nk,this._manpower[nk],L,zk);rwsSyncKV('manpower',ok,null,L,zk);}}}));
+        if(typeof rwsSyncKV==='function'){rwsSyncKV('manpower',nk,this._manpower[nk],L,zk);rwsSyncKV('manpower',ok,null,L,zk);}
+        const oh=ok+'||h',nh=nk+'||h';if(this._manpower[oh]!=null){if(this._manpower[nh]==null)this._manpower[nh]=this._manpower[oh];delete this._manpower[oh];
+          if(typeof rwsSyncKV==='function'){rwsSyncKV('manpower',nh,this._manpower[nh],L,zk);rwsSyncKV('manpower',oh,null,L,zk);}}}}));
     try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower||{}));}catch(e){}
     this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
@@ -829,7 +831,23 @@ class Component extends DCLogic {
   _pctAid(aid){return aid==='col'||aid==='pile'||aid==='mbeam'||aid==='cbeam';}
   _pourAidOfType(type){return ({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'ls',lift:'ls',stair:'ls'})[type]||null;}
   actPourPct(lv,zmk,aid){return this.actPourStats(lv,zmk,aid).pct;}
-  setElemPourPct(lv,zmk,aid,type,id,raw){if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny&&this.rwsDeny('Outside your assigned zones.');return;}const k=this._elemPourKey(lv,zmk,aid,type,id),s=String(raw==null?'':raw).trim(),v=s===''?null:Math.max(0,Math.min(100,Math.round(Number(s)||0)));this._manpower=this._manpower||{};if(v==null)delete this._manpower[k];else this._manpower[k]=v;try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);}
+  setElemPourPct(lv,zmk,aid,type,id,raw){if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny&&this.rwsDeny('Outside your assigned zones.');return;}const k=this._elemPourKey(lv,zmk,aid,type,id),s=String(raw==null?'':raw).trim(),v=s===''?null:Math.max(0,Math.min(100,Math.round(Number(s)||0)));this._manpower=this._manpower||{};const prev=this._manpower[k]==null?null:this._manpower[k];if(v==null)delete this._manpower[k];else this._manpower[k]=v;
+    /* History of every % change (date, value, who), kept next to the % itself so the register can show
+       when it was last updated and every earlier value.  Several changes on one day keep the last one. */
+    if(prev!==v){const hk=k+'||h',u=this._rwsUser||{},e={d:this.todayISOStr(),v,by:u.display_name||u.username||''};let h=Array.isArray(this._manpower[hk])?this._manpower[hk].slice():[];
+      if(!h.length&&prev!=null)h.push({d:'',v:prev,by:''});
+      if(h.length&&h[h.length-1].d===e.d)h[h.length-1]=e;else h.push(e);
+      this._manpower[hk]=h;if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',hk,h,lv,zmk);}
+    try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,v,lv,zmk);}
+  elemPourHist(lv,zmk,aid,type,id){const h=(this._manpower||{})[this._elemPourKey(lv,zmk,aid,type,id)+'||h'];return Array.isArray(h)?h:[];}
+  _openPourHist(lv,zmk,aid,type,id){
+    const h=this.elemPourHist(lv,zmk,aid,type,id),E=s=>this.esc(String(s==null?'':s)),old=document.getElementById('__pctHist');if(old)old.remove();
+    const ov=document.createElement('div');ov.id='__pctHist';ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px';
+    const rows=h.slice().reverse().map(e=>`<tr><td style="padding:4px 10px">${e.d?E(this._fmtD?this._fmtD(e.d):e.d):'<span style="color:var(--faint)">before history</span>'}</td><td style="padding:4px 10px;text-align:right;font-weight:800">${e.v==null?'cleared':E(e.v)+'%'}</td><td style="padding:4px 10px;color:var(--dim)">${E(e.by||'')}</td></tr>`).join('');
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;min-width:300px;max-width:460px;max-height:80vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.3)"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)"><b>${E(id)} · % history</b><button class="hbtn" id="__phX">Close</button></div>`
+      +(rows?`<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr><th style="text-align:left;padding:6px 10px">Date</th><th style="text-align:right;padding:6px 10px">%</th><th style="text-align:left;padding:6px 10px">By</th></tr></thead><tbody>${rows}</tbody></table>`:'<div style="padding:16px;color:var(--dim)">No % history yet.</div>')+`</div>`;
+    document.body.appendChild(ov);const c=()=>ov.remove();ov.querySelector('#__phX').onclick=c;ov.onclick=e=>{if(e.target===ov)c();};
+  }
   setActRes(lv,zmk,aid,which,raw){if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny&&this.rwsDeny('Outside your assigned zones.');return;}
     const k=lv+'||'+zmk+'||'+aid+'||'+which; const s=String(raw==null?'':raw).trim(); const v=s===''?null:Math.max(0,Math.round(+s||0));
     this._manpower=this._manpower||{}; if(v==null)delete this._manpower[k]; else this._manpower[k]=v;
@@ -5524,8 +5542,8 @@ class Component extends DCLogic {
         return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="Restore or permanently clear elements deleted on this level">Deleted '+n+' · restore / clear</button>':'';})()+'</div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Each cell saves as you change it and syncs to every account. Untick <b>Keep</b> = the element no longer counts anywhere (map, zone list, Report, tiles); the drawing data is untouched and you can tick it back any time. Change <b>Zone</b> = move it to that zone; ticks and cast dates move with it. <b>%</b> = progress of the element — the same figure as in the zone panel.</div>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="10" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
+      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('% updated')+TH('Cast date')+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="11" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
     rows.forEach(r=>{
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.custom?r.code:r.type)+'" data-id="'+esc(r.id)+'"'+(r.custom?' data-custom="1"':'');
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
@@ -5549,6 +5567,10 @@ class Component extends DCLogic {
             const pa=r.custom?null:this._pourAidOfType(r.type);if(!pa)return '<span style="color:var(--faint)">—</span>';
             const v=this.elemPourPct(r.lv,r.zmk,pa,r.type,r.id);
             return '<input type="number" min="0" max="100" step="1" class="rgPct" '+d+' data-a="'+pa+'" value="'+(v==null?'':v)+'" placeholder="%" style="'+IN+';width:62px">';})()+'</td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px">'+(()=>{
+            const pa=r.custom?null:this._pourAidOfType(r.type);if(!pa)return '';const h=this.elemPourHist(r.lv,r.zmk,pa,r.type,r.id),last=h.length?h[h.length-1]:null;
+            if(!last)return '<span style="color:var(--faint)">—</span>';
+            return '<a href="#" class="rgPctHist" '+d+' data-a="'+pa+'" title="'+esc((last.by?'by '+last.by+' · ':'')+'click for every earlier value')+'" style="color:var(--accent);text-decoration:none">'+esc(last.d?(this._fmtD?this._fmtD(last.d):last.d):'—')+(h.length>1?' <span style="color:var(--faint)">('+h.length+')</span>':'')+'</a>';})()+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit)">✕</button></td>'
         +'</tr>';});
@@ -5662,6 +5684,7 @@ class Component extends DCLogic {
     root.querySelectorAll('.rgKeep').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetKeep(a.lv,a.zmk,a.type,a.id,e.target.checked);after();});
     root.querySelectorAll('.rgSt').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetStatus(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgCopyLv').forEach(i=>i.onchange=e=>{const a=at(e),to=e.target.value;if(!to)return;this._regCopyColToLevel(a.lv,a.id,to);after();});
+    root.querySelectorAll('.rgPctHist').forEach(i=>i.onclick=e=>{e.preventDefault();const t=e.currentTarget,a={lv:t.dataset.lv,zmk:t.dataset.zmk,type:t.dataset.type,id:t.dataset.id};this._openPourHist(a.lv,a.zmk,t.dataset.a,a.type,a.id);});
     root.querySelectorAll('.rgPct').forEach(i=>i.onchange=e=>{const a=at(e);this.setElemPourPct(a.lv,a.zmk,e.target.dataset.a,a.type,a.id,e.target.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();after();});
     root.querySelectorAll('.rgDate').forEach(i=>i.onchange=e=>{const a=at(e);this._regSetDate(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgDel').forEach(b=>b.onclick=e=>{const a=at(e);
