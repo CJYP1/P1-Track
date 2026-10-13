@@ -731,7 +731,7 @@ class Component extends DCLogic {
     if(this.ACT_MONTHS&&this.ACT_MONTHS.indexOf(real)>=0)return real;
     const AB={January:'Jan',February:'Feb',March:'Mar',April:'Apr',May:'May',June:'Jun',July:'Jul',August:'Aug',September:'Sep',October:'Oct',November:'Nov',December:'Dec'};const p=((this.ZP&&this.ZP.current)||'July 2026').split(' ');return (AB[p[0]]||p[0])+"'"+String(p[1]||'2026').slice(2);}
   actDefaultMonth(){const c=this.actCurLabel();return this.ACT_MONTHS.indexOf(c)>=0?c:this.ACT_MONTHS[this.ACT_MONTHS.length-1];}
-  userMonthCutoff(){return (this._appCfg&&this._appCfg.userMonthCutoff)||"Aug'26";}   /* 用户可见到哪个月(admin 可在后台改, 云端同步; 默认 Aug'26) */
+  userMonthCutoff(){const M=this.ACT_MONTHS||[];return (this._appCfg&&this._appCfg.userMonthCutoff)||M[M.length-1];}   /* not loaded yet / never set = no cut-off (the old fixed Aug'26 default pinned the first render to August) */   /* 用户可见到哪个月(admin 可在后台改, 云端同步; 默认 Aug'26) */
   visMonths(){const M=this.ACT_MONTHS;if(this.rwsIsAdmin())return M;const i=M.indexOf(this.userMonthCutoff());return i>=0?M.slice(0,i+1):M;}
   setUserMonthCutoff(m){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change this.');return;}if(this.ACT_MONTHS.indexOf(m)<0)return;this._appCfg=this._appCfg||{};this._appCfg.userMonthCutoff=m;try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','userMonthCutoff',m,null,null);this.render();}
   userLevelCutoff(){return (this._appCfg&&this._appCfg.userLevelCutoff)||'L5';}   /* 非 admin 用户可见到哪一层为止(admin 后台可改, 云端同步) */
