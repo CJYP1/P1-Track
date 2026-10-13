@@ -5197,6 +5197,8 @@ class Component extends DCLogic {
   _l1vsL2(lv,up){lv=lv||'L1';up=up||this._upLevels(lv);
     const nk=id=>this._colKey(String(id).replace(/^\s*(WF|MK)\s*-/i,'')),L2={},miss=[],area=[];
     up.forEach(U=>((this.DATA.levels[U]||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const k=nk(id);(L2[k]=L2[k]||[]).push({zone:(up.length>1?U+' ':'')+z.label,cat:z.cat||'NB'});})));
+    /* a mark renamed from a level upward (B2C21 → C21a from L1 up) still continues the column below */
+    up.forEach(U=>{const M=this._renMapFor('col',U);Object.keys(M).forEach(o=>{const hit=L2[nk(M[o])];const ko=this._colKey(o).replace(/^(WF|MK)/,'');if(hit&&!L2[ko])L2[ko]=hit;});});
     ((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{const zmk=z.mk||z.lid,cat=z.cat||'NB';this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const hit=L2[nk(id)];const r={lv,zmk,zone:z.label,cat,id};
       if(!hit){r.base=(z.cols||[]).some(c=>this._colKey(typeof c==='string'?c:(c.id||c.name))===this._colKey(id));miss.push(r);}else if(!hit.some(h=>h.cat===cat))area.push(Object.assign(r,{l2:hit.map(h=>h.zone+' '+h.cat).join(', ')}));});});
     return {miss,area};
@@ -5273,7 +5275,8 @@ class Component extends DCLogic {
     const ad=aid?(this._actDateOf(r.lv,r.zmk,aid)||{}):{},ps=ad.start?this._dISO(ad.start):'',today=this.todayISOStr();
     if(r.st==='done'&&!r.date)iss.push('Done, no cast date');
     if(r.type==='col'&&!r.pod){const up=this._upLevels(r.lv);if(up.length){this._upSets=this._upSets||{};const nk=id=>this._colKey(String(id).replace(/^\s*(WF|MK)\s*-/i,''));
-      let set=this._upSets[r.lv];if(!set){set=this._upSets[r.lv]=new Set();up.forEach(U=>((this.DATA.levels[U]||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>set.add(nk(typeof x==='string'?x:x.id)))));}
+      let set=this._upSets[r.lv];if(!set){set=this._upSets[r.lv]=new Set();up.forEach(U=>((this.DATA.levels[U]||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>set.add(nk(typeof x==='string'?x:x.id)))));
+        up.forEach(U=>{const M=this._renMapFor('col',U);Object.keys(M).forEach(o=>{if(set.has(nk(M[o])))set.add(this._colKey(o).replace(/^(WF|MK)/,''));});});}
       if(!set.has(nk(r.id)))iss.push('Not on '+up.join(' / ')+' — does it continue up?');}}
     if(r.date&&ps&&r.date<ps)iss.push('Cast before plan start');
     const pf=this._elemPlanFinish(r.lv,r.zmk,r.type);
@@ -5457,7 +5460,26 @@ class Component extends DCLogic {
      level (same physical element); beams and pile caps only on the level they were renamed on. */
   _elemRen(){const c=this._appCfg=this._appCfg||{};return c.elemRename=c.elemRename||{};}
   _renScope(type,lv){return (type==='col'||type==='core'||type==='lift'||type==='stair')?'*':lv;}
-  _renMapFor(type,lv){const T=this._elemRen()[type]||{};return Object.assign({},T['*']||{},T[lv]||{});}
+  /* scopes: '*' every level · '>=L2' that level and every level above · 'L2' that level only */
+  _renMapFor(type,lv){const T=this._elemRen()[type]||{},o=this._floorOrd(lv),up={};
+    Object.keys(T).sort((a,b)=>(this._floorOrd(a.slice(2))||0)-(this._floorOrd(b.slice(2))||0)).forEach(k=>{if(k.indexOf('>=')===0){const fo=this._floorOrd(k.slice(2));if(o!=null&&fo!=null&&o>=fo-1e-6)Object.assign(up,T[k]);}});
+    return Object.assign({},T['*']||{},up,T[lv]||{});}
+  _renInScope(scope,lv){if(scope==='*')return true;if(scope.indexOf('>=')===0){const o=this._floorOrd(lv),fo=this._floorOrd(scope.slice(2));return o!=null&&fo!=null&&o>=fo-1e-6;}return scope===lv;}
+  /* Ask how far a rename reaches: the same column can carry another mark upstairs (WF-B2C21 on L1 is C21a above). */
+  _regRenameAsk(lv,zmk,type,oldId,newId,after){
+    newId=String(newId||'').trim();if(!newId||newId===oldId){after&&after();return;}
+    if(!(type==='col'||type==='core'||type==='lift'||type==='stair')){this._regRename(lv,zmk,type,oldId,newId);after&&after();return;}
+    const old=document.getElementById('__renAsk');if(old)old.remove();const E=s=>this.esc(String(s));
+    const ov=document.createElement('div');ov.id='__renAsk';ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:16px';
+    const b=(sc,t,d)=>`<button class="hbtn" data-sc="${sc}" style="display:block;width:100%;text-align:left;padding:9px 12px;margin:6px 0"><b>${t}</b><div style="font-size:11px;color:var(--dim);font-weight:500">${d}</div></button>`;
+    ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:440px;width:100%;padding:14px 16px;box-shadow:0 18px 50px rgba(0,0,0,.3)"><b>Rename ${E(oldId)} → ${E(newId)}</b><div style="font-size:12px;color:var(--dim);margin:4px 0 6px">Where should the new mark apply?</div>`
+      +b('>='+lv,'This level and above ('+E(lv)+' ↑)','Levels below keep '+E(oldId)+' — e.g. a column that changes mark from this floor up')
+      +b(lv,'This level only ('+E(lv)+')','Every other level keeps '+E(oldId))
+      +b('*','All levels','The mark changes everywhere this element appears')
+      +`<div style="text-align:right;margin-top:6px"><button class="hbtn" data-sc="">Cancel</button></div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelectorAll('button[data-sc]').forEach(x=>x.onclick=()=>{const sc=x.dataset.sc;ov.remove();if(sc)this._regRename(lv,zmk,type,oldId,newId,sc);after&&after();});
+  }
   _applyElemRename(){
     const R=this._elemRen();if(!Object.keys(R).length)return;
     const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
@@ -5471,30 +5493,30 @@ class Component extends DCLogic {
     /* Marine podium P-zone columns come from their own ledger */
     {const map=this._renMapFor('col','L1');if(Object.keys(map).length&&this._marineCol)Object.keys(this._marineCol).forEach(P=>{this._marineCol[P]=ren(this._marineCol[P],map);});}
   }
-  _regRename(lv,zmk,type,oldId,newId){
+  _regRename(lv,zmk,type,oldId,newId,scopeIn){
     if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can rename elements.');return false;}
     newId=String(newId||'').trim();if(!newId||newId===oldId)return false;
     if(/[.。]+$/.test(newId))newId=this._dotFixId(newId);
-    const ok=this._colKey(oldId),scope=this._renScope(type,lv),R=this._elemRen(),T=R[type]=R[type]||{},M=T[scope]=T[scope]||{};
+    const ok=this._colKey(oldId),scope=scopeIn||this._renScope(type,lv),R=this._elemRen(),T=R[type]=R[type]||{},M=T[scope]=T[scope]||{};
     /* chain: anything that was renamed to the old mark now goes to the new one */
     Object.keys(M).forEach(k=>{if(this._colKey(M[k])===ok)M[k]=newId;});
     if(this._colKey(newId)!==ok)M[ok]=newId;
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemRename',R,null,null);
     /* items added by hand / placed on the map carry the mark themselves */
-    const N=this._elemNew();let nDirty=false;Object.keys(N).forEach(k=>{const q=k.split('||');if(q[2]!==type||(scope!=='*'&&q[0]!==lv))return;N[k]=N[k].map(x=>{if(this._colKey(x)===ok){nDirty=true;return newId;}return x;});});if(nDirty)this._saveElemNew();
-    if(type==='col'&&this._colAdd){let d=false;Object.keys(this._colAdd).forEach(L=>{if(scope!=='*'&&L!==lv)return;(this._colAdd[L]||[]).forEach(c=>{if(this._colKey(c.id)===ok){c.id=newId;d=true;}});});if(d&&this._savePlacedColsRaw)this._savePlacedColsRaw();}
+    const N=this._elemNew();let nDirty=false;Object.keys(N).forEach(k=>{const q=k.split('||');if(q[2]!==type||(!this._renInScope(scope,q[0])))return;N[k]=N[k].map(x=>{if(this._colKey(x)===ok){nDirty=true;return newId;}return x;});});if(nDirty)this._saveElemNew();
+    if(type==='col'&&this._colAdd){let d=false;Object.keys(this._colAdd).forEach(L=>{if(!this._renInScope(scope,L))return;(this._colAdd[L]||[]).forEach(c=>{if(this._colKey(c.id)===ok){c.id=newId;d=true;}});});if(d&&this._savePlacedColsRaw)this._savePlacedColsRaw();}
     /* drawn shapes keep their label in step (admin only — the shapes are admin settings) */
     if(this.rwsIsAdmin()&&(type==='core'||type==='lift'||type==='stair')){const key=type==='core'?'coreWalls':'lifts',S=(this._appCfg||{})[key]||{};let d=false;
       Object.keys(S).forEach(L=>(S[L]||[]).forEach(w=>{if(w&&this._colKey(w.id)===ok){w.id=newId;d=true;}}));
       if(d&&typeof rwsSyncKV==='function')rwsSyncKV('settings',key,S,null,null);}
     /* Keep / drop entries */
-    {const D=this._elemDrop();let d=false;Object.keys(D).forEach(k=>{const q=k.split('||');if(q[2]!==type||(scope!=='*'&&q[0]!==lv))return;D[k]=D[k].map(x=>{if(this._colKey(x)===ok){d=true;return newId;}return x;});});
+    {const D=this._elemDrop();let d=false;Object.keys(D).forEach(k=>{const q=k.split('||');if(q[2]!==type||(!this._renInScope(scope,q[0])))return;D[k]=D[k].map(x=>{if(this._colKey(x)===ok){d=true;return newId;}return x;});});
       if(d&&typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',D,null,null);}
     /* status, cast date, % and its history follow the new mark on every level it covers */
     const E=this.elem||{},DT=this._elemDate||{},keys=new Set([...Object.keys(E),...Object.keys(DT)]);
-    keys.forEach(k=>{const q=k.split('||');if(q.length!==4||q[2]!==type||this._colKey(q[3])!==ok||(scope!=='*'&&q[0]!==lv))return;this._migrateElemKey(k,q[0]+'||'+q[1]+'||'+type+'||'+newId);});
-    const MP=this._manpower||{};Object.keys(MP).forEach(k=>{const q=k.split('||');if(q.length<6||q[3]!=='pour_elem'||q[4]!==type||(scope!=='*'&&q[0]!==lv))return;let id;try{id=decodeURIComponent(q[5]);}catch(e){id=q[5];}if(this._colKey(id)!==ok)return;
+    keys.forEach(k=>{const q=k.split('||');if(q.length!==4||q[2]!==type||this._colKey(q[3])!==ok||(!this._renInScope(scope,q[0])))return;this._migrateElemKey(k,q[0]+'||'+q[1]+'||'+type+'||'+newId);});
+    const MP=this._manpower||{};Object.keys(MP).forEach(k=>{const q=k.split('||');if(q.length<6||q[3]!=='pour_elem'||q[4]!==type||(!this._renInScope(scope,q[0])))return;let id;try{id=decodeURIComponent(q[5]);}catch(e){id=q[5];}if(this._colKey(id)!==ok)return;
       const nk=q.slice(0,5).join('||')+'||'+encodeURIComponent(newId)+(q.length>6?'||'+q.slice(6).join('||'):'');if(MP[nk]==null)MP[nk]=MP[k];delete MP[k];
       if(typeof rwsSyncKV==='function'){rwsSyncKV('manpower',nk,MP[nk],q[0],q[1]);rwsSyncKV('manpower',k,null,q[0],q[1]);}});
     try{localStorage.setItem('rws_manpower',JSON.stringify(MP));}catch(e){}
@@ -5502,7 +5524,7 @@ class Component extends DCLogic {
     this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
     try{this._reconcileZoneCores&&this._reconcileZoneCores();this._reconcileZoneStairs&&this._reconcileZoneStairs();}catch(e){}
     this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
-    this._toast(oldId+' → '+newId+(scope==='*'?' (all levels)':' ('+lv+')'));
+    this._toast(oldId+' → '+newId+(scope==='*'?' (all levels)':(scope.indexOf('>=')===0?' ('+lv+' and above)':' ('+lv+' only)')));
     return true;
   }
   _regSetKeep(lv,zmk,type,id,keep){
@@ -5926,7 +5948,7 @@ class Component extends DCLogic {
   _bindRegHandlers(root,after){
     root.querySelectorAll('.rgRefresh').forEach(b=>b.onclick=()=>this._rgRefresh(b));
     const at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,type:e.target.dataset.type,id:e.target.dataset.id});
-    root.querySelectorAll('.rgId').forEach(i=>i.onchange=e=>{const a=at(e);this._regRename(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
+    root.querySelectorAll('.rgId').forEach(i=>i.onchange=e=>{const a=at(e);if(e.target.readOnly)return;this._regRenameAsk(a.lv,a.zmk,a.type,a.id,e.target.value,after);});
     root.querySelectorAll('.rgZone').forEach(i=>i.onchange=e=>{const a=at(e);this._regMove(a.lv,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgKind').forEach(i=>i.onchange=e=>{const a=at(e),to=e.target.value;
       const nm={core:'Core Wall',lift:'Lift',stair:'Staircase'};
