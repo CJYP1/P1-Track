@@ -5270,6 +5270,7 @@ class Component extends DCLogic {
     const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'act_corewall',lift:'ls',stair:'ls'})[r.type];
     const ad=aid?(this._actDateOf(r.lv,r.zmk,aid)||{}):{},ps=ad.start?this._dISO(ad.start):'',today=this.todayISOStr();
     if(r.st==='done'&&!r.date)iss.push('Done, no cast date');
+    if(!r.pod&&this._reportZoneDropped({label:r.zone},r.cat))iss.push('Zone not counted in the '+r.cat+' Report (M-SLAB / capping beam) — move it to a counted zone if it belongs to '+r.cat);
     if(r.type==='col'&&!r.pod){const up=this._upLevels(r.lv);if(up.length){this._upSets=this._upSets||{};const nk=id=>this._colKey(String(id).replace(/^\s*(WF|MK)\s*-/i,''));
       let set=this._upSets[r.lv];if(!set){set=this._upSets[r.lv]=new Set();up.forEach(U=>((this.DATA.levels[U]||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>set.add(nk(typeof x==='string'?x:x.id)))));}
       if(!set.has(nk(r.id)))iss.push('Not on '+up.join(' / ')+' — does it continue up?');}}
@@ -5627,6 +5628,9 @@ class Component extends DCLogic {
         return '<span style="color:var(--dim)">Showing '+rows.length
           +(matched.length>rows.length?' / '+matched.length:'')
           +' \u00b7 kept '+kept+' \u00b7 done '+done
+          +(()=>{/* what the Report counts from these rows: kept, outside M-SLAB / capping-beam zones, each mark once */
+            const inR=new Map();matched.forEach(r=>{if(r.keep!=='Y'||r.custom)return;if(!r.pod&&this._reportZoneDropped({label:r.zone},r.cat))return;const k=r.lv+'|'+String(r.id).trim().toUpperCase();const o=inR.get(k)||{d:false};if(r.st==='done')o.d=true;inR.set(k,o);});
+            const n=inR.size,nd=[...inR.values()].filter(o=>o.d).length;return n!==kept?' \u00b7 <b title="Rows in M-SLAB / capping-beam zones (not in the NB Report) and marks listed twice are left out">in Report '+n+' \u00b7 done '+nd+'</b>':'';})()
           +(dup>0?' \u00b7 <b style="color:var(--txt)">distinct marks '+marks.size+'</b>':'')
           +'</span>'
           +(dup>0?'<span title="A through-column has one row on each level it passes: '+base.length
