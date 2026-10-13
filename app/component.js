@@ -5189,35 +5189,39 @@ class Component extends DCLogic {
   /* L1 columns are the L1→L2 lifts, so every counted L1 column must also be on L2.
      Lists L1 columns with no L2 match (e.g. B2 columns that stop at B1M) and
      columns whose L2 zone is in another area, and unticks 计入 for the picks. */
-  _l1vsL2(){
+  /* Levels a column on lv continues into: the next level, and through a part-floor mezzanine (B1M) to
+     the one above it, since most B1 columns run straight past B1M to L1. */
+  _upLevels(lv){const O=this.DATA.order||[],i=O.indexOf(lv);if(i<0||i>=O.length-1)return [];const n=O[i+1];return n==='B1M'&&O[i+2]?[n,O[i+2]]:[n];}
+  _l1vsL2(lv,up){lv=lv||'L1';up=up||this._upLevels(lv);
     const nk=id=>this._colKey(String(id).replace(/^\s*(WF|MK)\s*-/i,'')),L2={},miss=[],area=[];
-    ((this.DATA.levels.L2||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const k=nk(id);(L2[k]=L2[k]||[]).push({zone:z.label,cat:z.cat||'NB'});}));
-    ((this.DATA.levels.L1||{}).zones||[]).forEach(z=>{const zmk=z.mk||z.lid,cat=z.cat||'NB';this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const hit=L2[nk(id)];const r={lv:'L1',zmk,zone:z.label,cat,id};
+    up.forEach(U=>((this.DATA.levels[U]||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const k=nk(id);(L2[k]=L2[k]||[]).push({zone:(up.length>1?U+' ':'')+z.label,cat:z.cat||'NB'});})));
+    ((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>{const zmk=z.mk||z.lid,cat=z.cat||'NB';this._zoneElemList(z,'col').forEach(x=>{const id=typeof x==='string'?x:x.id;const hit=L2[nk(id)];const r={lv,zmk,zone:z.label,cat,id};
       if(!hit){r.base=(z.cols||[]).some(c=>this._colKey(typeof c==='string'?c:(c.id||c.name))===this._colKey(id));miss.push(r);}else if(!hit.some(h=>h.cat===cat))area.push(Object.assign(r,{l2:hit.map(h=>h.zone+' '+h.cat).join(', ')}));});});
     return {miss,area};
   }
-  _openL1vsL2(after){
+  _openL1vsL2(after,lv){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
-    const {miss,area}=this._l1vsL2(),E=s=>this.esc(String(s));
+    lv=lv||'L1';const up=this._upLevels(lv),UP=up.join(' / ');if(!up.length){this._toast('No level above '+lv+'.');return;}
+    const {miss,area}=this._l1vsL2(lv,up),E=s=>this.esc(String(s));
     const old=document.getElementById('__l1l2');if(old)old.remove();
     const ov=document.createElement('div');ov.id='__l1l2';
     ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.42);display:flex;align-items:center;justify-content:center;padding:16px';
     const row=(r,i,g,on,extra)=>`<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:12px"><input type="checkbox" data-g="${g}" data-i="${i}" ${on?'checked':''}><b style="min-width:92px">${E(r.id)}</b><span style="color:var(--dim)">${E(r.zone)} · ${E(r.cat)}</span>${extra?'<span style="color:var(--faint)">'+extra+'</span>':''}</label>`;
     ov.innerHTML=`<div style="background:var(--panel);color:var(--ink);border-radius:12px;max-width:620px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3)">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><b>L1 columns vs L2</b><button class="hbtn" id="l2X">Close</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)"><b>${E(lv)} columns vs ${E(UP)}</b><button class="hbtn" id="l2X">Close</button></div>
       <div style="padding:10px 16px;overflow:auto;flex:1">
-        <div style="font-size:11px;color:var(--dim);margin-bottom:8px">L1 columns are the L1 → L2 lifts, so every one should also be on the L2 list. Untick any that are the same column under a different mark on L2.</div>
-        <div style="font-weight:800;font-size:12px;margin:6px 0 2px">① Not on L2 · ${miss.length} (NB ticked by default; EB / Marine and columns in the original L1 data are not)</div>
-        ${miss.map((r,i)=>row(r,i,'m',r.cat==='NB'&&!r.base,r.base?'In the original L1 data (L2 may use a different mark) — please check':'')).join('')||'<div style="font-size:12px;color:var(--faint)">None</div>'}
-        <div style="font-weight:800;font-size:12px;margin:12px 0 2px">② In another area on L2 · ${area.length} (not ticked by default)</div>
-        ${area.map((r,i)=>row(r,i,'a',false,'L2: '+E(r.l2))).join('')||'<div style="font-size:12px;color:var(--faint)">None</div>'}
+        <div style="font-size:11px;color:var(--dim);margin-bottom:8px">${E(lv)} columns are the ${E(lv)} → ${E(up[up.length-1])} lifts, so every one should also be on the ${E(UP)} list. Untick any that are the same column under a different mark above.</div>
+        <div style="font-weight:800;font-size:12px;margin:6px 0 2px">① Not on ${E(UP)} · ${miss.length} (NB ticked by default; EB / Marine and columns in the original ${E(lv)} data are not)</div>
+        ${miss.map((r,i)=>row(r,i,'m',r.cat==='NB'&&!r.base,r.base?'In the original '+lv+' data (the level above may use a different mark) — please check':'')).join('')||'<div style="font-size:12px;color:var(--faint)">None</div>'}
+        <div style="font-weight:800;font-size:12px;margin:12px 0 2px">② In another area above · ${area.length} (not ticked by default)</div>
+        ${area.map((r,i)=>row(r,i,'a',false,'Above: '+E(r.l2))).join('')||'<div style="font-size:12px;color:var(--faint)">None</div>'}
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line)"><button class="hbtn" id="l2Go" style="background:#6474df;color:#fff;border-color:#6474df;font-weight:800">Untick Keep for the selected</button></div></div>`;
     document.body.appendChild(ov);const close=()=>ov.remove();
     ov.querySelector('#l2X').onclick=close;ov.onclick=e=>{if(e.target===ov)close();};
     ov.querySelector('#l2Go').onclick=()=>{const picks=[...ov.querySelectorAll('input[type=checkbox]:checked')].map(i=>(i.dataset.g==='m'?miss:area)[+i.dataset.i]);
       if(!picks.length){this._toast('Nothing ticked');return;}
-      this._confirmModal('Untick Keep for '+picks.length+' L1 column(s)? You can tick them back in the register later.',()=>{
+      this._confirmModal('Untick Keep for '+picks.length+' '+lv+' column(s)? You can tick them back in the register later.',()=>{
         const D=this._elemDrop();picks.forEach(r=>{const k=r.lv+'||'+r.zmk+'||col',a=D[k]=D[k]||[];if(!a.some(x=>this._colKey(x)===this._colKey(r.id)))a.push(r.id);});
         try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
         if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',D,null,null);
@@ -5266,6 +5270,9 @@ class Component extends DCLogic {
     const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'act_corewall',lift:'ls',stair:'ls'})[r.type];
     const ad=aid?(this._actDateOf(r.lv,r.zmk,aid)||{}):{},ps=ad.start?this._dISO(ad.start):'',today=this.todayISOStr();
     if(r.st==='done'&&!r.date)iss.push('Done, no cast date');
+    if(r.type==='col'&&!r.pod){const up=this._upLevels(r.lv);if(up.length){this._upSets=this._upSets||{};const nk=id=>this._colKey(String(id).replace(/^\s*(WF|MK)\s*-/i,''));
+      let set=this._upSets[r.lv];if(!set){set=this._upSets[r.lv]=new Set();up.forEach(U=>((this.DATA.levels[U]||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>set.add(nk(typeof x==='string'?x:x.id)))));}
+      if(!set.has(nk(r.id)))iss.push('Not on '+up.join(' / ')+' — does it continue up?');}}
     if(r.date&&ps&&r.date<ps)iss.push('Cast before plan start');
     const pf=this._elemPlanFinish(r.lv,r.zmk,r.type);
     if(pf){if(r.st!=='done'&&pf.d<today)iss.push('Past plan finish, not done');if(r.st==='done'&&r.date&&r.date>pf.d)iss.push('Cast after plan finish');}
@@ -5585,7 +5592,7 @@ class Component extends DCLogic {
     const zones=ALLLV?[]:((this.DATA.levels[st.lv]||{}).zones||[]).filter(z=>_adm||this.rwsScopeOk(st.lv,z.mk||z.lid));
     const all=this._regRows().filter(r=>(ALLLV||r.lv===st.lv)&&r.type===st.type&&(_adm||this.rwsScopeOk(r.lv,r.zmk)));
     const q=String(st.q||'').trim().toUpperCase();
-    all.forEach(r=>{r.iss=this._regIssues(r);});
+    this._upSets={};all.forEach(r=>{r.iss=this._regIssues(r);});
     const matched=all.filter(r=>(st.cat==='all'||r.cat===st.cat)
       &&(!st.zone||st.zone==='__all'||r.zone===st.zone)
       &&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0)
@@ -5627,7 +5634,7 @@ class Component extends DCLogic {
             +dup+' repeated rows \u00b7 through-elements</span>':'');
       })()
       +(this._rgPrefixable(st)?'<button class="hbtn" id="rgPrefix" title="Change the first digit of the marks on this level to the level number, e.g. 2VB11 → 3VB11">↺ Renumber to level</button>':'')
-      +(st.lv==='L1'&&st.type==='col'&&this.rwsIsAdmin()?'<button class="hbtn" id="rgVsL2" title="An L1 column must continue to L2: check each one against the L2 column list">⇅ Check vs L2</button>':'')
+      +(st.lv!=='__all'&&st.type==='col'&&this.rwsIsAdmin()&&this._upLevels(st.lv).length?'<button class="hbtn" id="rgVsL2" title="A column on this level must continue to the level above: check each one against that level\'s column list">⇅ Check vs '+esc(this._upLevels(st.lv).join(' / '))+'</button>':'')
       +'<span style="flex:1"></span>'
       +(ALLLV?'<span style="color:var(--dim);font-size:12px">Pick one level to add elements</span>'
         :('<span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:nowrap;border:1px dashed var(--line);border-radius:8px;padding:4px 6px">'
@@ -5707,7 +5714,7 @@ class Component extends DCLogic {
       if(this._regAdd(st.lv,zsel.value,st.type,idi.value)){idi.value='';re();}};}
     {const zb=root.querySelector('#rgZone');if(zb)zb.onchange=e=>{st.zone=e.target.value;re();};}
     {const pb=root.querySelector('#rgPrefix');if(pb)pb.onclick=()=>this._rgRenumber(st,re);}
-    {const vb=root.querySelector('#rgVsL2');if(vb)vb.onclick=()=>this._openL1vsL2(re);}
+    {const vb=root.querySelector('#rgVsL2');if(vb)vb.onclick=()=>this._openL1vsL2(re,st.lv);}
     this._bindRegHandlers(root,re);
   }
   /* Slab & area works in the register: one row per zone and activity.  Total defaults to the drawing
