@@ -125,6 +125,7 @@ class Component extends DCLogic {
       if(typeof rwsQueueSize==='function'&&rwsQueueSize()>0)return;        // 本机有待同步改动, 先不覆盖
       const ae=document.activeElement; if(ae&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName))return;  // 不打断正在输入
       await this.rwsAfterLogin();                                          // 拉云端 + 合并 + 重绘
+      if(document.getElementById('__regGrid'))this._rgRender();          /* open register shows others' changes too */
       if(this._subOpen)this.selectSubzone(this._subOpen.kind,this._subOpen.i);
       else if(this.selKey){const z=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z)this.selectZone(z);}
     }catch(e){}
@@ -5565,7 +5566,7 @@ class Component extends DCLogic {
       +'<div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1 · admin</div>'
       +'<div style="font-size:24px;font-weight:800;line-height:1.15">Element register</div></div>'
       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
-      +(_adm?'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button>':'')+'<button class="hbtn" id="rgClose">✕ Close</button></div></div>';
+      +'<button class="hbtn rgRefresh" title="Load everyone\'s latest changes from the cloud">⟳ Refresh</button>'+(_adm?'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button>':'')+'<button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
       +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'All levels (through-elements listed per level)')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
       +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'Slab & area works')+'</select>'
@@ -5677,6 +5678,14 @@ class Component extends DCLogic {
   /* Slab & area works in the register: one row per zone and activity.  Total defaults to the drawing
      area (slab types) and can be typed; "Done to date" is cumulative — the change goes into the month
      of the date given, so the Activities card, Report and monthly catch-up all move with it. */
+  async _rgRefresh(btn){
+    if(btn){btn.disabled=true;btn.textContent='⟳ Loading…';}
+    try{if(typeof rwsQueueSize==='function'&&rwsQueueSize()>0&&typeof rwsQueueFlush==='function')await rwsQueueFlush();
+      if(typeof rwsGetSession==='function'&&rwsGetSession())await this.rwsAfterLogin();
+      this._reconcileZoneCols&&this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render&&this.render();this._toast('Register up to date');}
+    catch(e){this._toast('Refresh failed: '+(e&&e.message||e));}
+    if(document.getElementById('__regGrid'))this._rgRender();
+  }
   _qtyRows(lv){
     const out=[],M=this.ACT_MONTHS||[],_adm=this.rwsIsAdmin();
     ((lv==='__all')?(this.DATA.order||[]):[lv]).forEach(L=>{const seen=new Set();
@@ -5713,6 +5722,24 @@ class Component extends DCLogic {
     const h=Array.isArray(this._manpower[k])?this._manpower[k].slice():[];if(h.length&&h[h.length-1].d===e.d)h[h.length-1]=e;else h.push(e);this._manpower[k]=h;
     try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(_){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,h,lv,zmk);
   }
+  /* Month by month for one area row: plan, done (editable), running total — so the month where the
+     done went over the total, or came before the plan started, can be seen and corrected. */
+  _qtyMonthsHtml(r){
+    const M=this.ACT_MONTHS||[],esc=s=>this.esc(s),f=v=>this.fmt(Math.round((+v||0)*100)/100),cur=this.actCurLabel?this.actCurLabel():'';
+    let first=-1;M.forEach((m,i)=>{if(first<0&&this.actPlan(r.lv,r.zmk,r.aid,m)!=null)first=i;});
+    let cum=0,cumP=0,rows='',overAt='';
+    M.forEach((m,i)=>{const p=this.actPlan(r.lv,r.zmk,r.aid,m),d=this.actDoneMonth(r.lv,r.zmk,r.aid,m);if(p==null&&d==null&&m!==cur)return;
+      cum+=(+d||0);cumP+=(+p||0);const over=r.total>0&&cum>r.total+0.5,early=first>=0&&i<first&&(+d||0)>0,big=p!=null&&(+d||0)>(+p||0)*1.5&&(+d||0)>0;
+      if(over&&!overAt)overAt=m;
+      const note=[early?'before plan start':'',over?'total exceeded':'',big?'done ≫ plan':''].filter(Boolean).join(' · ');
+      rows+='<tr style="'+(over||early?'background:color-mix(in srgb,var(--crit) 10%,transparent)':'')+'"><td style="padding:3px 8px;font-weight:700">'+esc(m)+(m===cur?' <span style="color:var(--faint);font-weight:500">(now)</span>':'')+'</td>'
+        +'<td style="padding:3px 8px;text-align:right">'+(p==null?'—':f(p))+'</td>'
+        +'<td style="padding:3px 8px"><input type="number" step="any" min="0" class="qMonDone" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-a="'+esc(r.aid)+'" data-m="'+esc(m)+'" value="'+(d==null?'':d)+'" placeholder="—" style="font:inherit;font-size:12px;padding:2px 5px;border:1px solid var(--line);border-radius:4px;width:86px;background:var(--panel);color:inherit"></td>'
+        +'<td style="padding:3px 8px;text-align:right">'+f(cumP)+'</td><td style="padding:3px 8px;text-align:right;font-weight:700'+(over?';color:var(--crit)':'')+'">'+f(cum)+'</td>'
+        +'<td style="padding:3px 8px;text-align:right">'+(r.total>0?Math.round(cum/r.total*100)+'%':'—')+'</td><td style="padding:3px 8px;color:var(--crit);font-size:11px">'+esc(note)+'</td></tr>';});
+    return '<div style="font-size:11.5px;color:var(--dim);margin-bottom:4px">'+esc(r.label)+' · '+esc(r.zone)+' · total '+f(r.total)+' '+esc(r.unit)+(overAt?' · <b style="color:var(--crit)">went over the total in '+esc(overAt)+'</b>':'')+' · edit a month\'s Done here to correct it</div>'
+      +'<table style="border-collapse:collapse;font-size:12px"><tr style="color:var(--dim)"><th style="text-align:left;padding:3px 8px">Month</th><th style="text-align:right;padding:3px 8px">Plan</th><th style="text-align:left;padding:3px 8px">Done</th><th style="text-align:right;padding:3px 8px">Plan to date</th><th style="text-align:right;padding:3px 8px">Done to date</th><th style="text-align:right;padding:3px 8px">%</th><th></th></tr>'+(rows||'<tr><td colspan="7" style="padding:6px 8px;color:var(--faint)">No plan or done yet</td></tr>')+'</table>';
+  }
   _rgRenderQty(){
     const root=document.getElementById('rgRoot');if(!root)return;const st=this._rg,esc=s=>this.esc(s),_adm=this.rwsIsAdmin(),ALLLV=st.lv==='__all';
     const TYPES=this._regTypes(),opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
@@ -5722,7 +5749,7 @@ class Component extends DCLogic {
     const rows=all.filter(r=>(st.cat==='all'||r.cat===st.cat)&&(!st.zone||st.zone==='__all'||r.zone===st.zone)&&(!st.act||st.act==='__all'||r.label===st.act)
       &&(!q||String(r.zone).toUpperCase().indexOf(q)>=0||String(r.label).toUpperCase().indexOf(q)>=0)&&(!st.bad||r.iss.length));
     const zoneNames=[...new Set(all.map(r=>r.zone))].sort(),fd=d=>d?(this._fmtD?this._fmtD(d):d):'—',f=v=>this.fmt(Math.round((+v||0)*100)/100);
-    let h='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px"><div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1</div><div style="font-size:24px;font-weight:800;line-height:1.15">Element register</div></div><div><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
+    let h='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px"><div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1</div><div style="font-size:24px;font-weight:800;line-height:1.15">Element register</div></div><div style="display:flex;gap:8px"><button class="hbtn rgRefresh" title="Load everyone\'s latest changes from the cloud">⟳ Refresh</button><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
       +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'All levels')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
       +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'Slab & area works')+'</select>'
@@ -5737,7 +5764,7 @@ class Component extends DCLogic {
     if(!rows.length)h+='<tr><td colspan="13" style="padding:26px;text-align:center;color:var(--dim)">Nothing here.</td></tr>';
     rows.slice(0,600).forEach(r=>{const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-a="'+esc(r.aid)+'"',last=r.hist.length?r.hist[r.hist.length-1]:null,late=r.st!=='done'&&r.pe&&r.pe<this.todayISOStr();
       h+='<tr>'+(ALLLV?'<td style="'+TD+'"><b>'+esc(r.lv)+'</b></td>':'')
-        +'<td style="'+TD+';font-weight:700">'+esc(r.label)+'</td><td style="'+TD+'">'+esc(r.zone)+'</td><td style="'+TD+';color:var(--dim)">'+esc(r.cat)+'</td>'
+        +'<td style="'+TD+';font-weight:700;white-space:nowrap">'+esc(r.label)+' <a href="#" class="qMon" data-k="'+esc(r.lv+'||'+r.zmk+'||'+r.aid)+'" title="Plan and done month by month" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600">'+((st.open||{})[r.lv+'||'+r.zmk+'||'+r.aid]?'▾ months':'▸ months')+'</a></td><td style="'+TD+'">'+esc(r.zone)+'</td><td style="'+TD+';color:var(--dim)">'+esc(r.cat)+'</td>'
         +'<td style="'+TD+';white-space:nowrap">'+(_adm?'<input type="number" step="any" class="qTot" '+d+' value="'+(r.typed?r.total:'')+'" placeholder="'+(r.total>0?f(r.total):'—')+'" style="'+IN+';width:90px">':f(r.total))+' <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+(r.typed?' · typed':(r.drawing>0?' · drawing':''))+'</span></td>'
         +'<td style="'+TD+';white-space:nowrap"><input type="number" step="any" min="0" class="qDone" '+d+' value="'+(r.done||'')+'" placeholder="0" style="'+IN+';width:90px"> <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
         +'<td style="'+TD+'"><input type="date" class="qDate" '+d+' value="'+esc(this.todayISOStr())+'" style="'+IN+'"></td>'
@@ -5746,13 +5773,17 @@ class Component extends DCLogic {
         +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+(last?'<a href="#" class="qHist" '+d+' title="'+esc((last.by?'by '+last.by+' · ':'')+'click for the history')+'" style="color:var(--accent);text-decoration:none">'+esc(fd(last.d))+(r.hist.length>1?' <span style="color:var(--faint)">('+r.hist.length+')</span>':'')+'</a>':'<span style="color:var(--faint)">—</span>')+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+esc(fd(r.ps))+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap'+(late?';color:var(--crit);font-weight:700':'')+'">'+esc(fd(r.pe))+'</td>'
-        +'<td style="'+TD+';font-size:11px;color:var(--crit);max-width:190px">'+(r.iss.length?r.iss.map(esc).join('<br>'):'<span style="color:#2e7d4f">✓</span>')+'</td></tr>';});
+        +'<td style="'+TD+';font-size:11px;color:var(--crit);max-width:190px">'+(r.iss.length?r.iss.map(esc).join('<br>'):'<span style="color:#2e7d4f">✓</span>')+'</td></tr>';
+      if((st.open||{})[r.lv+'||'+r.zmk+'||'+r.aid])h+='<tr><td colspan="'+(ALLLV?13:12)+'" style="padding:4px 8px 12px 28px;border-bottom:1px solid var(--line);background:var(--bg)">'+this._qtyMonthsHtml(r)+'</td></tr>';});
     h+='</tbody></table></div>';root.innerHTML=h;
     const re=()=>this._rgRender(),at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,a:e.target.dataset.a});
     root.querySelector('#rgClose').onclick=()=>{const o=document.getElementById('__regGrid');if(o)o.remove();};
     root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgAct').onchange=e=>{st.act=e.target.value;re();};
+    root.querySelectorAll('.rgRefresh').forEach(b=>b.onclick=()=>this._rgRefresh(b));
+    root.querySelectorAll('.qMon').forEach(b=>b.onclick=e=>{e.preventDefault();const k=b.dataset.k;st.open=st.open||{};st.open[k]=!st.open[k];re();});
+    root.querySelectorAll('.qMonDone').forEach(i=>i.onchange=e=>{const t=e.target;this.setActDoneMonth(t.dataset.lv,t.dataset.zmk,t.dataset.a,t.dataset.m,t.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();re();});
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
     root.querySelector('#rgZone').onchange=e=>{st.zone=e.target.value;re();};
     root.querySelector('#rgBad').onchange=e=>{st.bad=e.target.checked;re();};
@@ -5846,6 +5877,7 @@ class Component extends DCLogic {
   }
   /* Shared by the expanded rows here and by the standalone grid. */
   _bindRegHandlers(root,after){
+    root.querySelectorAll('.rgRefresh').forEach(b=>b.onclick=()=>this._rgRefresh(b));
     const at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,type:e.target.dataset.type,id:e.target.dataset.id});
     root.querySelectorAll('.rgId').forEach(i=>i.onchange=e=>{const a=at(e);this._regRename(a.lv,a.zmk,a.type,a.id,e.target.value);after();});
     root.querySelectorAll('.rgZone').forEach(i=>i.onchange=e=>{const a=at(e);this._regMove(a.lv,a.type,a.id,e.target.value);after();});
