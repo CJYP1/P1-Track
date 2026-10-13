@@ -795,7 +795,12 @@ class Component extends DCLogic {
   toggleHideCol(id){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can hide columns.');return;}this._appCfg=this._appCfg||{};this._hidePush();const hc=this._appCfg.hideCols=this._appCfg.hideCols||{};const lv=this.curLevel;const arr=hc[lv]=hc[lv]||[];const i=arr.indexOf(id);if(i>=0)arr.splice(i,1);else arr.push(id);if(!arr.length)delete hc[lv];try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function'){rwsSyncKV('settings','hideCols',this._appCfg.hideCols||{},null,null);rwsSyncKV('settings','hideColsUndo',this._appCfg.hideColsUndo||[],null,null);}this.render();}
   toggleHideColMode(){if(!this.rwsIsAdmin())return;this._hidingCol=!this._hidingCol;if(this._placingCol&&this._hidingCol)this._placingCol=false;this.render();this.refreshSubzPanel&&this.refreshSubzPanel();}
   actDefaultMonthVis(){const dm=this.actDefaultMonth(),VM=this.visMonths();return VM.indexOf(dm)>=0?dm:VM[VM.length-1];}
-  actTotal(lv,zmk,a,def){if(a==='ls'||a==='act_corewall'||a==='col'){const refs=this._activityElemRefs(lv,zmk,a);if(refs.length)return refs.length;}const v=(this._actTotal||{})[lv+'||'+zmk+'||'+a];return v==null?def:v;}
+  actTotal(lv,zmk,a,def){if(a==='ls'||a==='act_corewall'||a==='col'){const refs=this._activityElemRefs(lv,zmk,a);if(refs.length)return refs.length;}const v=(this._actTotal||{})[lv+'||'+zmk+'||'+a];if(v!=null)return v;
+    /* Slab-type m2 works: the zone's drawing area is the total unless one is typed (Element register / Activities). */
+    if(this._areaAid(a)){const ar=this._zoneAreaOf(lv,zmk);if(ar>0)return ar;}return def;}
+  _areaAid(a){return a==='slab'||a==='slab_top'||a==='slab_pile';}
+  _zoneAreaOf(lv,zmk){const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>String(x.mk||x.lid)===String(zmk));if(z)return Number(z.area)||0;
+    const lab=String(zmk).replace(/^L1\|/,''),S=this.SUBZONES&&this.SUBZONES.L1;if(lv==='L1'&&S){for(const k of ['P','C','ZC','CZ']){const e=(S[k]||[]).find(x=>x.label===lab);if(e)return Number(e.a)||0;}}return 0;}
   /* Auto excavation volume — NEW BASEMENT only: B1 area×8.5m, B2 area×6m */
   excDepth(lv){return lv==='B1'?8.5:(lv==='B2'?6:null);}
   excAuto(lv,z){if((z.cat||'NB')!=='NB')return null;const d=this.excDepth(lv);return d==null?null:Math.round((z.area||0)*d);}
@@ -5245,6 +5250,17 @@ class Component extends DCLogic {
     let src='activity';if(!pe){pe=((this._zdate||{})[lv+'||'+zmk]||{}).end||'';src='zone';}
     return pe?{d:this._dISO?this._dISO(pe):pe,src}:null;
   }
+  /* What looks wrong on one register row (replaces the old Number check). */
+  _regIssues(r){
+    const iss=[];if(!r||r.keep==='N'||r.custom)return iss;
+    const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'act_corewall',lift:'ls',stair:'ls'})[r.type];
+    const ad=aid?(this._actDateOf(r.lv,r.zmk,aid)||{}):{},ps=ad.start?this._dISO(ad.start):'',today=this.todayISOStr();
+    if(r.st==='done'&&!r.date)iss.push('Done, no cast date');
+    if(r.date&&ps&&r.date<ps)iss.push('Cast before plan start');
+    const pf=this._elemPlanFinish(r.lv,r.zmk,r.type);
+    if(pf){if(r.st!=='done'&&pf.d<today)iss.push('Past plan finish, not done');if(r.st==='done'&&r.date&&r.date>pf.d)iss.push('Cast after plan finish');}
+    return iss;
+  }
   _regCan(){return this.rwsIsAdmin()||['NB','EB','MA'].some(c=>this.rwsHasScope(c));}
   _regOk(lv,zmk){return this.rwsIsAdmin()||(this._regCan()&&this.rwsScopeOk(lv,zmk));}
   _regZoneOk(lv,label){if(this.rwsIsAdmin())return true;const z=(((this.DATA.levels[lv]||{}).zones)||[]).find(x=>(x.label||x.mk)===label||String(x.mk||x.lid)===String(label));return !!z&&this.rwsScopeOk(lv,z.mk||z.lid);}
@@ -5518,15 +5534,18 @@ class Component extends DCLogic {
   _rgRender(){
     const root=document.getElementById('rgRoot');if(!root)return;
     const st=this._rg,esc=s=>this.esc(s);
+    if(st.type==='qty'){this._rgRenderQty();return;}
     const TYPES=this._regTypes();
     const ALLLV=st.lv==='__all';
     const _adm=this.rwsIsAdmin();
     const zones=ALLLV?[]:((this.DATA.levels[st.lv]||{}).zones||[]).filter(z=>_adm||this.rwsScopeOk(st.lv,z.mk||z.lid));
     const all=this._regRows().filter(r=>(ALLLV||r.lv===st.lv)&&r.type===st.type&&(_adm||this.rwsScopeOk(r.lv,r.zmk)));
     const q=String(st.q||'').trim().toUpperCase();
+    all.forEach(r=>{r.iss=this._regIssues(r);});
     const matched=all.filter(r=>(st.cat==='all'||r.cat===st.cat)
       &&(!st.zone||st.zone==='__all'||r.zone===st.zone)
-      &&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0));
+      &&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0)
+      &&(!st.bad||r.iss.length));
     const CAP=400,rows=matched.slice(0,CAP);
     const zoneNames=[];all.forEach(r=>{if(zoneNames.indexOf(r.zone)<0)zoneNames.push(r.zone);});zoneNames.sort();
     const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
@@ -5541,10 +5560,11 @@ class Component extends DCLogic {
       +(_adm?'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button>':'')+'<button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
       +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'All levels (through-elements listed per level)')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
-      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+'</select>'
+      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'Slab & area works')+'</select>'
       +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'All areas')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
       +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','All zones')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
       +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="Filter mark / zone" style="'+IN+';width:170px">'
+      +'<label style="display:inline-flex;gap:5px;align-items:center;font-weight:700;color:'+(st.bad?'var(--crit)':'var(--dim)')+'"><input type="checkbox" id="rgBad"'+(st.bad?' checked':'')+'> Problems only ('+all.filter(r=>r.iss.length).length+')</label>'
       +(()=>{
         /* The same column is recorded once on every level it runs through, so a count of rows is
            a count of pours, not of columns.  Both numbers are printed side by side, because
@@ -5574,9 +5594,17 @@ class Component extends DCLogic {
       +(()=>{const P=this._elemPurge();let n=0;Object.keys(P).forEach(k=>{if(k.split('||')[0]===st.lv)n+=P[k].length;});
         return n?'<button class="hbtn rgRestore" data-lv="'+esc(st.lv)+'" title="Restore or permanently clear elements deleted on this level">Deleted '+n+' · restore / clear</button>':'';})()+'</div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px">Each cell saves as you change it and syncs to every account. Untick <b>Keep</b> = the element no longer counts anywhere (map, zone list, Report, tiles); the drawing data is untouched and you can tick it back any time. Change <b>Zone</b> = move it to that zone; ticks and cast dates move with it. <b>%</b> = progress of the element — the same figure as in the zone panel.</div>';
+    h+=(()=>{
+      /* Zone count check (was Number check): the drawing take-off against the list kept here. */
+      const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'ls',lift:'ls',stair:'ls'})[st.type];if(!aid)return '';
+      const bad=(this._ncRows()||[]).filter(x=>x.aid===aid&&(ALLLV||x.lv===st.lv)&&(st.cat==='all'||x.cat===st.cat)&&x.reg>0&&x.reg!==x.els);
+      if(!bad.length)return '';
+      return '<div style="font-size:12px;border:1px solid var(--line);border-left:3px solid var(--crit);border-radius:6px;padding:6px 10px;margin-bottom:8px"><b>Count check</b> — the drawing take-off and this list differ in '+bad.length+' zone'+(bad.length===1?'':'s')+': '
+        +bad.slice(0,12).map(x=>esc((ALLLV?x.lv+' ':'')+x.zone)+' <b>'+x.els+'</b> listed / '+x.reg+' on drawing').join(' · ')+(bad.length>12?' …':'')
+        +'<div style="color:var(--dim);font-size:11px;margin-top:2px">Add the missing ones or untick Keep on the extras, so the list is the count you want.</div></div>';})();
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('% updated')+TH('Cast date')+TH('Plan finish')+TH('')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="12" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
+      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('% updated')+TH('Cast date')+TH('Plan finish')+TH('Check')+TH('')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="13" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
     rows.forEach(r=>{
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.custom?r.code:r.type)+'" data-id="'+esc(r.id)+'"'+(r.custom?' data-custom="1"':'');
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
@@ -5616,6 +5644,7 @@ class Component extends DCLogic {
             if(!pf)return '<span style="color:var(--faint)">—</span>';
             const iso=pf.d,src=pf.src,today=this.todayISOStr(),late=(r.st!=='done'&&iso<today)||(r.st==='done'&&r.date&&r.date>iso);
             return '<span title="'+(src==='zone'?'Zone plan end (no activity date set)':'Plan finish of this activity in the zone')+(late?(r.st==='done'?' · cast after plan':' · past plan, not done'):'')+'" style="'+(late?'color:var(--crit);font-weight:700':'')+'">'+esc(this._fmtD?this._fmtD(iso):iso)+(src==='zone'?' <span style="color:var(--faint);font-size:10px">zone</span>':'')+'</span>';})()+'</td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);font-size:11px;color:var(--crit);max-width:170px">'+(r.iss&&r.iss.length?r.iss.map(esc).join('<br>'):'<span style="color:#2e7d4f">✓</span>')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit)">✕</button></td>'
         +'</tr>';});
     h+='</tbody></table></div>';
@@ -5626,6 +5655,7 @@ class Component extends DCLogic {
     root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
+    {const bb=root.querySelector('#rgBad');if(bb)bb.onchange=e=>{st.bad=e.target.checked;re();};}
     {const qi=root.querySelector('#rgQ');qi.oninput=e=>{st.q=e.target.value;};
      qi.onchange=()=>re();qi.onkeydown=e=>{if(e.key==='Enter')re();};}
     {const ab=root.querySelector('#rgAdd');if(ab)ab.onclick=()=>{
@@ -5635,6 +5665,94 @@ class Component extends DCLogic {
     {const pb=root.querySelector('#rgPrefix');if(pb)pb.onclick=()=>this._rgRenumber(st,re);}
     {const vb=root.querySelector('#rgVsL2');if(vb)vb.onclick=()=>this._openL1vsL2(re);}
     this._bindRegHandlers(root,re);
+  }
+  /* Slab & area works in the register: one row per zone and activity.  Total defaults to the drawing
+     area (slab types) and can be typed; "Done to date" is cumulative — the change goes into the month
+     of the date given, so the Activities card, Report and monthly catch-up all move with it. */
+  _qtyRows(lv){
+    const out=[],M=this.ACT_MONTHS||[],_adm=this.rwsIsAdmin();
+    ((lv==='__all')?(this.DATA.order||[]):[lv]).forEach(L=>{const seen=new Set();
+      (((this.DATA.levels[L]||{}).zones)||[]).forEach(z=>{const zmk=z.mk||z.lid;if(seen.has(String(zmk)))return;seen.add(String(zmk));
+        if(!_adm&&!this.rwsScopeOk(L,zmk))return;
+        (this._actList(L,z)||[]).filter(a=>!this._elemAct(a.id)&&(a.custom||this._actApplies(a.id,L,z))).forEach(a=>{
+          const aid=a.id,k=L+'||'+zmk+'||'+aid,typed=(this._actTotal||{})[k],auto=this.actAutoTotal(L,zmk,aid),total=this.actTotal(L,zmk,aid,auto);
+          let done=0,anyD=false,first=-1,early=0;M.forEach((m,i)=>{const v=this.actDoneMonth(L,zmk,aid,m);if(v!=null){done+=(+v||0);anyD=true;}if(first<0&&this.actPlan(L,zmk,aid,m)!=null)first=i;});
+          if(first>0)M.slice(0,first).forEach(m=>{early+=(+this.actDoneMonth(L,zmk,aid,m)||0);});
+          if(!(total>0)&&!anyD&&auto==null)return;
+          const unit=a.unit||this._actUnit(aid),ad=this._actDateOf(L,zmk,aid)||{},h=(this._manpower||{})[k+'||qty_h'];
+          const pct=total>0?Math.round(done/total*100):null,stt=total>0&&done>=total?'done':(done>0?'wip':'todo');
+          const drawing=this._areaAid(aid)?(Number(z.area)||0):0,iss=[];
+          if(total>0&&done>total)iss.push('Done exceeds total by '+this.fmt(Math.round(done-total))+' '+unit);
+          if(early>0)iss.push('Done before plan start: '+this.fmt(Math.round(early))+' '+unit);
+          if(!(total>0)&&anyD)iss.push('Done but no total');
+          if(typed!=null&&drawing>0&&Math.abs(typed-drawing)>Math.max(1,drawing*0.01))iss.push('Total differs from drawing ('+this.fmt(drawing)+' m²)');
+          if(stt!=='done'&&ad.end&&this._dISO(ad.end)<this.todayISOStr())iss.push('Past plan finish, not done');
+          out.push({lv:L,zmk,zone:z.label||zmk,cat:z.cat||'NB',aid,label:a.label||aid,unit,total,typed:typed!=null,drawing,done:Math.round(done*100)/100,pct,st:stt,
+                    ps:ad.start?this._dISO(ad.start):'',pe:ad.end?this._dISO(ad.end):'',hist:Array.isArray(h)?h:[],iss});});});});
+    return out;
+  }
+  _qtySetDone(lv,zmk,aid,newCum,iso){
+    if(!(this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk))){this.rwsDeny('Outside your assigned zones.');return;}
+    const M=this.ACT_MONTHS||[],cur=M.reduce((n,m)=>n+(+this.actDoneMonth(lv,zmk,aid,m)||0),0),v=Number(newCum);if(!isFinite(v)||v<0)return;
+    let delta=Math.round((v-cur)*100)/100;if(!delta)return;const day=iso||this.todayISOStr(),m0=this.dateToActMonth(day);let i=M.indexOf(m0);if(i<0)i=M.length-1;
+    /* Add to the month of the date; a correction downwards takes from that month, then earlier ones. */
+    while(delta!==0&&i>=0){const m=M[i],have=+this.actDoneMonth(lv,zmk,aid,m)||0;let nv=Math.round((have+delta)*100)/100;
+      if(nv<0){delta=nv;nv=0;}else delta=0;if(nv!==have)this.setActDoneMonth(lv,zmk,aid,m,nv===0?'':String(nv));i--;}
+    const k=lv+'||'+zmk+'||'+aid+'||qty_h',u=this._rwsUser||{},e={d:day,v,by:u.display_name||u.username||''};this._manpower=this._manpower||{};
+    const h=Array.isArray(this._manpower[k])?this._manpower[k].slice():[];if(h.length&&h[h.length-1].d===e.d)h[h.length-1]=e;else h.push(e);this._manpower[k]=h;
+    try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(_){}if(typeof rwsSyncKV==='function')rwsSyncKV('manpower',k,h,lv,zmk);
+  }
+  _rgRenderQty(){
+    const root=document.getElementById('rgRoot');if(!root)return;const st=this._rg,esc=s=>this.esc(s),_adm=this.rwsIsAdmin(),ALLLV=st.lv==='__all';
+    const TYPES=this._regTypes(),opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
+    const TH=t=>'<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>';
+    const IN='font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:inherit',TD='padding:5px 8px;border-bottom:1px solid var(--line)';
+    const all=this._qtyRows(st.lv),q=String(st.q||'').trim().toUpperCase(),acts=[...new Set(all.map(r=>r.label))].sort();
+    const rows=all.filter(r=>(st.cat==='all'||r.cat===st.cat)&&(!st.zone||st.zone==='__all'||r.zone===st.zone)&&(!st.act||st.act==='__all'||r.label===st.act)
+      &&(!q||String(r.zone).toUpperCase().indexOf(q)>=0||String(r.label).toUpperCase().indexOf(q)>=0)&&(!st.bad||r.iss.length));
+    const zoneNames=[...new Set(all.map(r=>r.zone))].sort(),fd=d=>d?(this._fmtD?this._fmtD(d):d):'—',f=v=>this.fmt(Math.round((+v||0)*100)/100);
+    let h='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px"><div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1</div><div style="font-size:24px;font-weight:800;line-height:1.15">Element register</div></div><div><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
+      +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'All levels')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
+      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'Slab & area works')+'</select>'
+      +'<select id="rgAct" class="hbtn">'+opt('__all',st.act||'__all','All activities')+acts.map(a=>opt(a,st.act||'__all')).join('')+'</select>'
+      +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'All areas')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
+      +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','All zones')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
+      +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="Filter zone / activity" style="'+IN+';width:170px">'
+      +'<label style="display:inline-flex;gap:5px;align-items:center;font-weight:700;color:'+(st.bad?'var(--crit)':'var(--dim)')+'"><input type="checkbox" id="rgBad"'+(st.bad?' checked':'')+'> Problems only ('+all.filter(r=>r.iss.length).length+')</label>'
+      +'<span style="color:var(--dim)">Showing '+rows.length+' · total '+f(rows.reduce((n,r)=>n+(+r.total||0),0))+' · done '+f(rows.reduce((n,r)=>n+(+r.done||0),0))+'</span></div>';
+    h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px"><b>Total</b> = the zone\'s drawing area unless you type another figure (typed totals are marked). <b>Done to date</b> is cumulative: type the new figure and the date it was reached — the difference is booked to that date\'s month, so the Activities card, the Report and the monthly catch-up all follow.</div>';
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'+(ALLLV?TH('Level'):'')+TH('Activity')+TH('Zone')+TH('Area')+TH('Total')+TH('Done to date')+TH('As of')+TH('%')+TH('Status')+TH('Updated')+TH('Plan start')+TH('Plan finish')+TH('Check')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="13" style="padding:26px;text-align:center;color:var(--dim)">Nothing here.</td></tr>';
+    rows.slice(0,600).forEach(r=>{const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-a="'+esc(r.aid)+'"',last=r.hist.length?r.hist[r.hist.length-1]:null,late=r.st!=='done'&&r.pe&&r.pe<this.todayISOStr();
+      h+='<tr>'+(ALLLV?'<td style="'+TD+'"><b>'+esc(r.lv)+'</b></td>':'')
+        +'<td style="'+TD+';font-weight:700">'+esc(r.label)+'</td><td style="'+TD+'">'+esc(r.zone)+'</td><td style="'+TD+';color:var(--dim)">'+esc(r.cat)+'</td>'
+        +'<td style="'+TD+';white-space:nowrap">'+(_adm?'<input type="number" step="any" class="qTot" '+d+' value="'+(r.typed?r.total:'')+'" placeholder="'+(r.total>0?f(r.total):'—')+'" style="'+IN+';width:90px">':f(r.total))+' <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+(r.typed?' · typed':(r.drawing>0?' · drawing':''))+'</span></td>'
+        +'<td style="'+TD+';white-space:nowrap"><input type="number" step="any" min="0" class="qDone" '+d+' value="'+(r.done||'')+'" placeholder="0" style="'+IN+';width:90px"> <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
+        +'<td style="'+TD+'"><input type="date" class="qDate" '+d+' value="'+esc(this.todayISOStr())+'" style="'+IN+'"></td>'
+        +'<td style="'+TD+';font-weight:800">'+(r.pct==null?'—':r.pct+'%')+'</td>'
+        +'<td style="'+TD+'">'+esc(r.st)+'</td>'
+        +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+(last?'<a href="#" class="qHist" '+d+' title="'+esc((last.by?'by '+last.by+' · ':'')+'click for the history')+'" style="color:var(--accent);text-decoration:none">'+esc(fd(last.d))+(r.hist.length>1?' <span style="color:var(--faint)">('+r.hist.length+')</span>':'')+'</a>':'<span style="color:var(--faint)">—</span>')+'</td>'
+        +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+esc(fd(r.ps))+'</td>'
+        +'<td style="'+TD+';font-size:12px;white-space:nowrap'+(late?';color:var(--crit);font-weight:700':'')+'">'+esc(fd(r.pe))+'</td>'
+        +'<td style="'+TD+';font-size:11px;color:var(--crit);max-width:190px">'+(r.iss.length?r.iss.map(esc).join('<br>'):'<span style="color:#2e7d4f">✓</span>')+'</td></tr>';});
+    h+='</tbody></table></div>';root.innerHTML=h;
+    const re=()=>this._rgRender(),at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,a:e.target.dataset.a});
+    root.querySelector('#rgClose').onclick=()=>{const o=document.getElementById('__regGrid');if(o)o.remove();};
+    root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;st.zone='__all';re();};
+    root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;st.zone='__all';re();};
+    root.querySelector('#rgAct').onchange=e=>{st.act=e.target.value;re();};
+    root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
+    root.querySelector('#rgZone').onchange=e=>{st.zone=e.target.value;re();};
+    root.querySelector('#rgBad').onchange=e=>{st.bad=e.target.checked;re();};
+    {const qi=root.querySelector('#rgQ');qi.oninput=e=>{st.q=e.target.value;};qi.onchange=()=>re();qi.onkeydown=e=>{if(e.key==='Enter')re();};}
+    root.querySelectorAll('.qTot').forEach(i=>i.onchange=e=>{const a=at(e);this.setActTotal(a.lv,a.zmk,a.a,e.target.value);this.buildMetrics&&this.buildMetrics();re();});
+    root.querySelectorAll('.qDone').forEach(i=>i.onchange=e=>{const a=at(e),tr=e.target.closest('tr'),dt=tr&&tr.querySelector('.qDate');this._qtySetDone(a.lv,a.zmk,a.a,e.target.value,dt&&dt.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();re();});
+    root.querySelectorAll('.qHist').forEach(i=>i.onclick=e=>{e.preventDefault();const t=e.currentTarget,k=t.dataset.lv+'||'+t.dataset.zmk+'||'+t.dataset.a+'||qty_h',hh=(this._manpower||{})[k]||[];
+      const old=document.getElementById('__pctHist');if(old)old.remove();const ov=document.createElement('div');ov.id='__pctHist';ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px';
+      ov.innerHTML='<div style="background:var(--panel);color:var(--ink);border-radius:12px;min-width:300px;max-height:80vh;overflow:auto"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)"><b>Done-to-date history</b><button class="hbtn" id="__phX">Close</button></div><table style="width:100%;font-size:12.5px;border-collapse:collapse"><tr><th style="text-align:left;padding:6px 10px">As of</th><th style="text-align:right;padding:6px 10px">Done to date</th><th style="text-align:left;padding:6px 10px">By</th></tr>'
+        +hh.slice().reverse().map(x=>'<tr><td style="padding:4px 10px">'+esc(fd(x.d))+'</td><td style="padding:4px 10px;text-align:right;font-weight:800">'+f(x.v)+'</td><td style="padding:4px 10px;color:var(--dim)">'+esc(x.by||'')+'</td></tr>').join('')+'</table></div>';
+      document.body.appendChild(ov);ov.querySelector('#__phX').onclick=()=>ov.remove();ov.onclick=ev=>{if(ev.target===ov)ov.remove();};});
   }
   openRegisterImport(){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the register.');return;}
