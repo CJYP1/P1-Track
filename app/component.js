@@ -5118,6 +5118,8 @@ class Component extends DCLogic {
     /* Added by hand: just take it out of the added list. */
     const N=this._elemNew();let wasNew=false;
     if(N[k]){const j=N[k].findIndex(x=>this._colKey(x)===ck);if(j>=0){N[k].splice(j,1);if(!N[k].length)delete N[k];wasNew=true;this._saveElemNew();}}
+    /* A column placed on the map: remove the placement itself (this replaces the old Placed columns list). */
+    if(type==='col'&&this._colAdd&&this._colAdd[lv]){const a=this._colAdd[lv],j=a.findIndex(c=>this._colKey(c.id)===ck);if(j>=0){a.splice(j,1);if(!a.length)delete this._colAdd[lv];this.savePlacedCols&&this.savePlacedCols();wasNew=true;}}
     const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);
     const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
     if(z&&z[arrOf[type]]&&wasNew)z[arrOf[type]]=z[arrOf[type]].filter(x=>this._colKey((typeof x==='string')?x:x.id)!==ck);
@@ -5447,6 +5449,7 @@ class Component extends DCLogic {
        next rebuild puts the old mark back. */
     const N=this._elemNew(),nk=lv+'||'+zmk+'||'+type;
     if(N[nk]){const j=N[nk].findIndex(x=>this._colKey(x)===this._colKey(oldId));if(j>=0){N[nk][j]=newId;this._saveElemNew();}}
+    if(type==='col'&&this._colAdd&&this._colAdd[lv]){const c=this._colAdd[lv].find(c=>this._colKey(c.id)===this._colKey(oldId));if(c){c.id=newId;this._savePlacedColsRaw&&this._savePlacedColsRaw();}}
     this._migrateElemKey(oldKey,this.ekey(lv,z,type,newId));
     this.saveElem&&this.saveElem();
     this.render();
