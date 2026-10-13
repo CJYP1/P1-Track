@@ -358,6 +358,7 @@ class Component extends DCLogic {
     });
     try{this._applyElemNew();}catch(e){console.error('elem new',e);}
     try{this._pinColArea();}catch(e){console.error('pin col area',e);}
+    try{this._applyElemRename();}catch(e){console.error('elem rename',e);}
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
     try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
     try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
@@ -605,7 +606,7 @@ class Component extends DCLogic {
     return null;}
   _coreItemsFor(lv,zmk){const R=(this._appCfg&&this._appCfg.elemRetype)||{};return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]).filter(x=>{const id=typeof x==='string'?x:x.id;const to=R['core||'+this._colKey(id)];return !to||to==='core';});}
   _reconcileZoneCores(){this.__rangeCache=null;this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
-        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();this._mergeRenamedWalls&&this._mergeRenamedWalls();}catch(_e){}}
+        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();this._mergeRenamedWalls&&this._mergeRenamedWalls();this._applyElemRename&&this._applyElemRename();}catch(_e){}}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -638,6 +639,7 @@ class Component extends DCLogic {
       add.forEach(x=>{const id=typeof x==='string'?x:x.id;if(!dst.some(y=>this._idSameGroup(typeof y==='string'?y:y.id,id)))dst.push(x);});
       if(srcLv===lv)w.zone=target.label;
     });
+    try{this._applyElemRename&&this._applyElemRename();}catch(e){console.error('elem rename',e);}
   }
   colHtmlFor(lv,z){const zoneCrit=!!z.crit;
     const _isC=x=>{const id=(typeof x==='string')?x:(x&&x.id);return zoneCrit||!!(x&&x.c)||!!(this._marineCritSet&&this._marineCritSet.has(String(id||'').trim().toUpperCase()));};   /* critical = 整区关键 / 台账标的 / marine-col-map 标的 —— 与地图红色一致 */
@@ -5440,25 +5442,58 @@ class Component extends DCLogic {
     this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
     return true;
   }
+  /* Renames are kept as a map (settings.elemRename) and applied every time the zone lists are rebuilt
+     from the drawing / shapes — otherwise the old mark came back on the next rebuild and the new one
+     sat beside it as a second element.  Columns, core walls, lifts and stairs are renamed on every
+     level (same physical element); beams and pile caps only on the level they were renamed on. */
+  _elemRen(){const c=this._appCfg=this._appCfg||{};return c.elemRename=c.elemRename||{};}
+  _renScope(type,lv){return (type==='col'||type==='core'||type==='lift'||type==='stair')?'*':lv;}
+  _renMapFor(type,lv){const T=this._elemRen()[type]||{};return Object.assign({},T['*']||{},T[lv]||{});}
+  _applyElemRename(){
+    const R=this._elemRen();if(!Object.keys(R).length)return;
+    const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
+    const ren=(list,map)=>(list||[]).map(x=>{const id=typeof x==='string'?x:(x&&x.id);const n=id!=null?map[this._colKey(id)]:null;if(!n)return x;return typeof x==='string'?n:{...x,id:n};})
+      .filter((x,i,a)=>{const k=this._colKey(typeof x==='string'?x:x.id);return a.findIndex(y=>this._colKey(typeof y==='string'?y:y.id)===k)===i;});
+    (this.DATA.order||[]).forEach(lv=>{
+      Object.keys(R).forEach(type=>{const map=this._renMapFor(type,lv);if(!Object.keys(map).length)return;const arr=arrOf[type];if(!arr)return;
+        (((this.DATA.levels[lv]||{}).zones)||[]).forEach(z=>{if(z[arr])z[arr]=ren(z[arr],map);});
+        const sub=type==='core'?(this._coreZoneItems||{})[lv]:(type==='stair'?(this._stairZoneItems||{})[lv]:null);
+        if(sub)Object.keys(sub).forEach(k=>{sub[k]=ren(sub[k],map);});});});
+    /* Marine podium P-zone columns come from their own ledger */
+    {const map=this._renMapFor('col','L1');if(Object.keys(map).length&&this._marineCol)Object.keys(this._marineCol).forEach(P=>{this._marineCol[P]=ren(this._marineCol[P],map);});}
+  }
   _regRename(lv,zmk,type,oldId,newId){
     if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can rename elements.');return false;}
     newId=String(newId||'').trim();if(!newId||newId===oldId)return false;
     if(/[.。]+$/.test(newId))newId=this._dotFixId(newId);
-    const L=this.DATA.levels[lv],z=(L&&L.zones||[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return false;
-    const arrOf={};this._regTypes().forEach(([t,a])=>arrOf[t]=a);
-    const arr=z[arrOf[type]]||[];
-    const i=arr.findIndex(x=>this._colKey((typeof x==='string')?x:x.id)===this._colKey(oldId));
-    if(i<0)return false;
-    const oldKey=this.ekey(lv,z,type,oldId);
-    if(typeof arr[i]==='string')arr[i]=newId;else arr[i]={...arr[i],id:newId};
-    /* A rename that only exists in a store has to be recorded there too, or the
-       next rebuild puts the old mark back. */
-    const N=this._elemNew(),nk=lv+'||'+zmk+'||'+type;
-    if(N[nk]){const j=N[nk].findIndex(x=>this._colKey(x)===this._colKey(oldId));if(j>=0){N[nk][j]=newId;this._saveElemNew();}}
-    if(type==='col'&&this._colAdd&&this._colAdd[lv]){const c=this._colAdd[lv].find(c=>this._colKey(c.id)===this._colKey(oldId));if(c){c.id=newId;this._savePlacedColsRaw&&this._savePlacedColsRaw();}}
-    this._migrateElemKey(oldKey,this.ekey(lv,z,type,newId));
-    this.saveElem&&this.saveElem();
-    this.render();
+    const ok=this._colKey(oldId),scope=this._renScope(type,lv),R=this._elemRen(),T=R[type]=R[type]||{},M=T[scope]=T[scope]||{};
+    /* chain: anything that was renamed to the old mark now goes to the new one */
+    Object.keys(M).forEach(k=>{if(this._colKey(M[k])===ok)M[k]=newId;});
+    if(this._colKey(newId)!==ok)M[ok]=newId;
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemRename',R,null,null);
+    /* items added by hand / placed on the map carry the mark themselves */
+    const N=this._elemNew();let nDirty=false;Object.keys(N).forEach(k=>{const q=k.split('||');if(q[2]!==type||(scope!=='*'&&q[0]!==lv))return;N[k]=N[k].map(x=>{if(this._colKey(x)===ok){nDirty=true;return newId;}return x;});});if(nDirty)this._saveElemNew();
+    if(type==='col'&&this._colAdd){let d=false;Object.keys(this._colAdd).forEach(L=>{if(scope!=='*'&&L!==lv)return;(this._colAdd[L]||[]).forEach(c=>{if(this._colKey(c.id)===ok){c.id=newId;d=true;}});});if(d&&this._savePlacedColsRaw)this._savePlacedColsRaw();}
+    /* drawn shapes keep their label in step (admin only — the shapes are admin settings) */
+    if(this.rwsIsAdmin()&&(type==='core'||type==='lift'||type==='stair')){const key=type==='core'?'coreWalls':'lifts',S=(this._appCfg||{})[key]||{};let d=false;
+      Object.keys(S).forEach(L=>(S[L]||[]).forEach(w=>{if(w&&this._colKey(w.id)===ok){w.id=newId;d=true;}}));
+      if(d&&typeof rwsSyncKV==='function')rwsSyncKV('settings',key,S,null,null);}
+    /* Keep / drop entries */
+    {const D=this._elemDrop();let d=false;Object.keys(D).forEach(k=>{const q=k.split('||');if(q[2]!==type||(scope!=='*'&&q[0]!==lv))return;D[k]=D[k].map(x=>{if(this._colKey(x)===ok){d=true;return newId;}return x;});});
+      if(d&&typeof rwsSyncKV==='function')rwsSyncKV('settings','elemDrop',D,null,null);}
+    /* status, cast date, % and its history follow the new mark on every level it covers */
+    const E=this.elem||{},DT=this._elemDate||{},keys=new Set([...Object.keys(E),...Object.keys(DT)]);
+    keys.forEach(k=>{const q=k.split('||');if(q.length!==4||q[2]!==type||this._colKey(q[3])!==ok||(scope!=='*'&&q[0]!==lv))return;this._migrateElemKey(k,q[0]+'||'+q[1]+'||'+type+'||'+newId);});
+    const MP=this._manpower||{};Object.keys(MP).forEach(k=>{const q=k.split('||');if(q.length<6||q[3]!=='pour_elem'||q[4]!==type||(scope!=='*'&&q[0]!==lv))return;let id;try{id=decodeURIComponent(q[5]);}catch(e){id=q[5];}if(this._colKey(id)!==ok)return;
+      const nk=q.slice(0,5).join('||')+'||'+encodeURIComponent(newId)+(q.length>6?'||'+q.slice(6).join('||'):'');if(MP[nk]==null)MP[nk]=MP[k];delete MP[k];
+      if(typeof rwsSyncKV==='function'){rwsSyncKV('manpower',nk,MP[nk],q[0],q[1]);rwsSyncKV('manpower',k,null,q[0],q[1]);}});
+    try{localStorage.setItem('rws_manpower',JSON.stringify(MP));}catch(e){}
+    this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();
+    this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;
+    try{this._reconcileZoneCores&&this._reconcileZoneCores();this._reconcileZoneStairs&&this._reconcileZoneStairs();}catch(e){}
+    this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();this.render();
+    this._toast(oldId+' → '+newId+(scope==='*'?' (all levels)':' ('+lv+')'));
     return true;
   }
   _regSetKeep(lv,zmk,type,id,keep){

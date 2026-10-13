@@ -26,7 +26,7 @@ begin
          or not (coalesce(s.allowed_scopes,'[]'::jsonb) ? report_area) then
         raise exception 'not permitted: Report Edit + matching area required';
       end if;
-    elsif p_store = 'settings' and p_k in ('elemDrop','elemGone','elemMove','elemNew','elemPurge','elemRetype','hideCols','hideColsUndo','placedCols') then
+    elsif p_store = 'settings' and p_k in ('elemDrop','elemGone','elemMove','elemNew','elemPurge','elemRetype','hideCols','hideColsUndo','placedCols','elemRename') then
       -- Element register: NB / EB / MA accounts may edit it too.  The page only shows and
       -- changes rows in the account's own area(s).
       if not (coalesce(s.allowed_scopes,'[]'::jsonb) ?| array['NB','EB','MA']) then
