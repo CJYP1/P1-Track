@@ -5686,6 +5686,9 @@ class Component extends DCLogic {
           if(early>0)iss.push('Done before plan start: '+this.fmt(Math.round(early))+' '+unit);
           if(!(total>0)&&anyD)iss.push('Done but no total');
           if(typed!=null&&drawing>0&&Math.abs(typed-drawing)>Math.max(1,drawing*0.01))iss.push('Total differs from drawing ('+this.fmt(drawing)+' m²)');
+          /* Before the drawing area became the total, the total was the sum of the monthly plan.  Where the two
+             differ the % moved, so flag it (L5 left out for now — its zoning is still being settled). */
+          if(typed==null&&drawing>0&&auto!=null&&L!=='L5'&&Math.abs(auto-drawing)>Math.max(1,drawing*0.01))iss.push('Plan qty '+this.fmt(Math.round(auto))+' ≠ drawing '+this.fmt(Math.round(drawing))+' m² — type the right Total');
           if(stt!=='done'&&ad.end&&this._dISO(ad.end)<this.todayISOStr())iss.push('Past plan finish, not done');
           out.push({lv:L,zmk,zone:z.label||zmk,cat:z.cat||'NB',aid,label:a.label||aid,unit,total,typed:typed!=null,drawing,done:Math.round(done*100)/100,pct,st:stt,
                     ps:ad.start?this._dISO(ad.start):'',pe:ad.end?this._dISO(ad.end):'',hist:Array.isArray(h)?h:[],iss});});});});
