@@ -2685,8 +2685,10 @@ class Component extends DCLogic {
     const has=(this._reportZones(lv,cat)||[]).some(z=>/CIS/i.test(String(z.label||'')+' '+String(z.mk||'')));
     return (this._cisLvCache[k]=has);
   }
-  _reportZoneOk(z,cat,filter){if(cat&&(z.cat||'NB')!==cat)return false;
-    if(this._reportZoneDropped(z,cat))return false;
+  _reportZoneOk(z,cat,filter,aid){if(cat&&(z.cat||'NB')!==cat)return false;
+    /* Element counts (columns, beams, pile caps, core walls…) follow the Element register: whatever is
+       kept there counts, whichever zone it sits in.  The M-SLAB / capping-beam exclusion is for areas only. */
+    if(!(aid&&this._elemAct(aid))&&this._reportZoneDropped(z,cat))return false;
     const _isCis=()=>/CIS/i.test(String(z.label||'')+' '+String(z.mk||''));
     if(filter==='cis')return _isCis();
     /* The whole level's slab with the CIS zones taken out. */
@@ -2703,9 +2705,9 @@ class Component extends DCLogic {
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
   /* m² Report activities use the full applicable zone area as their denominator.
      This includes not-yet-scheduled zones and keeps Marine Top/Bottom/Podium scopes separate. */
-  _reportAreaTotal(levels,aid,cat,filter){if(['slab_pile','slab','slab_top'].indexOf(aid)<0)return null;let total=0,any=false;(levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const a=Number(z.area);if(Number.isFinite(a)&&a>0){total+=a;any=true;}}));return any?total:null;}
+  _reportAreaTotal(levels,aid,cat,filter){if(['slab_pile','slab','slab_top'].indexOf(aid)<0)return null;let total=0,any=false;(levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter,aid)||!this._reportAidApplies(lv,z,aid))return;const a=Number(z.area);if(Number.isFinite(a)&&a>0){total+=a;any=true;}}));return any?total:null;}
   _catchupPlan(levels,aid,cat,filter){const asOf=this._reportToday();let planned=0,total=0,end=null;
-    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid,d=(this._actDate||{})[lv+'||'+zmk+'||'+aid]||{};let any=false,zt=0,zp=0;
+    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter,aid)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid,d=(this._actDate||{})[lv+'||'+zmk+'||'+aid]||{};let any=false,zt=0,zp=0;
       this.ACT_MONTHS.forEach(m=>{const q=this.actPlan(lv,zmk,aid,m);if(q==null)return;any=true;zt+=(+q||0);zp+=(+q||0)*this._reportPlanFraction(m,d.start,d.end,asOf);});
       /* Catch-Up 只能来自明确填写的月度 Plan。Total 是分母，不能把没有 Plan 的余量自动补成“计划已到期”。 */
       total+=zt;planned+=zp;
@@ -2714,7 +2716,7 @@ class Component extends DCLogic {
     return {planned:Math.min(total,planned),total,end,asOf};}
   _catchupActual(levels,aid,cat,filter){
     const elems={},isPour=aid==='ls'||aid==='act_corewall'||this._pctAid(aid),refs=[];let refs0Typed=false;
-    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>refs.push({lv,zmk,z,r}));});});
+    (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{if(!this._reportZoneOk(z,cat,filter,aid)||!this._reportAidApplies(lv,z,aid))return;const zmk=z.mk||z.lid;this._activityElemRefs(lv,zmk,aid,z).forEach(r=>refs.push({lv,zmk,z,r}));});});
     /* Core/Lift/Stair is reported by core wall wherever a core exists.  Members
        can sit in a different Zone from their core, so this must be resolved over
        the whole selected report scope rather than one Zone at a time. */
@@ -2756,7 +2758,7 @@ class Component extends DCLogic {
        up.  Capping only the level sum let a zone recorded above its area (or recorded twice) fill
        the gap of a zone that has not been poured — B1 slab read 100% with zones still open.  The
        zones not yet complete are returned so the Report can name them. */
-    const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal;const open=[],seenZ=new Set(); (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(seenZ.has(lv+'||'+zmk))return;seenZ.add(lv+'||'+zmk); const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid)); if(areaTotal==null&&t)total+=(+t||0); const zt=(areaTotal!=null)?(Number(z.area)||0):(Number(t)||0); let zd=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)zd+=(+d||0);}); if(zt>0){zd=Math.min(zd,zt);if(zd<zt-0.5)open.push(lv+' '+(z.label||zmk)+': '+Math.round(zd).toLocaleString()+' / '+Math.round(zt).toLocaleString());} done+=zd; }); }); done=total>0?Math.min(done,total):done;return {done,total,pct:this._reportPct(done,total),open}; }
+    const areaTotal=this._reportAreaTotal(levels,aid,cat,filter);let done=0,total=areaTotal==null?0:areaTotal;const open=[],seenZ=new Set(); (levels||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{ if(!this._reportZoneOk(z,cat,filter,aid)||!this._reportAidApplies(lv,z,aid))return; const zmk=z.mk||z.lid; if(seenZ.has(lv+'||'+zmk))return;seenZ.add(lv+'||'+zmk); const t=this.actTotal(lv,zmk,aid,this.actAutoTotal(lv,zmk,aid)); if(areaTotal==null&&t)total+=(+t||0); const zt=(areaTotal!=null)?(Number(z.area)||0):(Number(t)||0); let zd=0; this.ACT_MONTHS.forEach(m=>{const d=this.actDoneMonth(lv,zmk,aid,m); if(d)zd+=(+d||0);}); if(zt>0){zd=Math.min(zd,zt);if(zd<zt-0.5)open.push(lv+' '+(z.label||zmk)+': '+Math.round(zd).toLocaleString()+' / '+Math.round(zt).toLocaleString());} done+=zd; }); }); done=total>0?Math.min(done,total):done;return {done,total,pct:this._reportPct(done,total),open}; }
   /* A report is only 100% when its recorded done quantity has actually reached
      the full scope.  Flooring incomplete percentages prevents 99.5%+ from
      being presented as complete (for example B1 slab 17,359 / 17,378). */
@@ -2787,7 +2789,7 @@ class Component extends DCLogic {
     if(!this._elemAct(aid))return null;
     const seen=new Set();let n=0;
     (levels||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{
-      if(!this._reportZoneOk(z,cat,filter)||!this._reportAidApplies(lv,z,aid))return;
+      if(!this._reportZoneOk(z,cat,filter,aid)||!this._reportAidApplies(lv,z,aid))return;
       const zmk=z.mk||z.lid;
       (this._activityElemRefs(lv,zmk,aid,z)||[]).forEach(r=>{
         const k=r.key||(lv+'||'+zmk+'||'+aid+'||'+r.id);
@@ -5270,7 +5272,6 @@ class Component extends DCLogic {
     const aid=({col:'col',pile:'pile',beam:'mbeam',cbeam:'cbeam',core:'act_corewall',lift:'ls',stair:'ls'})[r.type];
     const ad=aid?(this._actDateOf(r.lv,r.zmk,aid)||{}):{},ps=ad.start?this._dISO(ad.start):'',today=this.todayISOStr();
     if(r.st==='done'&&!r.date)iss.push('Done, no cast date');
-    if(!r.pod&&this._reportZoneDropped({label:r.zone},r.cat))iss.push('Zone not counted in the '+r.cat+' Report (M-SLAB / capping beam) — move it to a counted zone if it belongs to '+r.cat);
     if(r.type==='col'&&!r.pod){const up=this._upLevels(r.lv);if(up.length){this._upSets=this._upSets||{};const nk=id=>this._colKey(String(id).replace(/^\s*(WF|MK)\s*-/i,''));
       let set=this._upSets[r.lv];if(!set){set=this._upSets[r.lv]=new Set();up.forEach(U=>((this.DATA.levels[U]||{}).zones||[]).forEach(z=>this._zoneElemList(z,'col').forEach(x=>set.add(nk(typeof x==='string'?x:x.id)))));}
       if(!set.has(nk(r.id)))iss.push('Not on '+up.join(' / ')+' — does it continue up?');}}
@@ -5629,8 +5630,8 @@ class Component extends DCLogic {
           +(matched.length>rows.length?' / '+matched.length:'')
           +' \u00b7 kept '+kept+' \u00b7 done '+done
           +(()=>{/* what the Report counts from these rows: kept, outside M-SLAB / capping-beam zones, each mark once */
-            const inR=new Map();matched.forEach(r=>{if(r.keep!=='Y'||r.custom)return;if(!r.pod&&this._reportZoneDropped({label:r.zone},r.cat))return;const k=r.lv+'|'+String(r.id).trim().toUpperCase();const o=inR.get(k)||{d:false};if(r.st==='done')o.d=true;inR.set(k,o);});
-            const n=inR.size,nd=[...inR.values()].filter(o=>o.d).length;return n!==kept?' \u00b7 <b title="Rows in M-SLAB / capping-beam zones (not in the NB Report) and marks listed twice are left out">in Report '+n+' \u00b7 done '+nd+'</b>':'';})()
+            const inR=new Map();matched.forEach(r=>{if(r.keep!=='Y'||r.custom)return;const k=r.lv+'|'+String(r.id).trim().toUpperCase();const o=inR.get(k)||{d:false};if(r.st==='done')o.d=true;inR.set(k,o);});
+            const n=inR.size,nd=[...inR.values()].filter(o=>o.d).length;return n!==kept?' \u00b7 <b title="A mark listed in two zones is counted once in the Report">in Report '+n+' \u00b7 done '+nd+'</b>':'';})()
           +(dup>0?' \u00b7 <b style="color:var(--txt)">distinct marks '+marks.size+'</b>':'')
           +'</span>'
           +(dup>0?'<span title="A through-column has one row on each level it passes: '+base.length
