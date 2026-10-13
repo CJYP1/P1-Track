@@ -2312,7 +2312,12 @@ class Component extends DCLogic {
   /* ---- Monthly-plan overview: which zones have planned work in a given month ---- */
   _actUnit(id,fallback){const u={earth:'m³',exc:'m³',demo_wall:'m³',demo:'m³',rc:'m³',slab_pile:'m²',slab:'m²',slab_top:'m²',pcbeam:'m²',act_cyclical:'m²',piling:'nos',pile:'nos',col:'nos',ls:'nos',mbeam:'nos',cbeam:'nos',act_corewall:'nos',act_wall:'nos',temp_stair:'nos',mep_acmv:'%',mep_fps:'%',mep_elec:'%',mep_bms:'%'};return u[id]||fallback||'';}
   _actMeta(){const a=[{id:'earth',label:'Earthwork'},{id:'exc',label:'Excavation'},{id:'piling',label:'Piling'},{id:'demo_wall',label:'Demolished Wall'},{id:'demo',label:'Slab Demolition'},{id:'slab_pile',label:'Slab + Pilecap'},{id:'pile',label:'Pilecap'},{id:'col',label:'Column'},{id:'ls',label:'Lift/Stairs Wall'},{id:'mbeam',label:'Steel Main Beam'},{id:'cbeam',label:'Cast Steel Main Beam'},{id:'slab',label:'Slab'},{id:'slab_top',label:'Top Slab'},{id:'act_corewall',label:'Core Wall'},{id:'act_wall',label:'Wall'},{id:'rc',label:'RC Works'},{id:'pcbeam',label:'Precast Beam Installation'},{id:'temp_stair',label:'Temp Staircase'},{id:'act_cyclical',label:'Cyclical Works'},{id:'mep_acmv',label:'ACMV'},{id:'mep_fps',label:'FPS'},{id:'mep_elec',label:'ELEC'},{id:'mep_bms',label:'BMS'}].map(x=>({...x,unit:this._actUnit(x.id)}));(this._actDefs||[]).forEach(d=>{if(d.id==='act_colcorbel'||a.some(x=>x.id===d.id))return;a.push({id:d.id,label:d.label,unit:this._actUnit(d.id,d.unit)});});return a;}
-  planMonth(){if(!this._planMonth||this.visMonths().indexOf(this._planMonth)<0)this._planMonth=this.actDefaultMonthVis();return this._planMonth;}
+  /* The first render happens before the login is restored, when only the months visible to site users
+     exist (cut-off Aug'26), so the map stuck on Aug'26 after F5 even for admin.  A month the app picked
+     by itself is re-picked whenever the visible months change; a month someone chose is kept. */
+  planMonth(){const auto=this._planMonthAuto&&this._planMonth===this._planMonthAuto;
+    if(!this._planMonth||auto||this.visMonths().indexOf(this._planMonth)<0){this._planMonth=this.actDefaultMonthVis();this._planMonthAuto=this._planMonth;}
+    return this._planMonth;}
   zonePlanItems(lv,z,m){const zmk=z.mk||z.lid,mi=this.ACT_MONTHS.indexOf(m),out=[];this._actMeta().forEach(a=>{if(this.actHidden(lv,zmk,a.id))return;const p=this.actPlan(lv,zmk,a.id,m);if(p!=null&&p>0){const d=this.actDoneMonth(lv,zmk,a.id,m)||0,cg=mi>=0?this.actCarry(lv,zmk,a.id,mi):null;out.push({label:a.label,qty:p,unit:a.unit,done:d,owed:cg?Math.max(0,cg.balance):Math.max(0,p-d),achieved:cg?cg.balance<=0:d>=p});}});return out;}
   zoneHasPlan(lv,z,m){return this.zonePlanItems(lv,z,m).length>0;}
   zonePlanStarted(lv,z,m){const zmk=z.mk||z.lid;return this._actMeta().some(a=>{const d=this.actDoneMonth(lv,zmk,a.id,m);return d!=null&&d>0;});}
@@ -8243,7 +8248,7 @@ class Component extends DCLogic {
     const lv=this.curLevel, zmk=z.mk||z.lid;
     const canEdit=this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk), admin=this.rwsIsAdmin();
     const c=z.counts||{}, M=this.visMonths();
-    if(!this._actMonth||M.indexOf(this._actMonth)<0)this._actMonth=this.actDefaultMonthVis();
+    if(!this._actMonth||M.indexOf(this._actMonth)<0||(this._actMonthAuto&&this._actMonth===this._actMonthAuto)){this._actMonth=this.actDefaultMonthVis();this._actMonthAuto=this._actMonth;}
     const sm=this._actMonth, mi=M.indexOf(sm), curL=this.actCurLabel();
     const acts=this._actList(lv,z);
     /* 管理员先看仍有欠量的活动；其次才是本月有 Plan/Done 的活动。 */
