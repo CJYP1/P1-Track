@@ -205,7 +205,10 @@ class Component extends DCLogic {
   /* The upper-floor zone geometry was cloned from L2 and its beam IDs therefore still carry
      the L2 drawing prefix in the source data.  Keep that legacy ID as the storage key (so
      existing status/date records remain linked), but show the correct floor drawing mark. */
-  _elemDisplayId(lv,type,id){const raw=String(id==null?'':id);if(type!=='beam'&&type!=='cbeam')return raw;const m=String(lv||'').match(/^L([345])$/i);if(!m)return raw;return raw.replace(/^2HB/i,m[1]+'H').replace(/^2VB/i,m[1]+'V');}
+  /* Display names: the mark stays the same everywhere (keys, groups, history); only what is shown changes. */
+  _dispNames(){const d={'CW08':'CW08(LIFT 1/2)','LW7':'LW7(LIFT 3/4)'};return Object.assign(d,(this._appCfg&&this._appCfg.dispNames)||{});}
+  _dispName(id){const s=String(id==null?'':id),D=this._dispNames(),k=s.trim().toUpperCase();return D[k]||s;}
+  _elemDisplayId(lv,type,id){const raw=this._dispName(id);if(type!=='beam'&&type!=='cbeam')return raw;const m=String(lv||'').match(/^L([345])$/i);if(!m)return raw;return raw.replace(/^2HB/i,m[1]+'H').replace(/^2VB/i,m[1]+'V');}
   _actElemSec(lv,z,aid){
     /* 计入 unticked (or deleted) = gone from the activity's element list too. */
     {const _zm=z.mk||z.lid,_k=(t,a)=>(a||[]).filter(x=>!(this._elemDropped&&this._elemDropped(lv,_zm,t,(typeof x==='string')?x:x.id)));
@@ -2765,7 +2768,7 @@ class Component extends DCLogic {
       else{if(done)o.done=true;if(isPour)o.pct=Math.max(o.pct,pv==null?(done?100:0):pv);}});
     if(Object.keys(elems).length){
       const all=Object.values(elems); if(all.length){const total=all.length,done=isPour?all.reduce((n,x)=>n+x.pct/100,0):all.filter(x=>x.done).length;
-        const items=Object.keys(elems).map(k=>{const q=k.split('||');return q[2]==='coregrp'?('Core '+q[3]):((q[2]==='stair'?'Stair ':q[2]==='core'?'Core ':q[2]+' ')+q[3]);});
+        const items=Object.keys(elems).map(k=>{const q=k.split('||');return q[2]==='coregrp'?('Core '+this._dispName(q[3])):((q[2]==='stair'?'Stair ':q[2]==='core'?'Core ':q[2]+' ')+q[3]);});
         return {done,total,pct:this._reportPct(done,total),pour:isPour&&!this._pctAid(aid),items};   /* columns / beams / pile caps read as done / total nos (partial % counted in), not 'x% pouring' */} }
     /* Quantities: each zone's done is capped at that zone's own scope before the zones are added
        up.  Capping only the level sum let a zone recorded above its area (or recorded twice) fill
@@ -5700,7 +5703,7 @@ class Component extends DCLogic {
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.custom?r.code:r.type)+'" data-id="'+esc(r.id)+'"'+(r.custom?' data-custom="1"':'');
       h+='<tr'+(r.keep==='N'?' style="opacity:.55"':'')+'>'
         +(ALLLV?'<td style="padding:5px 8px;border-bottom:1px solid var(--line);font-family:ui-monospace,monospace"><b>'+esc(r.lv)+'</b></td>':'')
-        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap"><input class="rgId" '+d+' value="'+esc(r.id)+'"'+(r.custom?' readonly title="Added in the zone panel (+ List) — rename it there"':'')+' style="'+IN+';width:150px;font-weight:700">'+(r.custom?' <span style="font-size:10px;color:var(--faint)">added in zone</span>':'')
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap"><input class="rgId" '+d+' value="'+esc(r.id)+'"'+(r.custom?' readonly title="Added in the zone panel (+ List) — rename it there"':'')+' style="'+IN+';width:150px;font-weight:700">'+(r.custom?' <span style="font-size:10px;color:var(--faint)">added in zone</span>':'')+(this._dispName(r.id)!==r.id?' <span style="font-size:10.5px;color:var(--dim);font-weight:700" title="Shown as this everywhere; the mark itself stays '+esc(r.id)+'">'+esc(this._dispName(r.id))+'</span>':'')
           +(r.type==='col'&&!ALLLV&&!r.custom&&!r.pod?' <select class="rgCopyLv" '+d+' title="Also put this column on another level (same position on the plan)" style="'+IN+';width:auto;margin-left:4px"><option value="">+ level</option>'+(this.DATA.order||[]).filter(x=>x!==r.lv).map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('')+'</select>':'')
           +((r.type==='core'||r.type==='lift'||r.type==='stair')
             ?' <select class="rgKind" '+d+' title="Change the type: changed on every level, with ticks, cast dates and pour % carried over" style="'+IN+';width:auto;margin-left:4px">'
@@ -7562,7 +7565,7 @@ class Component extends DCLogic {
     ov.querySelector('#__pk_free').addEventListener('click',()=>{close();onFree&&onFree();});
     ov.querySelectorAll('.__pk').forEach(el=>el.addEventListener('click',()=>{const it=items[+el.dataset.i];close();onPick&&onPick(it);}));
   }
-  _shapeLabel(w){return this._lw8Name(w.id||((w.link&&w.link.id)||''));}
+  _shapeLabel(w){return this._dispName(this._lw8Name(w.id||((w.link&&w.link.id)||'')));}
   /* Belt and braces for the renames: a shape whose stored name came back from the cloud after the
      migration ran is still drawn and matched under its new name — LW8 as ST3, CW8 as Lift 1/2. */
   _lw8Name(v){return String(v==null?'':v).replace(/\bLW8\b/g,'ST3').replace(/\bCW8\b/g,'CW08').replace(/\bLift 1\/2\b/g,'CW08');}
@@ -7570,7 +7573,7 @@ class Component extends DCLogic {
   _idSameGroup(a,b){const A=this._idAliasSet(a),B=this._idAliasSet(b);for(const x of A)if(B.has(x))return true;return false;}
   /* 元素 id → 它所属的 Core Wall 编号(反查 CW_GROUPS, 含拼写变体) */
   _cwOf(id){if(!id)return '';if(!this.__cwRev){this.__cwRev={};const G=(typeof window!=='undefined'&&window.CW_GROUPS)||{};for(const cw in G){const g=G[cw]||{};[...(g.lifts||[]),...(g.stairs||[]),...(g.cores||[])].forEach(x=>{if(!this.__cwRev[x])this.__cwRev[x]=cw;});}}return this.__cwRev[id]||'';}
-  _cwTag(id){const cw=this._cwOf(id);return cw?`<span class="cwtag" title="Part of core wall ${this.esc(cw)}" style="display:inline-block;background:rgba(34,197,94,.16);color:#15803d;border:1px solid rgba(34,197,94,.55);border-radius:5px;padding:0 5px;font-size:9px;font-weight:800;margin-left:6px;vertical-align:middle">${this.esc(cw)}</span>`:'';}
+  _cwTag(id){const cw0=this._cwOf(id),cw=cw0?this._dispName(cw0):cw0;return cw?`<span class="cwtag" title="Part of core wall ${this.esc(cw)}" style="display:inline-block;background:rgba(34,197,94,.16);color:#15803d;border:1px solid rgba(34,197,94,.55);border-radius:5px;padding:0 5px;font-size:9px;font-weight:800;margin-left:6px;vertical-align:middle">${this.esc(cw)}</span>`:'';}
   /* 按名字自动匹配数据: 扫【整层所有区】找这个 CW 组的成员(查 window.CW_GROUPS)或名字直接对上的元素 id。
      不再只看形状重心落在哪个区 —— 画偏一点也能对上。 */
   _autoLinks(w,lv){if(w&&w.links&&w.links.length)return w.links;if(w&&w.link)return[w.link];
@@ -8051,7 +8054,7 @@ class Component extends DCLogic {
       const idHtml=this._idSpanMaybeCol(id,displayId,z,lv);
       const cwTag=(type==='lift'||type==='stair')?this._cwTag(id):'';
       const _pa=this._pourAidOfType(type),_isPour=!!_pa,_zmk=z.mk||z.lid,_coveredCore=(type==='lift'||type==='stair')?this._lsMemberCore(z,id):'',_pv=(_isPour&&!_coveredCore)?this.elemPourPct(lv,_zmk,_pa,type,id):null,_canPour=_isPour&&!_coveredCore&&(this.rwsIsAdmin()||this.rwsScopeOk(lv,_zmk));
-      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(_coveredCore)}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="${_pa==='ls'?'Three-pour progress for this individual item':'Progress of this item (e.g. rebar / formwork done, not yet cast)'}"><span>${_pa==='ls'?'Pour':'Progress'}</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="${_pa}" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
+      const _pourCtl=_coveredCore?`<span class="elem-pour-read" title="This item is included in the Core Wall progress and is not counted again">Included in ${this.esc(this._dispName(_coveredCore))}</span>`:(!_isPour?'':(_canPour?`<label class="elem-pour" title="${_pa==='ls'?'Three-pour progress for this individual item':'Progress of this item (e.g. rebar / formwork done, not yet cast)'}"><span>${_pa==='ls'?'Pour':'Progress'}</span><input type="number" min="0" max="100" step="1" class="elem-pour-in" data-a="${_pa}" data-type="${this.esc(type)}" data-id="${this.esc(id)}" value="${_pv==null?'':_pv}" placeholder="%"><b>%</b></label>`:(_pv==null?'':`<span class="elem-pour-read">Pour ${_pv}%</span>`)));
       return `<div class="idrow ${crit?'crit':''}">${idHtml}${cwTag}<span class="meta">${metaFn?metaFn(x):''}</span>${_pourCtl}${this.elChip(key)}${dc}</div>`;}).join('');}
 
   /* ---------- schedule-record (ZP) integration — enriches the detail panel only; map unchanged ---------- */
