@@ -5580,22 +5580,45 @@ class Component extends DCLogic {
   _podLabels(){const S=this.SUBZONES&&this.SUBZONES.L1;return ((S&&S.P)||[]).map(e=>e.label);}
   /* Marine L1 columns live in the podium ledger (_marineCol, by P zone).  A move there is kept in
      elemMove like any other (L1||col||mark → P label) and re-applied whenever the ledger is rebuilt. */
+  /* L1 columns can sit in Marine's podium ledger (_marineCol, by P zone) or in a map zone.  A move
+     between the two (or between P zones) is kept in elemMove like any other (L1||col||mark → target)
+     and re-applied whenever the ledger or the zones are rebuilt. */
+  _l1ColZoneOpts(){const P=this._podLabels(),Z=(((this.DATA.levels.L1||{}).zones)||[]).filter(z=>!((z.cat||'NB')==='MA'&&!z._pod)).map(z=>z.label||z.mk);return P.concat(Z.filter(x=>P.indexOf(x)<0));}
+  _moveElemData(lv,fromZmk,toZmk,type,id){
+    this._migrateElemKey(lv+'||'+fromZmk+'||'+type+'||'+id,lv+'||'+toZmk+'||'+type+'||'+id);
+    const ck=this._colKey(id),MP=this._manpower||{};let d=false;
+    Object.keys(MP).forEach(m=>{const q=m.split('||');if(q[0]!==lv||q[1]!==fromZmk||q[3]!=='pour_elem'||q[4]!==type)return;let eid;try{eid=decodeURIComponent(q[5]);}catch(e){eid=q[5];}if(this._colKey(eid)!==ck)return;
+      const nk=[lv,toZmk].concat(q.slice(2)).join('||');if(MP[nk]==null)MP[nk]=MP[m];delete MP[m];d=true;
+      if(typeof rwsSyncKV==='function'){try{rwsSyncKV('manpower',nk,MP[nk],lv,toZmk);rwsSyncKV('manpower',m,null,lv,fromZmk);}catch(e){}}});
+    if(d){try{localStorage.setItem('rws_manpower',JSON.stringify(MP));}catch(e){}}
+  }
   _applyPodMoves(){
-    const MC=this._marineCol;if(!MC)return;const mv=this._elemMoves(),P=new Set(Object.keys(MC));let touched=false;
-    Object.keys(mv).forEach(k=>{const q=k.split('||');if(q[0]!=='L1'||q[1]!=='col'||!P.has(mv[k]))return;const to=mv[k],ck=q.slice(2).join('||');
-      let it=null,from=null;Object.keys(MC).forEach(pl=>{const i=(MC[pl]||[]).findIndex(c=>this._colKey(typeof c==='string'?c:(c&&c.id))===ck);if(i>=0&&pl!==to){it=MC[pl][i];from=pl;MC[pl].splice(i,1);}});
-      if(!it)return;const id=typeof it==='string'?it:it.id;
-      if(!(MC[to]||[]).some(c=>this._colKey(typeof c==='string'?c:(c&&c.id))===ck))(MC[to]=MC[to]||[]).push(it);
-      this._migrateElemKey('L1||L1|'+from+'||col||'+id,'L1||L1|'+to+'||col||'+id);
-      const MP=this._manpower||{};Object.keys(MP).forEach(m=>{const s2=m.split('||');if(s2[0]!=='L1'||s2[1]!=='L1|'+from||s2[3]!=='pour_elem'||s2[4]!=='col')return;let eid;try{eid=decodeURIComponent(s2[5]);}catch(e){eid=s2[5];}if(this._colKey(eid)!==ck)return;
-        const nk=['L1','L1|'+to].concat(s2.slice(2)).join('||');if(MP[nk]==null)MP[nk]=MP[m];delete MP[m];});
-      touched=true;});
-    if(touched){this._colPodIdx=null;this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower||{}));}catch(e){}}
+    const MC=this._marineCol;if(!MC)return;const mv=this._elemMoves(),P=new Set(Object.keys(MC)),Z=((this.DATA.levels.L1||{}).zones)||[];
+    const C=this._podOut=this._podOut||{};let touched=false;const idOf=c=>typeof c==='string'?c:(c&&c.id);
+    Object.keys(mv).forEach(k=>{const q=k.split('||');if(q[0]!=='L1'||q[1]!=='col')return;const to=mv[k],ck=q.slice(2).join('||');
+      const toP=P.has(to),tz=toP?null:Z.find(z=>(z.label||'')===to);if(!toP&&!tz)return;
+      /* where is it now? */
+      let it=null,fromZmk=null;
+      Object.keys(MC).forEach(pl=>{const i=(MC[pl]||[]).findIndex(c=>this._colKey(idOf(c))===ck);if(i<0)return;if(toP&&pl===to){it=it||'here';return;}const x=MC[pl].splice(i,1)[0];it=x;fromZmk='L1|'+pl;});
+      if(it==='here')it=null;
+      if(toP){
+        Z.forEach(z=>{if(!Array.isArray(z.cols))return;const i=z.cols.findIndex(c=>this._colKey(idOf(c))===ck);if(i<0)return;const x=z.cols.splice(i,1)[0];if(!it){it=x;fromZmk=z.mk||z.lid;}if(z.counts)z.counts.columns=z.cols.length;});
+        if(!it)return;
+        if(!(MC[to]||[]).some(c=>this._colKey(idOf(c))===ck))(MC[to]=MC[to]||[]).push(typeof it==='string'?{id:it}:it);
+        this._moveElemData('L1',fromZmk,'L1|'+to,'col',idOf(it));touched=true;return;}
+      /* to a map zone */
+      if(it){C[ck]=it;this._moveElemData('L1',fromZmk,tz.mk||tz.lid,'col',idOf(it));touched=true;}
+      const keep=it||C[ck];if(!keep)return;
+      tz.cols=tz.cols||[];if(!tz.cols.some(c=>this._colKey(idOf(c))===ck)){tz.cols.push(keep);if(tz.counts)tz.counts.columns=tz.cols.length;}
+      (this._podKeep=this._podKeep||new Set()).add(ck);});
+    if(touched){this._colPodIdx=null;this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();}
   }
   _regMove(lv,type,id,zoneLabel){
-    if(lv==='L1'&&type==='col'&&this._marineCol&&this._marineCol[zoneLabel]){
-      if(!this._regOk('L1','L1|'+zoneLabel)){this.rwsDeny('Only admin can move elements outside your area.');return;}
-      this._setElemMove(lv,type,id,zoneLabel);this._saveElemMoves();this._applyPodMoves();
+    const _inPod=lv==='L1'&&type==='col'&&this._marineCol&&Object.keys(this._marineCol).some(pl=>(this._marineCol[pl]||[]).some(c=>this._colKey(typeof c==='string'?c:(c&&c.id))===this._colKey(id)));
+    if(lv==='L1'&&type==='col'&&this._marineCol&&(this._marineCol[zoneLabel]||_inPod)){
+      const _tz=this._marineCol[zoneLabel]?null:(((this.DATA.levels.L1||{}).zones)||[]).find(z=>(z.label||'')===zoneLabel);
+      if(!this._regOk('L1',_tz?(_tz.mk||_tz.lid):'L1|'+zoneLabel)){this.rwsDeny('Only admin can move elements outside your area.');return;}
+      this._setElemMove(lv,type,id,zoneLabel);this._saveElemMoves();this._applyPodMoves();this._reconcileZoneCols&&this._reconcileZoneCols();
       this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this.buildMetrics&&this.buildMetrics();this.render();this._toast(id+' → '+zoneLabel);return;}
     if(!this._regCan()||!this._regZoneOk(lv,zoneLabel)){this.rwsDeny('Only admin can move elements outside your area.');return;}
     this._setElemMove(lv,type,id,zoneLabel);
@@ -5737,8 +5760,8 @@ class Component extends DCLogic {
           +'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
-          +(r.pod&&!r.custom&&r.type==='col'?'<select class="rgZone" '+d+' style="'+IN+'">'+this._podLabels().map(l=>opt(l,r.zone)).join('')+'</select> <span style="font-size:10px;color:var(--faint)">Podium</span>':'')
-          +(r.pod&&!r.custom&&r.type==='col'?'':(ALLLV||r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>'))+'</td>'
+          +(r.pod&&!r.custom&&r.type==='col'?'<select class="rgZone" '+d+' style="'+IN+'">'+this._l1ColZoneOpts().map(l=>opt(l,r.zone)).join('')+'</select> <span style="font-size:10px;color:var(--faint)">Podium</span>':'')
+          +(r.pod&&!r.custom&&r.type==='col'?'':(ALLLV||r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+((r.lv==='L1'&&r.type==='col')?this._l1ColZoneOpts():zones.map(z=>z.label||z.mk)).map(l=>opt(l,r.zone)).join('')+'</select>'))+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'+(r.custom?'<span style="color:var(--faint)">—</span>':'<input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>')
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
