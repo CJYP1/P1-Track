@@ -2842,7 +2842,7 @@ class Component extends DCLogic {
            to the level. Levels with no CIS zone keep the single row. */
         let filter=null;
         if(a.id==='slab'&&this._levelHasCis(lv,cat))filter=this._reportZoneOk(z,cat,'cis')?'cis':'nocis';
-        const maLabel={piling:'Top Slab · Piling',slab_top:'Top Slab',rc:'Bottom Slab · RC Works',pcbeam:'Bottom Slab · Precast Beam',act_cyclical:'Bottom Slab · Cyclical Works',col:'Podium · Columns',ls:'Podium · Core/Lift/Stair Wall',mbeam:'Podium · Steel Main Beam',cbeam:'Podium · Cast Steel Main Beam'};
+        const maLabel={slab_top:'Top Slab'};   /* plain activity names — no Top Slab / Bottom Slab / Podium prefix */
         const k=lv+'\u0001'+a.id+(filter?'\u0001'+filter:'');
         by[k]=by[k]||{a:(filter==='cis'?'CIS Slab':(filter==='nocis'?'Non-CIS Slab':((cat==='MA'&&maLabel[a.id])||a.label))),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
     return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0||r.hasSchedule).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
