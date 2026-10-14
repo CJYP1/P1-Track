@@ -2733,7 +2733,11 @@ class Component extends DCLogic {
        the report and the resource plan line up.  Set _maL1AllSubs=true to bring the ZC parent
        zones and the C sub-zones back in. */
     let out=Object.values(by);if(cat==='MA'&&lv==='L1'){const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
-      if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
+      if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P',crit:this._subCrit(mk,e)});}));}return out;}
+  /* Marine L1 sub-zones (C bottom slab, P podium) are critical when flagged themselves, or when the ZC zone they sit in is critical —
+     otherwise their work fell under Non-Critical even inside a critical ZC zone. */
+  _subCrit(mk,e){const ov=this._critOv||{};if(ov['L1|'+mk])return true;const pts=(e&&e.pts)||[];const c=(e&&e.lp)||(pts.length?[pts.reduce((n,p)=>n+p[0],0)/pts.length,pts.reduce((n,p)=>n+p[1],0)/pts.length]:null);if(!c)return false;
+    const zc=(((this.DATA.levels.L1||{}).zones)||[]).find(z=>(z.cat||'NB')==='MA'&&z.ring&&z.ring.length>2&&this.ptIn(z.ring,c[0],c[1]));return !!(zc&&zc.crit);}
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
   /* m² Report activities use the full applicable zone area as their denominator.
      This includes not-yet-scheduled zones and keeps Marine Top/Bottom/Podium scopes separate. */
