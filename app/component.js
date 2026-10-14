@@ -302,7 +302,7 @@ class Component extends DCLogic {
   _migrateLW8(){
     /* CW8 -> "Lift 1/2" -> back to CW08 (the name everyone on site knows).  Its status / dates /
        pour % saved under the lift kind move to the core-wall kind. */
-    const _REN=[[/\bLW8\b/g,'ST3'],[/\bCW8\b/g,'CW08'],[/\bLift 1\/2\b/g,'CW08'],[/Lift%201%2F2/g,'CW08'],[/\|\|lift\|\|CW08\b/g,'||core||CW08']];
+    const _REN=[[/\bLW8\b/g,'ST3'],[/\bCW8\b/g,'CW08'],[/\bLift 1\/2\b/g,'CW08'],[/Lift%201%2F2/g,'CW08']];   /* the old '||lift||CW08 → ||core||CW08' rekey ran on every pull and wiped a status set on a CW08 listed as a lift — removed */
     const RE={test:v=>{const t=String(v==null?'':v);return _REN.some(([r])=>new RegExp(r.source).test(t));}},
           sub=v=>{let t=String(v==null?'':v);_REN.forEach(([r,to])=>{t=t.replace(new RegExp(r.source,'g'),to);});return t;};
     let dirtyCfg=false, dirtyElem=false, dirtyAdd=false;
@@ -1616,6 +1616,7 @@ class Component extends DCLogic {
       (prev[k]||[]).forEach(id=>{
         const cur=this._elemAdd[k]||(this._elemAdd[k]=[]);
         if(cur.indexOf(id)>=0)return;
+        if(this._customGone()[k+'||'+id])return;   /* deleted on purpose — do not bring it back */
         cur.push(id);
         try{rwsAddItem(k+'||'+id,p[0],p[1],p[2],id);}catch(e){}
       });
@@ -1637,7 +1638,7 @@ class Component extends DCLogic {
     return `<div style="margin:4px 0 2px;border-left:2px solid color-mix(in srgb,var(--accent) 32%,transparent);padding-left:10px;border-radius:0 8px 8px 0">${warn}${rows}</div>`;}
   delCustomCat(code){if(!this.rwsIsAdmin())return;this._confirmModal('Delete this category and its items everywhere?',()=>{this._catAdd=this.customCats().filter(c=>c.code!==code);Object.keys(this._elemAdd||{}).forEach(k=>{if(k.split('||')[2]===code)delete this._elemAdd[k];});this.saveCustom();rwsDelCat(code);this._actRerender(this._selZone());});}
   addCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin()){this.rwsDeny('Not allowed.');return;}id=(id||'').trim();if(!id||id.indexOf('||')>=0)return;
-    if(/[.。]+$/.test(id)){const fixed=this._dotFixId(id);this._toast('A trailing dot is invisible next to the same number without one — saved as "'+fixed+'".');id=fixed;}const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();
+    if(/[.。]+$/.test(id)){const fixed=this._dotFixId(id);this._toast('A trailing dot is invisible next to the same number without one — saved as "'+fixed+'".');id=fixed;}const k=lv+'||'+zmk+'||'+type;const arr=this._elemAdd[k]||(this._elemAdd[k]=[]);if(arr.indexOf(id)>=0){this._toast('That ID already exists here.');return;}arr.push(id);this.saveCustom();{const G=this._customGone();if(G[k+'||'+id]){delete G[k+'||'+id];if(typeof rwsSyncKV==='function')rwsSyncKV('settings','customGone',G,null,null);}}
     /* The add must reach the server, otherwise it lives in this browser only
        and no other account ever sees it. Roll back on a hard rejection. */
     Promise.resolve(rwsAddItem(lv+'||'+zmk+'||'+type+'||'+id,lv,zmk,type,id)).then(r=>{
@@ -1648,7 +1649,11 @@ class Component extends DCLogic {
       this._toast('Could not save "'+id+'" to the cloud — not added. Check your login and try again.');
     }).catch(()=>{});
     this._actRerender(this._selZone());}
-  delCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin())return;const k=lv+'||'+zmk+'||'+type;this._elemAdd[k]=(this._elemAdd[k]||[]).filter(x=>x!==id);if(!this._elemAdd[k].length)delete this._elemAdd[k];const ek=lv+'||'+zmk+'||'+type+'||'+id;delete this.elem[ek];this.saveElem();this.saveCustom();rwsDelItem(ek);this._actRerender(this._selZone());}
+  _customGone(){const c=this._appCfg=this._appCfg||{};return c.customGone=c.customGone||{};}
+  delCustomItem(lv,zmk,type,id){if(!this.rwsIsAdmin())return;const k=lv+'||'+zmk+'||'+type;
+    /* Remember the delete (settings, synced): another browser that still has the item in its local copy
+       used to "heal" it straight back into the cloud, so it could never be deleted. */
+    {const G=this._customGone();G[k+'||'+id]=Date.now();try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}if(typeof rwsSyncKV==='function')rwsSyncKV('settings','customGone',G,null,null);}this._elemAdd[k]=(this._elemAdd[k]||[]).filter(x=>x!==id);if(!this._elemAdd[k].length)delete this._elemAdd[k];const ek=lv+'||'+zmk+'||'+type+'||'+id;delete this.elem[ek];this.saveElem();this.saveCustom();rwsDelItem(ek);this._actRerender(this._selZone());}
   _custCatSec(lv,z,ct,admin,nested){const zmk=z.mk||z.lid;const code=ct.code;const hidden=this.actHidden(lv,zmk,code);if(!admin&&hidden)return '';const ids=this.customItemsFor(lv,zmk,code);const nd=ids.filter(id=>this.elemStatus(lv+'||'+zmk+'||'+code+'||'+id)==='done').length;const rows=ids.length?ids.map(id=>{const key=lv+'||'+zmk+'||'+code+'||'+id;return `<div class="idrow">${this._idSpanMaybeCol(id,null,z,lv)}<span class="meta"></span>${this.elChip(key)}${this.elDateCtl(key)}${admin?`<span class="allbtn cdel" data-del="${this.esc(code+'||'+id)}" style="color:var(--crit);cursor:pointer;margin-left:6px" title="Delete item">✕</span>`:''}</div>`;}).join(''):'<div class="empty">no items yet</div>';const vis=admin?`<input type="checkbox" class="catvis" data-a="${code}" ${hidden?'':'checked'} title="Show this category to site users" style="margin-right:6px">`:'';const add=admin?` · <span class="allbtn cadd" data-cat="${code}" style="color:var(--accent);cursor:pointer">+ add</span>`:'';const del=admin?` · <span class="allbtn cdelcat" data-cat="${code}" style="color:var(--crit);cursor:pointer">delete</span>`:'';return `<details class="sec ${(admin&&hidden)?'act-off':''}${nested?' elemnest':''}" data-sec="${code}"${nested?' style="margin:6px 0 2px;border-left:2px solid color-mix(in srgb,var(--accent) 32%,transparent);padding-left:10px;border-radius:0 8px 8px 0"':''}><summary class="t">${vis}${this.esc(ct.label)}${(admin&&hidden)?' <span class="hiddentag">hidden from users</span>':''} <span>${nd}/${ids.length} done${add}${del}</span></summary>${rows}</details>`;}
   _custSecHtml(lv,z,admin){let out=(this.customCats()||[]).filter(ct=>!this._catAct(ct)).map(ct=>this._custCatSec(lv,z,ct,admin,false)).join('');return out;}
   setQtyOv(lv,zoneMk,field,raw){
@@ -1997,7 +2002,11 @@ class Component extends DCLogic {
       this._reconcileZoneCores();
       if(own('manpower')){this._manpower={...(state.manpower||{})};try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower));}catch(e){}}
       if(Array.isArray(state.custom_cats)){const seen={};this._catAdd=[];state.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;this._catAdd.push({code:c.code,label:c.label});}});}
-      if(Array.isArray(state.custom_items)){const _prevAdd=this._elemAdd||{};this._elemAdd={};state.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(this._elemAdd[k]=this._elemAdd[k]||[]).push(it.elem_id);});this._healCustomItems(_prevAdd);}
+      if(Array.isArray(state.custom_items)){const _prevAdd=this._elemAdd||{};this._elemAdd={};const _G=(state.settings&&state.settings.customGone)||this._customGone();
+        state.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;
+          /* a deleted item that some browser put back: delete it again (admin) and keep it hidden */
+          if(_G[k+'||'+it.elem_id]){if(this.rwsIsAdmin&&this.rwsIsAdmin()&&typeof rwsDelItem==='function'){try{rwsDelItem(k+'||'+it.elem_id);}catch(e){}}return;}
+          (this._elemAdd[k]=this._elemAdd[k]||[]).push(it.elem_id);});this._healCustomItems(_prevAdd);}
       if(state.custom_cats||state.custom_items)this.saveCustom();
       if(state.act_total||state.act_plan||state.act_done_m||state.act_hidden||state.act_def) this.saveAct();
       if(own('zone_updates')){this.updates={};
@@ -2058,7 +2067,7 @@ class Component extends DCLogic {
         take('_actCmt','act_cmt');take('_actUpd','act_upd');take('_editedKeys','edited');take('_zpOv','slab_qty');take('_qtyOv','qty_ov');take('_zpPlanOv','plan_qty_ov');take('_appCfg','settings');take('_manpower','manpower');
         if(own('act_def')){const defs=Object.keys(st.act_def||{}).map(id=>{const v=st.act_def[id]||{},o={id,label:v.label||id,unit:v.unit||''};if(v.phase)o.phase=v.phase;return o;});if(cmp(this._actDefs,defs)){this._actDefs=defs;changed=true;}}
         if(Array.isArray(st.custom_cats)){const seen={},cats=[];st.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;cats.push({code:c.code,label:c.label});}});if(cmp(this._catAdd,cats)){this._catAdd=cats;changed=true;}}
-        if(Array.isArray(st.custom_items)){const items={};st.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;(items[k]=items[k]||[]).push(it.elem_id);});if(cmp(this._elemAdd,items)){const _prevAdd=this._elemAdd;this._elemAdd=items;this._healCustomItems(_prevAdd);this.saveCustom();changed=true;}}
+        if(Array.isArray(st.custom_items)){const items={},_G=(st.settings&&st.settings.customGone)||this._customGone();st.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;if(_G[k+'||'+it.elem_id])return;(items[k]=items[k]||[]).push(it.elem_id);});if(cmp(this._elemAdd,items)){const _prevAdd=this._elemAdd;this._elemAdd=items;this._healCustomItems(_prevAdd);this.saveCustom();changed=true;}}
         if(own('crit')&&cmp(this._critOv,st.crit||{})){this._critOv={...(st.crit||{})};try{localStorage.setItem('rws_crit_ov',JSON.stringify(this._critOv));}catch(e){}this.applyCritOv&&this.applyCritOv();this._critPlanSet=null;changed=true;}
         if(st.zone_updates && st.zone_updates.length){   // 进度更新记录(Save update): 追加日志, 合并去重(按 ts+pct)
           let addedU=false;
