@@ -1310,7 +1310,8 @@ class Component extends DCLogic {
         const plan=Number(this.actPlan(lv,zmk,a.id,mon))||0,prevPlan=prev?(Number(this.actPlan(lv,zmk,a.id,prev))||0):0,prevDone=prev?(Number(this.actDoneMonth(lv,zmk,a.id,prev))||0):0,done=Number(this.actDoneMonth(lv,zmk,a.id,mon))||0,cg=this.actCarry(lv,zmk,a.id,mi),earlyPlan=M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+(Number(this.actPlan(lv,zmk,a.id,m))||0),0),earlyDone=M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),earlyRemain=Math.max(0,earlyPlan-earlyDone);
         const _u=a.unit||this._actUnit(a.id)||'',_p=z.crit?'critical':'noncritical',_all=M.reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),_t=Number(this.actTotal(lv,zmk,a.id,this.actAutoTotal(lv,zmk,a.id)));
         {const T=allTot[_p][_u]||(allTot[_p][_u]={cum:0,total:0});T.cum+=_all;if(Number.isFinite(_t)&&_t>0)T.total+=_t;}
-        if(!plan&&!prevPlan&&!prevDone&&!done&&!earlyRemain&&!(cg.balance>0))return;
+        /* Every activity still open in the area is listed (scope not yet done), even with no plan or work in these months. */
+        if(!plan&&!prevPlan&&!prevDone&&!done&&!earlyRemain&&!(cg.balance>0)&&!(Number.isFinite(_t)&&_t>0&&_all<_t))return;
         const unit=_u,path=_p,key=lv+'||'+a.id+'||'+unit,r=by[path][key]||(by[path][key]={lv,id:a.id,label:a.label,unit,plan:0,prevPlan:0,prevDone:0,earlyRemain:0,done:0,owe:0,cum:0,total:0,zones:new Set()});
         r.plan+=plan;r.prevPlan+=prevPlan;r.prevDone+=prevDone;r.earlyRemain+=earlyRemain;r.done+=done;r.owe+=Math.max(0,Number(cg.balance)||0);r.zones.add(lv+'||'+zmk);
         /* Total done to date (every month up to and including this one) and the zone's full scope. */
