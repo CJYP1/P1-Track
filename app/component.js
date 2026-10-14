@@ -5687,7 +5687,8 @@ class Component extends DCLogic {
       &&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0)
       &&(!st.bad||r.iss.length));
     const CAP=400,rows=matched.slice(0,CAP);
-    const zoneNames=[];all.forEach(r=>{if(zoneNames.indexOf(r.zone)<0)zoneNames.push(r.zone);});zoneNames.sort();
+    /* Every zone of the level is offered (not only zones that already hold this element type), so an empty zone can still be picked. */
+    const zoneNames=[];all.filter(r=>st.cat==='all'||r.cat===st.cat).forEach(r=>{if(zoneNames.indexOf(r.zone)<0)zoneNames.push(r.zone);});zones.filter(z=>st.cat==='all'||(z.cat||'NB')===st.cat).forEach(z=>{const l=z.label||z.mk;if(l&&zoneNames.indexOf(l)<0)zoneNames.push(l);});zoneNames.sort((x,y)=>String(x).localeCompare(String(y),undefined,{numeric:true}));
     const opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
     const TH=t=>'<th style="text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+t+'</th>';
     const IN='font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:inherit';
