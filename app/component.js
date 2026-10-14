@@ -2833,9 +2833,9 @@ class Component extends DCLogic {
   /* Catch-Up and Actual share one authoritative full-level denominator. */
   _reportCommonTotal(levels,aid,cat,filter,A,P){const fixed=this._reportScopeTotal(levels,aid,cat,filter);if(fixed!=null)return fixed;const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const el=this._reportElemTotal(levels,aid,cat,filter);if(el!=null)return el;
     const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
-  /* Work sequence used to order Report and Monthly Summary rows (Marine L1: Piling → Top Slab →
-     Precast Beam → RC Works → Cyclical Works → Column → Core/Lift/Stair Wall). */
-  _actSeq(aid){const O=['earth','exc','demo_wall','demo','piling','slab_top','pcbeam','rc','act_cyclical','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','sbeam','slab','temp_stair','mep_acmv','mep_fps','mep_elec','mep_bms'];const i=O.indexOf(aid);return i<0?99:i;}
+  /* Work sequence used to order Report and Monthly Summary rows (Marine L1: Piling → Cyclical Works →
+     Precast Beam → RC Works → Top Slab → Column → Core/Lift/Stair Wall). */
+  _actSeq(aid){const O=['earth','exc','demo_wall','demo','piling','act_cyclical','pcbeam','rc','slab_top','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','sbeam','slab','temp_stair','mep_acmv','mep_fps','mep_elec','mep_bms'];const i=O.indexOf(aid);return i<0?99:i;}
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
