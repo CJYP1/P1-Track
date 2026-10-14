@@ -364,6 +364,7 @@ class Component extends DCLogic {
     try{this._pinColArea();}catch(e){console.error('pin col area',e);}
     try{this._applyElemRename();}catch(e){console.error('elem rename',e);}
     try{this._applyElemMoves();}catch(e){console.error('elem move',e);}
+    try{this._applyPodMoves();}catch(e){console.error('pod move',e);}
     try{this._applyElemRetype();}catch(e){console.error('elem retype',e);}
     try{this._mergeRenamedWalls();}catch(e){console.error('merge renamed',e);}
     try{this._stripPodiumDupes();}catch(e){console.error('podium dupes',e);}
@@ -1780,6 +1781,7 @@ class Component extends DCLogic {
       if(d.colMonth) this._colMonth=_rebuildFromCSV('col_month',this._colMonth,d.colMonth);
       if(d.zoneDelay&&typeof d.zoneDelay==='object'){this._appCfg=this._appCfg||{};this._appCfg.zoneDelay={...(this._appCfg.zoneDelay||{}),...d.zoneDelay};try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}}
       if(d.marineCol){this._marineCol=d.marineCol;   /* Marine 柱子按 P 区分组映射(marine-col-map.csv) */
+        this._colPodIdx=null;try{this._applyPodMoves();}catch(e){}
         this._marineCritSet=new Set();Object.keys(d.marineCol).forEach(p=>d.marineCol[p].forEach(c=>{if(c.c)this._marineCritSet.add(String(c.id||'').trim().toUpperCase());}));}
       this.saveAct();this.saveDates();
       if(Array.isArray(d.actDefs)){const ex=new Set((this._actDefs||[]).map(x=>x&&x.id));d.actDefs.forEach(x=>{if(x&&x.id&&!ex.has(x.id)){(this._actDefs=this._actDefs||[]).push(x);}});}
@@ -5325,6 +5327,8 @@ class Component extends DCLogic {
       (L.zones||[]).forEach(z=>{
         const zmk=z.mk||z.lid;
         this._regTypes().forEach(([type,arr,label])=>{
+          /* Marine columns on L1 are kept by P zone (podium) only — the ZC / C slab zones don't hold them. */
+          if(type==='col'&&lv==='L1'&&(z.cat||'NB')==='MA'&&!z._pod)return;
           (z[arr]||[]).forEach(x=>{
             const id=(typeof x==='string')?x:x.id;
             add(lv,z,zmk,type,label,id);});
@@ -5573,7 +5577,26 @@ class Component extends DCLogic {
     if(!this._regOk(lv,zmk)){this.rwsDeny('Only admin can change dates here.');return;}
     this.setElemDate(lv+'||'+zmk+'||'+type+'||'+id,iso||'');
   }
+  _podLabels(){const S=this.SUBZONES&&this.SUBZONES.L1;return ((S&&S.P)||[]).map(e=>e.label);}
+  /* Marine L1 columns live in the podium ledger (_marineCol, by P zone).  A move there is kept in
+     elemMove like any other (L1||col||mark → P label) and re-applied whenever the ledger is rebuilt. */
+  _applyPodMoves(){
+    const MC=this._marineCol;if(!MC)return;const mv=this._elemMoves(),P=new Set(Object.keys(MC));let touched=false;
+    Object.keys(mv).forEach(k=>{const q=k.split('||');if(q[0]!=='L1'||q[1]!=='col'||!P.has(mv[k]))return;const to=mv[k],ck=q.slice(2).join('||');
+      let it=null,from=null;Object.keys(MC).forEach(pl=>{const i=(MC[pl]||[]).findIndex(c=>this._colKey(typeof c==='string'?c:(c&&c.id))===ck);if(i>=0&&pl!==to){it=MC[pl][i];from=pl;MC[pl].splice(i,1);}});
+      if(!it)return;const id=typeof it==='string'?it:it.id;
+      if(!(MC[to]||[]).some(c=>this._colKey(typeof c==='string'?c:(c&&c.id))===ck))(MC[to]=MC[to]||[]).push(it);
+      this._migrateElemKey('L1||L1|'+from+'||col||'+id,'L1||L1|'+to+'||col||'+id);
+      const MP=this._manpower||{};Object.keys(MP).forEach(m=>{const s2=m.split('||');if(s2[0]!=='L1'||s2[1]!=='L1|'+from||s2[3]!=='pour_elem'||s2[4]!=='col')return;let eid;try{eid=decodeURIComponent(s2[5]);}catch(e){eid=s2[5];}if(this._colKey(eid)!==ck)return;
+        const nk=['L1','L1|'+to].concat(s2.slice(2)).join('||');if(MP[nk]==null)MP[nk]=MP[m];delete MP[m];});
+      touched=true;});
+    if(touched){this._colPodIdx=null;this.saveElem&&this.saveElem();this.saveElemDate&&this.saveElemDate();try{localStorage.setItem('rws_manpower',JSON.stringify(this._manpower||{}));}catch(e){}}
+  }
   _regMove(lv,type,id,zoneLabel){
+    if(lv==='L1'&&type==='col'&&this._marineCol&&this._marineCol[zoneLabel]){
+      if(!this._regOk('L1','L1|'+zoneLabel)){this.rwsDeny('Only admin can move elements outside your area.');return;}
+      this._setElemMove(lv,type,id,zoneLabel);this._saveElemMoves();this._applyPodMoves();
+      this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this.buildMetrics&&this.buildMetrics();this.render();this._toast(id+' → '+zoneLabel);return;}
     if(!this._regCan()||!this._regZoneOk(lv,zoneLabel)){this.rwsDeny('Only admin can move elements outside your area.');return;}
     this._setElemMove(lv,type,id,zoneLabel);
     this._saveElemMoves();
@@ -5714,7 +5737,8 @@ class Component extends DCLogic {
           +'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
-          +(ALLLV||r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>')+'</td>'
+          +(r.pod&&!r.custom&&r.type==='col'?'<select class="rgZone" '+d+' style="'+IN+'">'+this._podLabels().map(l=>opt(l,r.zone)).join('')+'</select> <span style="font-size:10px;color:var(--faint)">Podium</span>':'')
+          +(r.pod&&!r.custom&&r.type==='col'?'':(ALLLV||r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select>'))+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'+(r.custom?'<span style="color:var(--faint)">—</span>':'<input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>')
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
