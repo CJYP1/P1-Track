@@ -5681,6 +5681,8 @@ class Component extends DCLogic {
     const ALLLV=st.lv==='__all';
     const _adm=this.rwsIsAdmin();
     const zones=ALLLV?[]:((this.DATA.levels[st.lv]||{}).zones||[]).filter(z=>_adm||this.rwsScopeOk(st.lv,z.mk||z.lid));
+    /* All-levels view: each row's Zone dropdown lists that row's own level. */
+    const _lvZC={},_lvZones=L=>_lvZC[L]||(_lvZC[L]=((this.DATA.levels[L]||{}).zones||[]).filter(z=>_adm||this.rwsScopeOk(L,z.mk||z.lid)));
     const all=this._regRows().filter(r=>(ALLLV||r.lv===st.lv)&&r.type===st.type&&(_adm||this.rwsScopeOk(r.lv,r.zmk)));
     const q=String(st.q||'').trim().toUpperCase();
     this._upSets={};all.forEach(r=>{r.iss=this._regIssues(r);});
@@ -5766,7 +5768,7 @@ class Component extends DCLogic {
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
           +(r.pod&&!r.custom&&r.type==='col'?'<select class="rgZone" '+d+' style="'+IN+'">'+this._l1ColZoneOpts().map(l=>opt(l,r.zone)).join('')+'</select> <span style="font-size:10px;color:var(--faint)">Podium</span>':'')
-          +(r.pod&&!r.custom&&r.type==='col'?'':(ALLLV||r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+((r.lv==='L1'&&r.type==='col')?this._l1ColZoneOpts():zones.map(z=>z.label||z.mk)).map(l=>opt(l,r.zone)).join('')+'</select>'))+'</td>'
+          +(r.pod&&!r.custom&&r.type==='col'?'':(r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+((r.lv==='L1'&&r.type==='col')?this._l1ColZoneOpts():(ALLLV?_lvZones(r.lv):zones).map(z=>z.label||z.mk)).map(l=>opt(l,r.zone)).join('')+'</select>'))+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'+(r.custom?'<span style="color:var(--faint)">—</span>':'<input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>')
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
