@@ -5695,7 +5695,7 @@ class Component extends DCLogic {
   _rgRender(){
     const root=document.getElementById('rgRoot');if(!root)return;
     const st=this._rg,esc=s=>this.esc(s);
-    if(st.type==='qty'){this._rgRenderQty();return;}
+    if(String(st.type||'').indexOf('qty')===0){st.act=st.type.indexOf('qty:')===0?st.type.slice(4):'__all';this._rgRenderQty();return;}
     const TYPES=this._regTypes();
     const ALLLV=st.lv==='__all';
     const _adm=this.rwsIsAdmin();
@@ -5725,7 +5725,7 @@ class Component extends DCLogic {
       +'<button class="hbtn rgRefresh" title="Load everyone\'s latest changes from the cloud">⟳ Refresh</button>'+(_adm?'<button class="hbtn" id="rgCsv">⬇⬆ CSV</button>':'')+'<button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
       +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'All levels (through-elements listed per level)')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
-      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'Slab & area works')+'</select>'
+      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'All quantity works')+this._qtyActLabels().map(l=>opt('qty:'+l,st.type,l)).join('')+'</select>'
       +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'All areas')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
       +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','All zones')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
       +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="Filter mark / zone" style="'+IN+';width:170px">'
@@ -5851,7 +5851,9 @@ class Component extends DCLogic {
   _qtyRows(lv){
     const out=[],M=this.ACT_MONTHS||[],_adm=this.rwsIsAdmin();
     ((lv==='__all')?(this.DATA.order||[]):[lv]).forEach(L=>{const seen=new Set();
-      (((this.DATA.levels[L]||{}).zones)||[]).forEach(z=>{const zmk=z.mk||z.lid;if(seen.has(String(zmk)))return;seen.add(String(zmk));
+      /* Marine L1 bottom-slab (C) and podium (P) sub-zones are not map zones, but their works (RC, precast, cyclical …) belong here too. */
+      const _zs=((((this.DATA.levels[L]||{}).zones)||[])).concat(L==='L1'?(this._reportZones('L1','MA')||[]).filter(z=>z._mslab||z._pod):[]);
+      _zs.forEach(z=>{const zmk=z.mk||z.lid;if(seen.has(String(zmk)))return;seen.add(String(zmk));
         if(!_adm&&!this.rwsScopeOk(L,zmk))return;
         (this._actList(L,z)||[]).filter(a=>!this._elemAct(a.id)&&(a.custom||this._actApplies(a.id,L,z))).forEach(a=>{
           const aid=a.id,k=L+'||'+zmk+'||'+aid,typed=(this._actTotal||{})[k],auto=this.actAutoTotal(L,zmk,aid),total=this.actTotal(L,zmk,aid,auto);
@@ -5902,6 +5904,10 @@ class Component extends DCLogic {
     return '<div style="font-size:11.5px;color:var(--dim);margin-bottom:4px">'+esc(r.label)+' · '+esc(r.zone)+' · total '+f(r.total)+' '+esc(r.unit)+(overAt?' · <b style="color:var(--crit)">went over the total in '+esc(overAt)+'</b>':'')+' · edit a month\'s Done here to correct it</div>'
       +'<table style="border-collapse:collapse;font-size:12px"><tr style="color:var(--dim)"><th style="text-align:left;padding:3px 8px">Month</th><th style="text-align:right;padding:3px 8px">Plan</th><th style="text-align:left;padding:3px 8px">Done</th><th style="text-align:right;padding:3px 8px">Plan to date</th><th style="text-align:right;padding:3px 8px">Done to date</th><th style="text-align:right;padding:3px 8px">%</th><th></th></tr>'+(rows||'<tr><td colspan="7" style="padding:6px 8px;color:var(--faint)">No plan or done yet</td></tr>')+'</table>';
   }
+  /* Every quantity (non-element) activity that exists anywhere, in work order — each gets its own entry in the register's type list. */
+  _qtyActLabels(){if(this._qtyActCache&&Date.now()-this._qtyActCache.t<5000)return this._qtyActCache.v;const seen={};
+    (this.DATA.order||[]).forEach(L=>(((this.DATA.levels[L]||{}).zones)||[]).forEach(z=>(this._actList(L,z)||[]).forEach(a=>{if(this._elemAct(a.id)||!(a.custom||this._actApplies(a.id,L,z)))return;if(!(a.label in seen))seen[a.label]=a.id;})));
+    const v=Object.keys(seen).sort((x,y)=>(this._actSeq(seen[x])-this._actSeq(seen[y]))||x.localeCompare(y));this._qtyActCache={t:Date.now(),v};return v;}
   _rgRenderQty(){
     const root=document.getElementById('rgRoot');if(!root)return;const st=this._rg,esc=s=>this.esc(s),_adm=this.rwsIsAdmin(),ALLLV=st.lv==='__all';
     const TYPES=this._regTypes(),opt=(v,cur,t)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t==null?v:t)+'</option>';
@@ -5910,23 +5916,26 @@ class Component extends DCLogic {
     const all=this._qtyRows(st.lv),q=String(st.q||'').trim().toUpperCase(),acts=[...new Set(all.map(r=>r.label))].sort();
     const rows=all.filter(r=>(st.cat==='all'||r.cat===st.cat)&&(!st.zone||st.zone==='__all'||r.zone===st.zone)&&(!st.act||st.act==='__all'||r.label===st.act)
       &&(!q||String(r.zone).toUpperCase().indexOf(q)>=0||String(r.label).toUpperCase().indexOf(q)>=0)&&(!st.bad||r.iss.length));
-    const zoneNames=[...new Set(all.map(r=>r.zone))].sort(),fd=d=>d?(this._fmtD?this._fmtD(d):d):'—',f=v=>this.fmt(Math.round((+v||0)*100)/100);
+    const MON=(st.mon&&st.mon!=='cum'&&(this.ACT_MONTHS||[]).includes(st.mon))?st.mon:null,zoneNames=[...new Set(all.map(r=>r.zone))].sort(),fd=d=>d?(this._fmtD?this._fmtD(d):d):'—',f=v=>this.fmt(Math.round((+v||0)*100)/100);
     let h='<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px 20px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:12px"><div><div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)">RWS P1</div><div style="font-size:24px;font-weight:800;line-height:1.15">Element register</div></div><div style="display:flex;gap:8px"><button class="hbtn rgRefresh" title="Load everyone\'s latest changes from the cloud">⟳ Refresh</button><button class="hbtn" id="rgClose">✕ Close</button></div></div>';
     h+='<div style="display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:12.5px;margin-bottom:10px">'
       +'<select id="rgLv" class="hbtn">'+opt('__all',st.lv,'All levels')+(this.DATA.order||[]).map(x=>opt(x,st.lv)).join('')+'</select>'
-      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'Slab & area works')+'</select>'
+      +'<select id="rgType" class="hbtn">'+TYPES.map(([t,a,l])=>opt(t,st.type,l)).join('')+opt('qty',st.type,'All quantity works')+this._qtyActLabels().map(l=>opt('qty:'+l,st.type,l)).join('')+'</select>'
+      +'<select id="rgMon" class="hbtn" title="Cumulative, or one month\'s plan and done">'+opt('cum',st.mon||'cum','Cumulative')+(this.ACT_MONTHS||[]).map(m=>opt(m,st.mon||'cum')).join('')+'</select>'
       +'<select id="rgAct" class="hbtn">'+opt('__all',st.act||'__all','All activities')+acts.map(a=>opt(a,st.act||'__all')).join('')+'</select>'
       +'<select id="rgCat" class="hbtn">'+opt('all',st.cat,'All areas')+['NB','EB','MA'].map(x=>opt(x,st.cat)).join('')+'</select>'
       +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','All zones')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
       +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="Filter zone / activity" style="'+IN+';width:170px">'
       +'<label style="display:inline-flex;gap:5px;align-items:center;font-weight:700;color:'+(st.bad?'var(--crit)':'var(--dim)')+'"><input type="checkbox" id="rgBad"'+(st.bad?' checked':'')+'> Problems only ('+all.filter(r=>r.iss.length).length+')</label>'
-      +'<span style="color:var(--dim)">Showing '+rows.length+' · total '+f(rows.reduce((n,r)=>n+(+r.total||0),0))+' · done '+f(rows.reduce((n,r)=>n+(+r.done||0),0))+'</span></div>';
+      +'<span style="color:var(--dim)">Showing '+rows.length+(MON?' · '+esc(MON)+' plan '+f(rows.reduce((n,r)=>n+(+this.actPlan(r.lv,r.zmk,r.aid,MON)||0),0))+' · done '+f(rows.reduce((n,r)=>n+(+this.actDoneMonth(r.lv,r.zmk,r.aid,MON)||0),0))+' ·':'')+' total '+f(rows.reduce((n,r)=>n+(+r.total||0),0))+' · done '+f(rows.reduce((n,r)=>n+(+r.done||0),0))+'</span></div>';
     h+='<div style="font-size:12px;color:var(--dim);margin-bottom:8px"><b>Total</b> = the zone\'s drawing area unless you type another figure (typed totals are marked). <b>Done to date</b> is cumulative: type the new figure and the date it was reached — the difference is booked to that date\'s month, so the Activities card, the Report and the monthly catch-up all follow.</div>';
-    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'+(ALLLV?TH('Level'):'')+TH('Activity')+TH('Zone')+TH('Area')+TH('Total')+TH('Done to date')+TH('As of')+TH('%')+TH('Status')+TH('Updated')+TH('Plan start')+TH('Plan finish')+TH('Check')+'</tr></thead><tbody>';
-    if(!rows.length)h+='<tr><td colspan="13" style="padding:26px;text-align:center;color:var(--dim)">Nothing here.</td></tr>';
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'+(ALLLV?TH('Level'):'')+TH('Activity')+TH('Zone')+TH('Area')+(MON?TH(esc(MON)+' plan')+TH(esc(MON)+' done'):'')+TH('Total')+TH('Done to date')+TH('As of')+TH('%')+TH('Status')+TH('Updated')+TH('Plan start')+TH('Plan finish')+TH('Check')+'</tr></thead><tbody>';
+    if(!rows.length)h+='<tr><td colspan="'+(13+(MON?2:0))+'" style="padding:26px;text-align:center;color:var(--dim)">Nothing here.</td></tr>';
     rows.slice(0,600).forEach(r=>{const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-a="'+esc(r.aid)+'"',last=r.hist.length?r.hist[r.hist.length-1]:null,late=r.st!=='done'&&r.pe&&r.pe<this.todayISOStr();
       h+='<tr>'+(ALLLV?'<td style="'+TD+'"><b>'+esc(r.lv)+'</b></td>':'')
         +'<td style="'+TD+';font-weight:700;white-space:nowrap">'+esc(r.label)+' <a href="#" class="qMon" data-k="'+esc(r.lv+'||'+r.zmk+'||'+r.aid)+'" title="Plan and done month by month" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600">'+((st.open||{})[r.lv+'||'+r.zmk+'||'+r.aid]?'▾ months':'▸ months')+'</a></td><td style="'+TD+'">'+esc(r.zone)+'</td><td style="'+TD+';color:var(--dim)">'+esc(r.cat)+'</td>'
+        +(MON?'<td style="'+TD+';white-space:nowrap">'+f(this.actPlan(r.lv,r.zmk,r.aid,MON)||0)+' <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
+          +'<td style="'+TD+';white-space:nowrap"><input type="number" step="any" min="0" class="qMonDone" '+d+' data-m="'+esc(MON)+'" value="'+(this.actDoneMonth(r.lv,r.zmk,r.aid,MON)==null?'':this.actDoneMonth(r.lv,r.zmk,r.aid,MON))+'" placeholder="0" title="Done in '+esc(MON)+'" style="'+IN+';width:80px"> <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>':'')
         +'<td style="'+TD+';white-space:nowrap">'+(_adm?'<input type="number" step="any" class="qTot" '+d+' value="'+(r.typed?r.total:'')+'" placeholder="'+(r.total>0?f(r.total):'—')+'" style="'+IN+';width:90px">':f(r.total))+' <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+(r.typed?' · typed':(r.drawing>0?' · drawing':''))+'</span></td>'
         +'<td style="'+TD+';white-space:nowrap"><input type="number" step="any" min="0" class="qDone" '+d+' value="'+(r.done||'')+'" placeholder="0" style="'+IN+';width:90px"> <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
         +'<td style="'+TD+'"><input type="date" class="qDate" '+d+' value="'+esc(this.todayISOStr())+'" style="'+IN+'"></td>'
@@ -5936,17 +5945,18 @@ class Component extends DCLogic {
         +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+esc(fd(r.ps))+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap'+(late?';color:var(--crit);font-weight:700':'')+'">'+esc(fd(r.pe))+'</td>'
         +'<td style="'+TD+';font-size:11px;color:var(--crit);max-width:190px">'+(r.iss.length?r.iss.map(esc).join('<br>'):'<span style="color:#2e7d4f">✓</span>')+'</td></tr>';
-      if((st.open||{})[r.lv+'||'+r.zmk+'||'+r.aid])h+='<tr><td colspan="'+(ALLLV?13:12)+'" style="padding:4px 8px 12px 28px;border-bottom:1px solid var(--line);background:var(--bg)">'+this._qtyMonthsHtml(r)+'</td></tr>';});
+      if((st.open||{})[r.lv+'||'+r.zmk+'||'+r.aid])h+='<tr><td colspan="'+((ALLLV?13:12)+(MON?2:0))+'" style="padding:4px 8px 12px 28px;border-bottom:1px solid var(--line);background:var(--bg)">'+this._qtyMonthsHtml(r)+'</td></tr>';});
     h+='</tbody></table></div>';root.innerHTML=h;
     const re=()=>this._rgRender(),at=e=>({lv:e.target.dataset.lv,zmk:e.target.dataset.zmk,a:e.target.dataset.a});
     root.querySelector('#rgClose').onclick=()=>{const o=document.getElementById('__regGrid');if(o)o.remove();};
     root.querySelector('#rgLv').onchange=e=>{st.lv=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;st.zone='__all';re();};
-    root.querySelector('#rgAct').onchange=e=>{st.act=e.target.value;re();};
+    root.querySelector('#rgAct').onchange=e=>{st.act=e.target.value;st.type=st.act==='__all'?'qty':'qty:'+st.act;re();};
     root.querySelectorAll('.rgRefresh').forEach(b=>b.onclick=()=>this._rgRefresh(b));
     root.querySelectorAll('.qMon').forEach(b=>b.onclick=e=>{e.preventDefault();const k=b.dataset.k;st.open=st.open||{};st.open[k]=!st.open[k];re();});
     root.querySelectorAll('.qMonDone').forEach(i=>i.onchange=e=>{const t=e.target;this.setActDoneMonth(t.dataset.lv,t.dataset.zmk,t.dataset.a,t.dataset.m,t.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();re();});
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
+    {const mb=root.querySelector('#rgMon');if(mb)mb.onchange=e=>{st.mon=e.target.value;re();};}
     root.querySelector('#rgZone').onchange=e=>{st.zone=e.target.value;re();};
     root.querySelector('#rgBad').onchange=e=>{st.bad=e.target.checked;re();};
     {const qi=root.querySelector('#rgQ');qi.oninput=e=>{st.q=e.target.value;};qi.onchange=()=>re();qi.onkeydown=e=>{if(e.key==='Enter')re();};}
