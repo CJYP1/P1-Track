@@ -775,6 +775,8 @@ class Component extends DCLogic {
     this.render();
     return n;
   }
+  /* Keep unticked in the register for this level = not drawn on this level's map (other levels unaffected). */
+  _colDropped(lv,id){const D=this._elemDrop?this._elemDrop():{},ck=this._colKey(id);return Object.keys(D).some(k=>{const q=k.split('||');return q[0]===lv&&q[q.length-1]==='col'&&(D[k]||[]).some(x=>this._colKey(x)===ck);});}
   _colHidden(lv,id){const h=(this._appCfg&&this._appCfg.hideCols&&this._appCfg.hideCols[lv])||[];return h.indexOf(id)>=0;}
   /* Un-hide a column on any level. toggleHideCol only ever works on the level
      being looked at, which is no use from a list that spans all of them. */
@@ -5685,7 +5687,8 @@ class Component extends DCLogic {
     const matched=all.filter(r=>(st.cat==='all'||r.cat===st.cat)
       &&(!st.zone||st.zone==='__all'||r.zone===st.zone)
       &&(!q||String(r.id).toUpperCase().indexOf(q)>=0||String(r.zone).toUpperCase().indexOf(q)>=0)
-      &&(!st.bad||r.iss.length));
+      &&(!st.bad||r.iss.length)
+      &&(st.showDrop||r.keep!=='N'||!!q));
     const CAP=400,rows=matched.slice(0,CAP);
     /* Every zone of the level is offered (not only zones that already hold this element type), so an empty zone can still be picked. */
     const zoneNames=[];all.filter(r=>st.cat==='all'||r.cat===st.cat).forEach(r=>{if(zoneNames.indexOf(r.zone)<0)zoneNames.push(r.zone);});zones.filter(z=>st.cat==='all'||(z.cat||'NB')===st.cat).forEach(z=>{const l=z.label||z.mk;if(l&&zoneNames.indexOf(l)<0)zoneNames.push(l);});zoneNames.sort((x,y)=>String(x).localeCompare(String(y),undefined,{numeric:true}));
@@ -5706,6 +5709,7 @@ class Component extends DCLogic {
       +'<select id="rgZone" class="hbtn">'+opt('__all',st.zone||'__all','All zones')+zoneNames.map(z=>opt(z,st.zone||'__all')).join('')+'</select>'
       +'<input id="rgQ" value="'+esc(st.q||'')+'" placeholder="Filter mark / zone" style="'+IN+';width:170px">'
       +'<label style="display:inline-flex;gap:5px;align-items:center;font-weight:700;color:'+(st.bad?'var(--crit)':'var(--dim)')+'"><input type="checkbox" id="rgBad"'+(st.bad?' checked':'')+'> Problems only ('+all.filter(r=>r.iss.length).length+')</label>'
+      +'<label style="display:inline-flex;gap:5px;align-items:center;font-weight:700;color:var(--dim)" title="Unticked (Keep off) elements are hidden from this list and from this level\'s map. Tick to see them and re-tick Keep."><input type="checkbox" id="rgShowDrop"'+(st.showDrop?' checked':'')+'> Show dropped ('+all.filter(r=>r.keep==='N'&&(st.cat==='all'||r.cat===st.cat)).length+')</label>'
       +(()=>{
         /* The same column is recorded once on every level it runs through, so a count of rows is
            a count of pours, not of columns.  Both numbers are printed side by side, because
@@ -5801,6 +5805,7 @@ class Component extends DCLogic {
     root.querySelector('#rgType').onchange=e=>{st.type=e.target.value;st.zone='__all';re();};
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
     {const bb=root.querySelector('#rgBad');if(bb)bb.onchange=e=>{st.bad=e.target.checked;re();};}
+    {const sd=root.querySelector('#rgShowDrop');if(sd)sd.onchange=e=>{st.showDrop=e.target.checked;re();};}
     {const qi=root.querySelector('#rgQ');qi.oninput=e=>{st.q=e.target.value;};
      qi.onchange=()=>re();qi.onkeydown=e=>{if(e.key==='Enter')re();};}
     {const ab=root.querySelector('#rgAdd');if(ab)ab.onclick=()=>{
@@ -6750,13 +6755,16 @@ class Component extends DCLogic {
     const _nrm=id=>String(id||'').trim().toUpperCase();
     let _colHtml='';   /* 柱子先攒起来, 等 Marine 子区画完再追加, 让柱子浮在最上层(名字可见/可点选) */
     const zoneByLabel={};L.zones.forEach(z=>{zoneByLabel[z.label]=z;});
+    /* The zone a column is actually listed in (after register moves) wins over the zone written on the drawing,
+       so a column moved from NB to Marine is filtered, coloured and counted as Marine. */
+    const zoneByCol={};L.zones.forEach(z=>(z.cols||[]).forEach(x=>{const id=typeof x==='string'?x:(x&&x.id);if(id)zoneByCol[this._colKey(id)]=z;}));
     if(!_focusOnly&&this.showColumns && this.COLUMNS && this.COLUMNS[this.curLevel] && !(this.colorMode==='castdate'&&!this._castColumnsOn())){   /* Dashboard 可独立开关柱子 */
       this.COLUMNS[this.curLevel].forEach((c,ci)=>{
         const _nid=_nrm(c.id); if(_colSeen.has(_nid))return;
-        const _hid=this._colHidden(this.curLevel,c.id); if(_hid&&!this._hidingCol)return;   // 隐藏的柱: 平时不画; 隐藏模式下淡显以便恢复
+        const _hid=this._colHidden(this.curLevel,c.id)||this._colDropped(this.curLevel,c.id); if(_hid&&!this._hidingCol)return;   // 隐藏的柱: 平时不画; 隐藏模式下淡显以便恢复
         const sy=H-c.y;
         const _podL=(this.curLevel==='L1')?this._colPodLabel(c.id):null;
-        const zz=_podL?{mk:this.curLevel+'|'+_podL,label:_podL,cat:'MA',_pod:true}:zoneByLabel[c.zone];   /* Marine 柱子归到它的 Podium 区: 状态/浇筑时间都从 P 区读 */
+        const zz=_podL?{mk:this.curLevel+'|'+_podL,label:_podL,cat:'MA',_pod:true}:(zoneByCol[this._colKey(c.id)]||zoneByLabel[c.zone]);   /* Marine 柱子归到它的 Podium 区: 状态/浇筑时间都从 P 区读 */
         /* A column whose stored zone name matches nothing on this level used to vanish the moment any
            area filter was on: admin looking at All saw it, an NB account did not.  Fall back to the
            zone it physically stands in before deciding it belongs to another area. */
@@ -6787,9 +6795,9 @@ class Component extends DCLogic {
     if(!_focusOnly&&this.showColumns&&!(this.colorMode==='castdate'&&!this._castColumnsOn())){   // 本地"点击放置"但还没入库的柱子(实心点); 已入库的跳过避免重复
       // 去重: 同 id 跳过; 另外按位置去重 —— 和任一正式柱子重叠(<1400)的一律跳过, 清掉已烤入正式数据后本地残留的重复
       const _nearReal=(x,y)=>_realCol.some(rc=>Math.hypot(rc.x-x,rc.y-y)<1400);
-      this.placedCols(this.curLevel).forEach(c=>{ const _nid=_nrm(c.id); if(_colSeen.has(_nid)||_realIds.has(c.id)||_nearReal(c.x,c.y))return; if(this._colHidden(this.curLevel,c.id)&&!this._hidingCol)return; const sy=H-c.y;
+      this.placedCols(this.curLevel).forEach(c=>{ const _nid=_nrm(c.id); if(_colSeen.has(_nid)||_realIds.has(c.id)||_nearReal(c.x,c.y))return; if((this._colHidden(this.curLevel,c.id)||this._colDropped(this.curLevel,c.id))&&!this._hidingCol)return; const sy=H-c.y;
         const _pc=!!c.crit||!!(this._marineCritSet&&this._marineCritSet.has(_nid));   /* 本地放置柱: 自身 crit 或 marine 表标了 critical → 红 */
-        const _pl=(this.curLevel==='L1')?this._colPodLabel(c.id):null,_pz=_pl?{mk:this.curLevel+'|'+_pl,label:_pl,cat:'MA',_pod:true}:zoneByLabel[c.zone],_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_ps=_pk?this.elemStatus(_pk):'todo',_pd=_pk?this.elemDate(_pk):'',_pr=_pc&&_ps!=='done',_pf=_ps==='done'?'#111111':_ps==='wip'?this.cssvar('--wip'):'#8a93a3';
+        const _pl=(this.curLevel==='L1')?this._colPodLabel(c.id):null,_pz=_pl?{mk:this.curLevel+'|'+_pl,label:_pl,cat:'MA',_pod:true}:(zoneByCol[this._colKey(c.id)]||zoneByLabel[c.zone]),_pk=_pz?this.ekey(this.curLevel,_pz,'col',c.id):'',_ps=_pk?this.elemStatus(_pk):'todo',_pd=_pk?this.elemDate(_pk):'',_pr=_pc&&_ps!=='done',_pf=_ps==='done'?'#111111':_ps==='wip'?this.cssvar('--wip'):'#8a93a3';
         if(this.filterCat!=='all'&&(!_pz||(_pz.cat||'NB')!==this.filterCat))return;
         _colSeen.add(_nid);
         _colHtml+=`<circle class="colmk colmk-placed" data-pcid="${this.esc(c.id)}" data-pczone="${this.esc(c.zone||'')}" style="cursor:pointer" cx="${c.x.toFixed(0)}" cy="${sy.toFixed(0)}" r="980" fill="${_pf}" stroke="${_pr?'#c8102e':'#ffffff'}" stroke-width="${_pr?360:220}"/>`;
