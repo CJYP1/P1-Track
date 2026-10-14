@@ -163,7 +163,7 @@ class Component extends DCLogic {
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
     if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
     if(aid==='slab_pile')return false;   /* merged into 'slab' everywhere */
-    switch(aid){case 'slab_top':return cat==='MA';   /* Top Slab is a Marine activity only — NB / EB have none */
+    switch(aid){case 'slab_top':return cat==='MA'&&lv==='L1';   /* Top Slab is a Marine L1 activity only — NB / EB and upper levels have none */
       case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':return cat==='EB'&&(lv==='B2'||lv==='B1'||lv==='L1');case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
   /* Demolition also runs on the L1 slab over the existing basement: the programme carries it on
      nine EB zones there (SLAB B-2.1 \u2026 B-3.5) and the level was simply missing from the list
@@ -2729,7 +2729,8 @@ class Component extends DCLogic {
   _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});/* Marine on L1 is reported on the Podium alone — that is what the teams are planned on, so
        the report and the resource plan line up.  Set _maL1AllSubs=true to bring the ZC parent
        zones and the C sub-zones back in. */
-    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){if(!this._maL1AllSubs)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(this._maL1AllSubs?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
+    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
+      if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P'});}));}return out;}
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
   /* m² Report activities use the full applicable zone area as their denominator.
      This includes not-yet-scheduled zones and keeps Marine Top/Bottom/Podium scopes separate. */
