@@ -1316,7 +1316,7 @@ class Component extends DCLogic {
         /* Total done to date (every month up to and including this one) and the zone's full scope. */
         r.cum+=_all;if(Number.isFinite(_t)&&_t>0)r.total+=_t;   /* all-time done (every month entered) and full scope */
       });});});
-    const sort=rows=>rows.sort((a,b)=>(this.DATA.order.indexOf(a.lv)-this.DATA.order.indexOf(b.lv))||(b.owe-a.owe)||(b.earlyRemain-a.earlyRemain)||String(a.label).localeCompare(String(b.label)));
+    const sort=rows=>rows.sort((a,b)=>(this.DATA.order.indexOf(a.lv)-this.DATA.order.indexOf(b.lv))||(this._actSeq(a.id)-this._actSeq(b.id))||String(a.label).localeCompare(String(b.label)));
     return {prev,earlier,allTot,critical:sort(Object.values(by.critical)),noncritical:sort(Object.values(by.noncritical))};
   }
   /* Monthly Summary: admin, plus NB / EB / MA accounts for their own area(s) (view only). */
@@ -2833,6 +2833,9 @@ class Component extends DCLogic {
   /* Catch-Up and Actual share one authoritative full-level denominator. */
   _reportCommonTotal(levels,aid,cat,filter,A,P){const fixed=this._reportScopeTotal(levels,aid,cat,filter);if(fixed!=null)return fixed;const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const el=this._reportElemTotal(levels,aid,cat,filter);if(el!=null)return el;
     const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
+  /* Work sequence used to order Report and Monthly Summary rows (Marine L1: Piling → Top Slab →
+     Precast Beam → RC Works → Cyclical Works → Column → Core/Lift/Stair Wall). */
+  _actSeq(aid){const O=['earth','exc','demo_wall','demo','piling','slab_top','pcbeam','rc','act_cyclical','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','sbeam','slab','temp_stair','mep_acmv','mep_fps','mep_elec','mep_bms'];const i=O.indexOf(aid);return i<0?99:i;}
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
@@ -2845,7 +2848,7 @@ class Component extends DCLogic {
         const maLabel={slab_top:'Top Slab'};   /* plain activity names — no Top Slab / Bottom Slab / Podium prefix */
         const k=lv+'\u0001'+a.id+(filter?'\u0001'+filter:'');
         by[k]=by[k]||{a:(filter==='cis'?'CIS Slab':(filter==='nocis'?'Non-CIS Slab':((cat==='MA'&&maLabel[a.id])||a.label))),levels:[lv],aid:a.id,unit:a.unit||'',filter,hasSchedule};if(hasSchedule)by[k].hasSchedule=true;}); }); });
-    return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0||r.hasSchedule).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||a.a.localeCompare(b.a)); }
+    return Object.values(by).map(r=>{const A=this._catchupActual(r.levels,r.aid,cat,r.filter),P=this._catchupPlan(r.levels,r.aid,cat,r.filter),den=this._reportCommonTotal(r.levels,r.aid,cat,r.filter,A,P);r.tgt=den>0?Math.min(100,Math.round(Math.min(den,P.planned)/den*100)):0;r.by=P.end?this._fmtDShort(P.end):'—';r.actual=A;r.plan=P;r.liveTotal=den;return r;}).filter(r=>r.liveTotal>0||r.actual.done>0||r.plan.planned>0||r.hasSchedule).sort((a,b)=>(this.DATA.order.indexOf(a.levels[0])-this.DATA.order.indexOf(b.levels[0]))||(this._actSeq(a.aid)-this._actSeq(b.aid))||String(a.filter||'').localeCompare(String(b.filter||''))||a.a.localeCompare(b.a)); }
   /* NB/EB/MA 三份 Report: 普通账号按区域权限查看; admin / RWS 看全部 */
   _reportDefs(){ return {
     NB:{label:'NB Report', title:'New Basement Superstructure', scope:'New Basement · working levels with live Activity data',levels:['B2','B1','B1M','L1','L2','L3','L4','L5']},
