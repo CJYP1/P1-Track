@@ -1306,12 +1306,27 @@ class Component extends DCLogic {
   /* Marine L1: the Report counts the Podium alone, but the catch-up has to show every Marine L1
      job — Top slab on the ZC zones and the bottom slab (RC works / precast / cyclical) on the C
      sub-zones as well as the Podium P sub-zones. */
+  /* Columns and core / lift / stair walls are counted by progress, not only by finished elements:
+     each element adds its % / 100.  A month's work = how much the %s grew during that month
+     (from the % history; a Done element reaches 100% on its cast date). */
+  _progAid(aid){return aid==='col'||aid==='ls'||aid==='act_corewall';}
+  _actMonthEnd(m){if(m==="Before Apr'26")return '2026-03-31';const x=String(m).match(/^([A-Za-z]{3})'(\d\d)$/);if(!x)return '';const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(x[1])+1,y=2000+(+x[2]),d=new Date(Date.UTC(y,mo,0));return d.toISOString().slice(0,10);}
+  _elemPctAt(lv,zmk,aid,r,iso){const st=this.elemStatus(r.key),today=this.todayISOStr();let best=0;
+    if(st==='done'){const dt=this.elemDate(r.key)||today;if(dt<=iso)return 100;}
+    const h=(this._manpower||{})[this._elemPourKey(lv,zmk,aid,r.type,r.id)+'||h'];
+    if(Array.isArray(h)&&h.length){h.forEach(e=>{if(e&&e.d&&e.d<=iso)best=Number(e.v)||0;});}
+    else{const v=this.elemPourPct(lv,zmk,aid,r.type,r.id);if(v!=null&&today<=iso)best=v;}
+    return Math.max(0,Math.min(st==='done'?99:100,best));}
+  _actProgTo(lv,zmk,aid,m){if(!m)return 0;const iso=this._actMonthEnd(m);if(!iso)return 0;const T={col:['col'],ls:['core','lift','stair'],act_corewall:['core']}[aid]||[];
+    return this._activityElemRefs(lv,zmk,aid).filter(r=>T.indexOf(r.type)>=0||r.custom).reduce((n,r)=>n+this._elemPctAt(lv,zmk,aid,r,iso)/100,0);}
+  _actDoneProg(lv,zmk,aid,m){const M=this.ACT_MONTHS||[],i=M.indexOf(m);if(i<0)return 0;return Math.max(0,this._actProgTo(lv,zmk,aid,m)-(i>0?this._actProgTo(lv,zmk,aid,M[i-1]):0));}
   _monthlySummaryRows(cat,mon){
     if(cat==='MA'&&!this._maL1AllSubs){this._maL1AllSubs=true;try{return this._monthlySummaryRows(cat,mon);}finally{this._maL1AllSubs=false;}}
     const M=this.ACT_MONTHS||[],mi=M.indexOf(mon),prev=mi>0?M[mi-1]:null,earlier=mi>1?M[mi-2]:null,by={critical:{},noncritical:{}},allTot={critical:{},noncritical:{}},lvTot={};if(mi<0)return {critical:[],noncritical:[],prev,earlier};
     (this.DATA.order||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;(this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)&&!(a.id==='slab_top'&&cat!=='MA')).forEach(a=>{
-        const plan=Number(this.actPlan(lv,zmk,a.id,mon))||0,prevPlan=prev?(Number(this.actPlan(lv,zmk,a.id,prev))||0):0,prevDone=prev?(Number(this.actDoneMonth(lv,zmk,a.id,prev))||0):0,done=Number(this.actDoneMonth(lv,zmk,a.id,mon))||0,cg=this.actCarry(lv,zmk,a.id,mi),earlyPlan=M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+(Number(this.actPlan(lv,zmk,a.id,m))||0),0),earlyDone=M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),earlyRemain=Math.max(0,earlyPlan-earlyDone);
-        const _u=a.unit||this._actUnit(a.id)||'',_p=z.crit?'critical':'noncritical',_all=M.reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),_t=Number(this.actTotal(lv,zmk,a.id,this.actAutoTotal(lv,zmk,a.id)));
+        const DM=m=>this._progAid(a.id)?this._actDoneProg(lv,zmk,a.id,m):(Number(this.actDoneMonth(lv,zmk,a.id,m))||0);
+        const plan=Number(this.actPlan(lv,zmk,a.id,mon))||0,prevPlan=prev?(Number(this.actPlan(lv,zmk,a.id,prev))||0):0,prevDone=prev?DM(prev):0,done=DM(mon),cg={balance:M.slice(0,mi+1).reduce((n,m)=>n+(Number(this.actPlan(lv,zmk,a.id,m))||0),0)-(this._progAid(a.id)?this._actProgTo(lv,zmk,a.id,mon):M.slice(0,mi+1).reduce((n,m)=>n+DM(m),0))},earlyPlan=M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+(Number(this.actPlan(lv,zmk,a.id,m))||0),0),earlyDone=this._progAid(a.id)?(mi>1?this._actProgTo(lv,zmk,a.id,M[mi-2]):0):M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+DM(m),0),earlyRemain=Math.max(0,earlyPlan-earlyDone);
+        const _u=a.unit||this._actUnit(a.id)||'',_p=z.crit?'critical':'noncritical',_all=this._progAid(a.id)?this._actProgTo(lv,zmk,a.id,M[M.length-1]):M.reduce((n,m)=>n+DM(m),0),_t=Number(this.actTotal(lv,zmk,a.id,this.actAutoTotal(lv,zmk,a.id)));
         {const T=allTot[_p][_u]||(allTot[_p][_u]={cum:0,total:0});T.cum+=_all;if(Number.isFinite(_t)&&_t>0)T.total+=_t;
          /* per level + activity, every zone (finished ones too) — the row's Total done must match the level tiles */
          const LK=_p+'||'+lv+'||'+a.id+'||'+_u,LT=lvTot[LK]||(lvTot[LK]={cum:0,total:0});LT.cum+=_all;if(Number.isFinite(_t)&&_t>0)LT.total+=_t;}
@@ -1341,7 +1356,7 @@ class Component extends DCLogic {
     const makePath=(title,list,critical)=>{let lastLv='';const body=list.map(r=>{const head=r.lv!==lastLv?(lastLv=r.lv,`<tr class="monthly-level"><td colspan="8">${this.esc(cat)} · ${this.esc(r.lv)}</td></tr>`):'';const cell=(v,cls)=>`<td class="num ${cls||''}">${fmt(v)}<small>${this.esc(r.unit)}</small></td>`;return head+`<tr><td><b>${this.esc(r.label)}</b><small>${r.zones.size} zone${r.zones.size===1?'':'s'}</small></td>${cell(r.earlyRemain,r.earlyRemain?'backlog':'')}${cell(r.prevPlan)}${cell(r.prevDone,'done')}${cell(r.plan)}${cell(r.done,'done')}${cell(r.owe,r.owe?'owe':'clear')}${cumCell(r)}</tr>`;}).join('')||`<tr><td colspan="8" class="monthly-empty">No ${critical?'critical':'non-critical'} work for ${this.esc(mon)}.</td></tr>`;return `<section class="monthly-path ${critical?'critical':'noncritical'}"><h3>${title}</h3><div class="monthly-summary-table"><table><thead><tr><th>Remaining Activity</th><th>${this.esc(earlier)}<small>remaining</small></th><th>${this.esc(prev)}<small>plan</small></th><th>${this.esc(prev)}<small>actual work</small></th><th>${this.esc(mon)}<small>plan</small></th><th>${this.esc(mon)}<small>actual work</small></th><th>${this.esc(mon)}<small>owed after month</small></th><th>Total done<small>all time / scope</small></th></tr></thead><tbody>${body}</tbody>${totRows(list,'Total',data.allTot&&data.allTot[critical?'critical':'noncritical'])}</table></div></section>`;};
     const count=data.critical.length+data.noncritical.length;
     let ov=this.root.querySelector('#monthlySummaryOverlay');if(!ov){ov=document.createElement('div');ov.id='monthlySummaryOverlay';this.root.appendChild(ov);}
-    ov.innerHTML=`<div class="monthly-summary-shell"><div class="monthly-summary-head"><div><h2>Monthly Catch-Up Summary</h2><p>${this.rwsIsAdmin()?'Admin':'View only · '+_cats.join(' / ')} · Critical and Non-Critical paths use the live online Zone flags and Activity quantities.</p></div><div class="monthly-summary-actions"><select id="monthlySummaryMonth">${M.map(m=>`<option value="${this.esc(m)}"${m===mon?' selected':''}>${this.esc(m)}</option>`).join('')}</select><button class="hbtn" id="monthlySummaryClose">Close ✕</button></div></div><div class="monthly-summary-tabs">${_cats.map(c=>`<button data-cat="${c}" class="${c===cat?'on':''}" style="--tab:${colors[c]}">${labels[c]}</button>`).join('')}</div><div class="monthly-summary-title"><b style="color:${colors[cat]}">${labels[cat]}</b><span>${this.esc(mon)} · ${count} activity rows</span></div><div class="monthly-path-grid">${makePath('Critical Path',data.critical,true)}${makePath('Non-Critical Path',data.noncritical,false)}</div><div class="monthly-summary-note">The first quantity column is outstanding work accumulated through ${this.esc(earlier)}. Owed-after-month is calculated per Zone before activities are summed, so progress in one Zone cannot hide another Zone’s backlog.</div></div>`;
+    ov.innerHTML=`<div class="monthly-summary-shell"><div class="monthly-summary-head"><div><h2>Monthly Catch-Up Summary</h2><p>${this.rwsIsAdmin()?'Admin':'View only · '+_cats.join(' / ')} · Critical and Non-Critical paths use the live online Zone flags and Activity quantities.</p></div><div class="monthly-summary-actions"><select id="monthlySummaryMonth">${M.map(m=>`<option value="${this.esc(m)}"${m===mon?' selected':''}>${this.esc(m)}</option>`).join('')}</select><button class="hbtn" id="monthlySummaryClose">Close ✕</button></div></div><div class="monthly-summary-tabs">${_cats.map(c=>`<button data-cat="${c}" class="${c===cat?'on':''}" style="--tab:${colors[c]}">${labels[c]}</button>`).join('')}</div><div class="monthly-summary-title"><b style="color:${colors[cat]}">${labels[cat]}</b><span>${this.esc(mon)} · ${count} activity rows</span></div><div class="monthly-path-grid">${makePath('Critical Path',data.critical,true)}${makePath('Non-Critical Path',data.noncritical,false)}</div><div class="monthly-summary-note">The first quantity column is outstanding work accumulated through ${this.esc(earlier)}. Owed-after-month is calculated per Zone before activities are summed, so progress in one Zone cannot hide another Zone’s backlog. Column and Core/Lift/Stair Wall count progress, not only finished elements: each element adds its % (a column at 40% counts 0.4), and a month’s work is how much the %s grew in that month.</div></div>`;
     ov.style.display='block';ov.querySelector('#monthlySummaryClose').onclick=()=>{ov.style.display='none';};ov.querySelector('#monthlySummaryMonth').onchange=e=>{this._monthlySummaryMonth=e.target.value;this.openMonthlySummary();};ov.querySelectorAll('.monthly-summary-tabs button').forEach(b=>b.onclick=()=>{this._monthlySummaryCat=b.dataset.cat;this.openMonthlySummary();});
   }
   saveEdited(){try{localStorage.setItem('rws_edited_keys',JSON.stringify(this._editedKeys||{}));}catch(e){}}
@@ -5796,7 +5811,7 @@ class Component extends DCLogic {
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'+(r.custom?'<span style="color:var(--faint)">—</span>':'<input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>')
           +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'
-          +['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
+          +[['todo','Not started'],['wip','In progress'],['done','Done']].map(([x,l])=>opt(x,r.st,l)).join('')+'</select></td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap">'+(()=>{
             /* Same % as the zone panel: columns under Column, core walls / lifts / stairs under Core/Lift/Stair. */
             const pa=r.custom?null:this._pourAidOfType(r.type);if(!pa)return '<span style="color:var(--faint)">—</span>';
@@ -5944,7 +5959,7 @@ class Component extends DCLogic {
         +'<td style="'+TD+';white-space:nowrap"><input type="number" step="any" min="0" class="qDone" '+d+' value="'+(r.done||'')+'" placeholder="0" style="'+IN+';width:90px"> <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
         +'<td style="'+TD+'"><input type="date" class="qDate" '+d+' value="'+esc(this.todayISOStr())+'" style="'+IN+'"></td>'
         +'<td style="'+TD+';font-weight:800">'+(r.pct==null?'—':r.pct+'%')+'</td>'
-        +'<td style="'+TD+'">'+esc(r.st)+'</td>'
+        +'<td style="'+TD+'">'+esc(({todo:'Not started',wip:'In progress',done:'Done'})[r.st]||r.st)+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+(last?'<a href="#" class="qHist" '+d+' title="'+esc((last.by?'by '+last.by+' · ':'')+'click for the history')+'" style="color:var(--accent);text-decoration:none">'+esc(fd(last.d))+(r.hist.length>1?' <span style="color:var(--faint)">('+r.hist.length+')</span>':'')+'</a>':'<span style="color:var(--faint)">—</span>')+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+esc(fd(r.ps))+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap'+(late?';color:var(--crit);font-weight:700':'')+'">'+esc(fd(r.pe))+'</td>'
@@ -6044,7 +6059,7 @@ class Component extends DCLogic {
           +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><select class="rgZone" '+d+' style="'+IN+'">'+zones.map(z=>opt(z.label||z.mk,r.zone)).join('')+'</select></td>'
           +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>'
             +(r.why?'<div style="font-size:10px;color:var(--crit)">'+esc(r.why)+'</div>':'')+'</td>'
-          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'+['todo','wip','done'].map(x=>opt(x,r.st)).join('')+'</select></td>'
+          +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><select class="rgSt" '+d+' style="'+IN+'">'+[['todo','Not started'],['wip','In progress'],['done','Done']].map(([x,l])=>opt(x,r.st,l)).join('')+'</select></td>'
           +'<td style="padding:3px 6px;border-bottom:1px solid var(--line)"><input type="date" class="rgDate" '+d+' value="'+esc(r.date||'')+'" style="'+IN+'"></td>'
           +'<td style="padding:3px 6px;border-bottom:1px solid var(--line);text-align:right"><button class="hbtn rgDel" '+d+' style="color:var(--crit);padding:1px 6px">✕</button></td>'
           +'</tr>';});
@@ -7423,7 +7438,7 @@ class Component extends DCLogic {
     if(_mv){
       const _ms=this._marineViewStats(_mv),dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
       const _num=v=>this.fmt(Math.max(0,Math.round((Number(v)||0)*100)/100));
-      const _cards=_ms.rows.map(r=>{const total=Math.max(0,r.total),done=Math.max(0,r.done),wip=Math.max(0,Math.min(r.wip,total-done)),left=Math.max(0,total-done-wip),dp=total?Math.min(100,done/total*100):0,wp=total?Math.min(100-dp,wip/total*100):0;return `<div class="kpi"><div class="n">${_num(total)}</div><div class="l">${this.esc(r.label)}${r.unit?' '+this.esc(r.unit):''}</div><div class="kmini" title="${_num(done)} done · ${_num(wip)} in progress · ${_num(left)} remaining"><i style="width:${dp}%;background:${dc}"></i><i style="width:${wp}%;background:${wc}"></i><i style="width:${Math.max(0,100-dp-wp)}%;background:${tc}"></i></div><div class="kmc"><span style="color:${dc}">${_num(done)} done</span>${wip?`<span style="color:${wc}">${_num(wip)} wip</span>`:''}<span style="color:var(--faint)">${_num(left)} left</span></div></div>`;});
+      const _cards=_ms.rows.map(r=>{const total=Math.max(0,r.total),done=Math.max(0,r.done),wip=Math.max(0,Math.min(r.wip,total-done)),left=Math.max(0,total-done-wip),dp=total?Math.min(100,done/total*100):0,wp=total?Math.min(100-dp,wip/total*100):0;return `<div class="kpi"><div class="n">${_num(total)}</div><div class="l">${this.esc(r.label)}${r.unit?' '+this.esc(r.unit):''}</div><div class="kmini" title="${_num(done)} done · ${_num(wip)} in progress · ${_num(left)} remaining"><i style="width:${dp}%;background:${dc}"></i><i style="width:${wp}%;background:${wc}"></i><i style="width:${Math.max(0,100-dp-wp)}%;background:${tc}"></i></div><div class="kmc"><span style="color:${dc}">${_num(done)} done</span>${wip?`<span style="color:${wc}">${_num(wip)} in progress</span>`:''}<span style="color:var(--faint)">${_num(left)} left</span></div></div>`;});
       _cards.push(`<div class="kpi"><div class="n">${this.fmt(_ms.area)}</div><div class="l">Area m² · ${this.esc(_mv.label)}</div></div>`);
       this.root.querySelector('#kpis').innerHTML=_cards.join('');return;
     }
@@ -7445,7 +7460,7 @@ class Component extends DCLogic {
     const dc=this.cssvar('--done'),wc=this.cssvar('--wip'),tc=this.cssvar('--todo');
     const mini=(es)=>{ if(!es||!es.total) return ''; const rem=es.total-es.done-es.wip;
       return `<div class="kmini" title="${es.done} done · ${es.wip} in progress · ${rem} remaining"><i style="width:${es.done/es.total*100}%;background:${dc}"></i><i style="width:${es.wip/es.total*100}%;background:${wc}"></i><i style="width:${rem/es.total*100}%;background:${tc}"></i></div>
-        <div class="kmc"><span style="color:${dc}">${es.done} done</span><span style="color:${wc}">${es.wip} wip</span><span style="color:var(--faint)">${rem} left</span></div>`; };
+        <div class="kmc"><span style="color:${dc}">${es.done} done</span><span style="color:${wc}">${es.wip} in progress</span><span style="color:var(--faint)">${rem} left</span></div>`; };
     // Excavation / Demolition — admin totals + cumulative done, summed across the level
     let excT=0,excD=0,demoT=0,demoD=0;
     uniq.forEach(z=>{const zmk=z.mk||z.lid;if(this._actApplies('exc',this.curLevel,z)){excT+=this.excTotal(this.curLevel,z)||0;excD+=this.actCumDone(this.curLevel,zmk,'exc')||0;}if(this._actApplies('demo_wall',this.curLevel,z)){demoT+=(this.actTotal(this.curLevel,zmk,'demo',0)||0)+(this.actTotal(this.curLevel,zmk,'demo_wall',0)||0);demoD+=(this.actCumDone(this.curLevel,zmk,'demo')||0)+(this.actCumDone(this.curLevel,zmk,'demo_wall')||0);}});
@@ -8578,7 +8593,7 @@ class Component extends DCLogic {
         <span class="frac" style="color:${this.progColor(es.total?Math.round(es.done/es.total*100):0)}">${es.done}/${es.total}</span>
         <span class="eb"><i style="width:${es.done/es.total*100}%;background:${dc}"></i><i style="width:${es.wip/es.total*100}%;background:${wc}"></i></span>
         <button data-bulk-all="done">All done</button>
-        <button data-bulk-all="wip">All WIP</button>
+        <button data-bulk-all="wip">All in progress</button>
         <button data-bulk-all="todo">Clear</button>
       </div>`:'<div class="g" style="color:var(--faint)">No element ID list in the source for this zone — update progress via the Schedule progress section above.</div>';
     const hist=(this.updates[z.mk]||[]);
