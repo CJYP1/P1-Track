@@ -3,7 +3,9 @@ class Component extends DCLogic {
   renderVals(){ return { rootRef: el => { this.root = el; } }; }
 
   componentDidMount(){
-    const boot=(DATA,CAT,OVL,ZP,T)=>{ this.DATA=DATA; this.CAT=CAT; this.OVL=OVL; this.ZP=ZP;
+    const boot=(DATA,CAT,OVL,ZP,T)=>{ this.DATA=DATA;
+      /* L1 M-SLAB 3–6 belong to Marine on L1 (whole zone, all activities). They are not ZC parent zones, so _mslabMA keeps the ZC-only logic off them. */
+      try{((DATA.levels.L1||{}).zones||[]).forEach(z=>{if(/^M-?SLAB\s*[3-6]$/i.test(String(z.label||'').trim())){z.cat='MA';z._mslabMA=true;}});}catch(e){} this.CAT=CAT; this.OVL=OVL; this.ZP=ZP;
       /* practice-only: extend L5 transfer slab outline to enclose transfer col WF-B2C58 (team data untouched) */
       try{var _l2=this.DATA&&this.DATA.levels&&this.DATA.levels.L2&&this.DATA.levels.L2.zones;if(_l2)_l2.forEach(function(z){if(z&&z.label==='P1.2T')z.label='1.2T';});}catch(_e2){}
       /* L5 is an independent working-floor copy of L4.  Keep its geometry/list content
@@ -162,7 +164,7 @@ class Component extends DCLogic {
   _actApplies(aid,lv,z){if(z&&z._topOnly)return aid==='slab_top';const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
-    if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
+    if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA'&&!(z&&z._mslabMA))return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
     if(aid==='slab_pile')return false;   /* merged into 'slab' everywhere */
     switch(aid){case 'slab_top':return lv==='L1'&&(cat==='MA'||this._mslabTop(z));   /* Top Slab: Marine L1, plus the M-SLAB 3–6 panels (reported under Marine) */
       case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':return cat==='EB'&&(lv==='B2'||lv==='B1'||lv==='L1');case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
@@ -381,7 +383,7 @@ class Component extends DCLogic {
     if(!Object.keys(own).length)return;
     const E=this.elem=this.elem||{},D=this._elemDate=this._elemDate||{},admin=this.rwsIsAdmin&&this.rwsIsAdmin(),rank=v=>v==='done'?2:((v&&v!=='todo')?1:0);
     this._podiumDupes=[];let moved=0;
-    (((this.DATA.levels.L1||{}).zones)||[]).forEach(z=>{if((z.cat||'NB')==='MA')return;const zmk=z.mk||z.lid;
+    (((this.DATA.levels.L1||{}).zones)||[]).forEach(z=>{if((z.cat||'NB')==='MA'&&!z._mslabMA)return;const zmk=z.mk||z.lid;
       z.cols=(z.cols||[]).filter(x=>{const id=typeof x==='string'?x:(x&&x.id),o=id&&own[this._colKey(id)];if(!o)return true;
         this._podiumDupes.push(id+': '+z.label+' → '+o.p);
         const ok='L1||'+zmk+'||col||'+id,nk='L1||L1|'+o.p+'||col||'+o.id;
@@ -581,7 +583,7 @@ class Component extends DCLogic {
     if(!z&&w.zone)z=(L.zones||[]).find(x=>(!pref||(x.cat||'NB')===pref)&&x.label===w.zone)||null;
     if(!z&&!pref){const zmk=this._shapeZmk(w,lv);z=(L.zones||[]).find(x=>(x.mk||x.lid)===zmk)||null;}
     const zmk=z?(z.mk||z.lid):'';
-    if(lv==='L1'&&z&&z.cat==='MA'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){
+    if(lv==='L1'&&z&&z.cat==='MA'&&!z._mslabMA&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){
       const all=this.SUBZONES.L1.P,byZone=all.map((e,i)=>({e,i})).filter(o=>((((this.SUBLINKS||{}).p2zone||{})[o.e.label]||[]).indexOf(z.label)>=0)),cand=byZone.length?byZone:all.map((e,i)=>({e,i}));
       cand.sort((a,b)=>{const pa=a.e.lp||a.e.pts[0],pb=b.e.lp||b.e.pts[0];return Math.hypot(pa[0]-cx,pa[1]-cy)-Math.hypot(pb[0]-cx,pb[1]-cy);});
       if(cand[0])return {lv,zmk:'L1|'+cand[0].e.label,label:cand[0].e.label,sub:{kind:'P',i:cand[0].i}};
@@ -1875,7 +1877,7 @@ class Component extends DCLogic {
     (this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{let done=0,plan=0;M.forEach(m=>{const d=this.actDoneMonth(lv,zmk,a.id,m),p=this.actPlan(lv,zmk,a.id,m);if(d!=null)done+=(+d||0);if(p!=null)plan+=(+p||0);});const pourPct=(a.id==='ls'||a.id==='act_corewall')?this.actPourPct(lv,zmk,a.id):null;if(pourPct!=null){const ratio=Math.max(0,Math.min(1,pourPct/100));ratios.push(ratio);if(pourPct>0)started=true;return;}let total=this.actTotal(lv,zmk,a.id,a.total);if(total==null||total<=0)total=plan>0?plan:(done>0?done:0);if(total<=0||(!plan&&!done))return;const ratio=Math.max(0,Math.min(1,done/total));ratios.push(ratio);if(done>0)started=true;});
     if(!ratios.length)return null;const complete=ratios.every(r=>r>=1),raw=ratios.reduce((a,b)=>a+b,0)/ratios.length,pct=complete?100:Math.min(99,Math.round(raw*100));return {pct,n:ratios.length,started,complete};}
   zoneActPct(lv,z){
-    if(lv==='L1'&&z&&z.cat==='MA'&&z.ring&&this.SUBLINKS){const _c=this._marineComboPct(lv,z);if(_c)return _c;}   /* marine 父区: ZC+C+P 合并 */
+    if(lv==='L1'&&z&&z.cat==='MA'&&!z._mslabMA&&z.ring&&this.SUBLINKS){const _c=this._marineComboPct(lv,z);if(_c)return _c;}   /* marine 父区: ZC+C+P 合并 */
     const ph=this._zonePhases(lv,z),W=this._pw(),present=Object.keys(ph).filter(p=>(W[p]||0)>0),all=this._zoneAllActivityPct(lv,z);if(!present.length)return all;
     let wsum=0,acc=0;present.forEach(p=>{const w=W[p];wsum+=w;acc+=ph[p]*w;});if(!wsum)return all;const raw=Math.round(acc/wsum*100),complete=raw>=100&&(!all||all.complete),pct=complete?100:Math.min(99,raw);return {pct,n:all?all.n:present.length,started:all?all.started:pct>0,complete,phases:present.length};}
   /* Slab casting status for map colouring (mirrors column status): none/todo/wip/done */
@@ -2676,7 +2678,7 @@ class Component extends DCLogic {
   _monAllowed(m){if(!m)return true;const V=this.visMonths();return V.indexOf(m)>=0||m==="Before Apr'26";}
   _castCut(info){if(!info||this._monAllowed(info.month))return info;
     return {aid:info.aid,done:false,date:null,start:null,end:null,month:null,hidden:true};}
-  _mapZoneCastInfo(lv,z){return this._castCut(lv==='L1'&&z&&z.cat==='MA'&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z));}
+  _mapZoneCastInfo(lv,z){return this._castCut(lv==='L1'&&z&&z.cat==='MA'&&!z._mslabMA&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z));}
   _castSlabsOn(){ return this._castShowSlabs!==false; }
   _castColumnsOn(){ return this._castShowColumns!==false; }
   _zoneCastColor(z){ if(!this._castSlabsOn())return '#efeaec'; const info=this._mapZoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
@@ -2734,8 +2736,7 @@ class Component extends DCLogic {
   _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});/* Marine on L1 is reported on the Podium alone — that is what the teams are planned on, so
        the report and the resource plan line up.  Set _maL1AllSubs=true to bring the ZC parent
        zones and the C sub-zones back in. */
-    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){(L&&L.zones||[]).forEach(z=>{if((z.cat||'NB')!=='MA'&&this._mslabTop(z))out.push({...z,cat:'MA',_topOnly:true,crit:z.crit});});   /* M-SLAB 3–6 Top Slab counts for Marine */
-      const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
+    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
       if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P',crit:this._subCrit(mk,e)});}));}return out;}
   /* Marine L1 sub-zones (C bottom slab, P podium) are critical when ticked Critical in their own panel. */
   _subCrit(mk,e){return !!(this._critOv||{})['L1|'+mk];}   /* ticked in the sub-zone's own panel */
@@ -5349,7 +5350,7 @@ class Component extends DCLogic {
         const zmk=z.mk||z.lid;
         this._regTypes().forEach(([type,arr,label])=>{
           /* Marine columns on L1 are kept by P zone (podium) only — the ZC / C slab zones don't hold them. */
-          if(type==='col'&&lv==='L1'&&(z.cat||'NB')==='MA'&&!z._pod)return;
+          if(type==='col'&&lv==='L1'&&(z.cat||'NB')==='MA'&&!z._pod&&!z._mslabMA)return;
           (z[arr]||[]).forEach(x=>{
             const id=(typeof x==='string')?x:x.id;
             add(lv,z,zmk,type,label,id);});
@@ -5604,7 +5605,7 @@ class Component extends DCLogic {
   /* L1 columns can sit in Marine's podium ledger (_marineCol, by P zone) or in a map zone.  A move
      between the two (or between P zones) is kept in elemMove like any other (L1||col||mark → target)
      and re-applied whenever the ledger or the zones are rebuilt. */
-  _l1ColZoneOpts(){const P=this._podLabels(),Z=(((this.DATA.levels.L1||{}).zones)||[]).filter(z=>!((z.cat||'NB')==='MA'&&!z._pod)).map(z=>z.label||z.mk);return P.concat(Z.filter(x=>P.indexOf(x)<0));}
+  _l1ColZoneOpts(){const P=this._podLabels(),Z=(((this.DATA.levels.L1||{}).zones)||[]).filter(z=>!((z.cat||'NB')==='MA'&&!z._pod&&!z._mslabMA)).map(z=>z.label||z.mk);return P.concat(Z.filter(x=>P.indexOf(x)<0));}
   _moveElemData(lv,fromZmk,toZmk,type,id){
     this._migrateElemKey(lv+'||'+fromZmk+'||'+type+'||'+id,lv+'||'+toZmk+'||'+type+'||'+id);
     const ck=this._colKey(id),MP=this._manpower||{};let d=false;
@@ -6640,7 +6641,7 @@ class Component extends DCLogic {
          override it, or two zones of the same Team come out in different shades. */
       if(!this._resourceMode&&vis&&this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); op=st.colored?0.62:0.92; }
       if(!this._resourceMode&&vis&&this.colorMode==='castdate'){ if(!this._castSlabsOn()){op=0.28;} else {const _ci=this._zoneCastInfo(this.curLevel,z); if(_ci.done)op=0.5;} }   /* 浇筑完成的板: 半透明黑, 跟按月上色的板区分 */
-      const _maL1=(this.curLevel==='L1'&&z.cat==='MA');   // L1 Marine 父区(ZC): ZC 层关只留边界线; 开则保持正常蓝色填充
+      const _maL1=(this.curLevel==='L1'&&z.cat==='MA'&&!z._mslabMA);   // L1 Marine 父区(ZC): ZC 层关只留边界线; 开则保持正常蓝色填充
       if(_maL1&&!this.showSubZC)op=0;
       const _aggPicked=this.rwsIsAdmin()&&this._adminAggLevel===this.curLevel&&this._adminAggSet&&this._adminAggSet.has(String(z.mk||z.lid));
       const _resInspect=this._resourceMode&&this._resourceInspect&&this._resourceInspect.lv===this.curLevel&&this._resourceInspect.zmk===(z.mk||z.lid);
@@ -6731,7 +6732,7 @@ class Component extends DCLogic {
     });
     _lbls.forEach(lb=>{
       const z=lb.z,cx=lb.fx,cy=lb.fy,fs=lb.fs;
-      if(this.curLevel==='L1'&&z.cat==='MA'&&this.showSubZC)return;   // ZC 子层已显示时避免父区重复
+      if(this.curLevel==='L1'&&z.cat==='MA'&&!z._mslabMA&&this.showSubZC)return;   // ZC 子层已显示时避免父区重复
       const isCrit=z.crit&&this.showCrit;
       const _pm=this.planMonth();
       const _delayed=this.colorMode==='plan'&&this.zoneDelayed(this.curLevel,z,_pm);   /* 延误: 标签变红粗边(替代原红点) */
@@ -6839,7 +6840,7 @@ class Component extends DCLogic {
     }
     // ZC 叠加层: 从真实 Marine 父区几何一次性生成(与 C/P 一样可切换显示)
     if(this.curLevel==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&!this.SUBZONES.L1.ZC){
-      this.SUBZONES.L1.ZC=(this.DATA.levels.L1.zones||[]).filter(z=>z.cat==='MA' && !/^P\d/i.test(z.label||'')).map(z=>({label:z.label,pts:z.ring,a:z.area,
+      this.SUBZONES.L1.ZC=(this.DATA.levels.L1.zones||[]).filter(z=>z.cat==='MA' && !z._mslabMA && !/^P\d/i.test(z.label||'')).map(z=>({label:z.label,pts:z.ring,a:z.area,
         lp:(z.lx!=null&&z.ly!=null)?[z.lx,z.ly]:[z.ring.reduce((a,p)=>a+p[0],0)/z.ring.length,z.ring.reduce((a,p)=>a+p[1],0)/z.ring.length]}));
     }
     const _subL=this.SUBZONES&&this.SUBZONES[this.curLevel];
@@ -8233,6 +8234,7 @@ class Component extends DCLogic {
     if(lv!=='L1')return null;
     if(z._pod)   return new Set(['col','ls','mbeam','cbeam']);            // Podium
     if(z._mslab) return new Set(['pcbeam','rc','act_cyclical']);                          // Bottom slab (C)
+    if(z._mslabMA) return null;   // M-SLAB 3–6: full activity list
     if(z.cat==='MA') return new Set(['piling','slab_top','mep_acmv','mep_fps','mep_elec','mep_bms']); // Top slab (ZC 真实分区)
     return null;
   }
