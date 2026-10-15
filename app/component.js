@@ -158,12 +158,13 @@ class Component extends DCLogic {
     const d=this._lsDrawn(z&&z._lv,z&&(z.mk||z.lid));
     return d==null?this.lsAll(c):d;
   }
-  _actApplies(aid,lv,z){const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
+  _mslabTop(z){return /^M-?SLAB\s*[3-6]$/i.test(String((z&&z.label)||'').trim());}
+  _actApplies(aid,lv,z){if(z&&z._topOnly)return aid==='slab_top';const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
     if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA')return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
     if(aid==='slab_pile')return false;   /* merged into 'slab' everywhere */
-    switch(aid){case 'slab_top':return cat==='MA'&&lv==='L1';   /* Top Slab is a Marine L1 activity only — NB / EB and upper levels have none */
+    switch(aid){case 'slab_top':return lv==='L1'&&(cat==='MA'||this._mslabTop(z));   /* Top Slab: Marine L1, plus the M-SLAB 3–6 panels (reported under Marine) */
       case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':return cat==='EB'&&(lv==='B2'||lv==='B1'||lv==='L1');case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
   /* Demolition also runs on the L1 slab over the existing basement: the programme carries it on
      nine EB zones there (SLAB B-2.1 \u2026 B-3.5) and the level was simply missing from the list
@@ -1306,7 +1307,7 @@ class Component extends DCLogic {
   _monthlySummaryRows(cat,mon){
     if(cat==='MA'&&!this._maL1AllSubs){this._maL1AllSubs=true;try{return this._monthlySummaryRows(cat,mon);}finally{this._maL1AllSubs=false;}}
     const M=this.ACT_MONTHS||[],mi=M.indexOf(mon),prev=mi>0?M[mi-1]:null,earlier=mi>1?M[mi-2]:null,by={critical:{},noncritical:{}},allTot={critical:{},noncritical:{}};if(mi<0)return {critical:[],noncritical:[],prev,earlier};
-    (this.DATA.order||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;(this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{
+    (this.DATA.order||[]).forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;(this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)&&!(a.id==='slab_top'&&cat!=='MA')).forEach(a=>{
         const plan=Number(this.actPlan(lv,zmk,a.id,mon))||0,prevPlan=prev?(Number(this.actPlan(lv,zmk,a.id,prev))||0):0,prevDone=prev?(Number(this.actDoneMonth(lv,zmk,a.id,prev))||0):0,done=Number(this.actDoneMonth(lv,zmk,a.id,mon))||0,cg=this.actCarry(lv,zmk,a.id,mi),earlyPlan=M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+(Number(this.actPlan(lv,zmk,a.id,m))||0),0),earlyDone=M.slice(0,Math.max(0,mi-1)).reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),earlyRemain=Math.max(0,earlyPlan-earlyDone);
         const _u=a.unit||this._actUnit(a.id)||'',_p=z.crit?'critical':'noncritical',_all=M.reduce((n,m)=>n+(Number(this.actDoneMonth(lv,zmk,a.id,m))||0),0),_t=Number(this.actTotal(lv,zmk,a.id,this.actAutoTotal(lv,zmk,a.id)));
         {const T=allTot[_p][_u]||(allTot[_p][_u]={cum:0,total:0});T.cum+=_all;if(Number.isFinite(_t)&&_t>0)T.total+=_t;}
@@ -2733,7 +2734,8 @@ class Component extends DCLogic {
   _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});/* Marine on L1 is reported on the Podium alone — that is what the teams are planned on, so
        the report and the resource plan line up.  Set _maL1AllSubs=true to bring the ZC parent
        zones and the C sub-zones back in. */
-    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
+    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){(L&&L.zones||[]).forEach(z=>{if((z.cat||'NB')!=='MA'&&this._mslabTop(z))out.push({...z,cat:'MA',_topOnly:true,crit:z.crit});});   /* M-SLAB 3–6 Top Slab counts for Marine */
+      const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
       if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P',crit:this._subCrit(mk,e)});}));}return out;}
   /* Marine L1 sub-zones (C bottom slab, P podium) are critical when ticked Critical in their own panel. */
   _subCrit(mk,e){return !!(this._critOv||{})['L1|'+mk];}   /* ticked in the sub-zone's own panel */
@@ -2842,7 +2844,7 @@ class Component extends DCLogic {
   _liveReportRows(cat,levels){ const AM=this.ACT_MONTHS,by={},wanted=(levels&&levels.length)?levels:this.DATA.order;
     wanted.forEach(lv=>{this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid;
       (this._actList(lv,z)||[]).filter(a=>a.custom||this._actApplies(a.id,lv,z)).forEach(a=>{let any=false;for(let i=0;i<AM.length;i++){if(this.actPlan(lv,zmk,a.id,AM[i])!=null||this.actDoneMonth(lv,zmk,a.id,AM[i])!=null){any=true;break;}}const hasElems=this._activityElemRefs(lv,zmk,a.id,z).length>0,hasTotal=Number(this.actTotal(lv,zmk,a.id,a.total))>0,ad=this._actDateOf(lv,zmk,a.id),hasSchedule=!!(ad.start||ad.end);if(!any&&!hasElems&&!hasTotal&&!hasSchedule)return;
-        if(!this._reportStructureAid(a.id))return;/* Every Slab row is the whole level, NB L2 included: it used to be the one exception. */
+        if(!this._reportStructureAid(a.id))return;if(a.id==='slab_top'&&cat!=='MA')return;/* Top Slab is reported under Marine only (incl. M-SLAB 3–6) */ /* Every Slab row is the whole level, NB L2 included: it used to be the one exception. */
         /* The CIS zones are poured as their own scope, so on a level that has
            them the Slab row splits in two — CIS and Non-CIS — which add back up
            to the level. Levels with no CIS zone keep the single row. */
