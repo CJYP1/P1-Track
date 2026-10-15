@@ -2756,7 +2756,10 @@ class Component extends DCLogic {
   _reportZones(lv,cat){const L=this.DATA.levels[lv],by={},score=z=>['cols','piles','beams','lifts','stairs','cores'].reduce((n,k)=>n+((z&&z[k]||[]).length),0);(L&&L.zones||[]).filter(z=>(z.cat||'NB')===cat).forEach(z=>{const k=String(z.mk||z.lid||z.label||'');if(!by[k]||score(z)>score(by[k]))by[k]=z;});/* Marine on L1 is reported on the Podium alone — that is what the teams are planned on, so
        the report and the resource plan line up.  Set _maL1AllSubs=true to bring the ZC parent
        zones and the C sub-zones back in. */
-    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
+    let out=Object.values(by);if(cat==='MA'&&lv==='L1'){
+      /* M-SLAB counts for Marine through its Top Slab only (3–6); its other works are not Marine's. */
+      out=out.filter(z=>!z._mslabMA||this._mslabTop(z)).map(z=>z._mslabMA?{...z,_topOnly:true}:z);
+      const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
       if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P',crit:this._subCrit(mk,e)});}));}return out;}
   /* Marine L1 sub-zones (C bottom slab, P podium) are critical when ticked Critical in their own panel. */
   _subCrit(mk,e){return !!(this._critOv||{})['L1|'+mk];}   /* ticked in the sub-zone's own panel */
