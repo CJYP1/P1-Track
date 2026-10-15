@@ -160,13 +160,13 @@ class Component extends DCLogic {
     const d=this._lsDrawn(z&&z._lv,z&&(z.mk||z.lid));
     return d==null?this.lsAll(c):d;
   }
-  _mslabTop(z){return /^M-?SLAB\s*\d+$/i.test(String((z&&z.label)||'').trim());}
+  _mslabTop(z){return /^M-?SLAB\s*[3-6]$/i.test(String((z&&z.label)||'').trim());}
   _actApplies(aid,lv,z){if(z&&z._topOnly)return aid==='slab_top';const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
     if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA'&&!(z&&z._mslabMA))return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
     if(aid==='slab_pile')return false;   /* merged into 'slab' everywhere */
-    switch(aid){case 'slab_top':return lv==='L1'&&(cat==='MA'||this._mslabTop(z));   /* Top Slab: Marine L1, plus the M-SLAB 3–6 panels (reported under Marine) */
+    switch(aid){case 'slab_top':return lv==='L1'&&(z&&z._mslabMA?this._mslabTop(z):cat==='MA');   /* Top Slab: Marine L1, plus the M-SLAB 3–6 panels (reported under Marine) */
       case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':return cat==='EB'&&(lv==='B2'||lv==='B1'||lv==='L1');case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
   /* Demolition also runs on the L1 slab over the existing basement: the programme carries it on
      nine EB zones there (SLAB B-2.1 \u2026 B-3.5) and the level was simply missing from the list
@@ -5893,12 +5893,12 @@ class Component extends DCLogic {
     const M=this.ACT_MONTHS||[],esc=s=>this.esc(s),f=v=>this.fmt(Math.round((+v||0)*100)/100),cur=this.actCurLabel?this.actCurLabel():'';
     let first=-1;M.forEach((m,i)=>{if(first<0&&this.actPlan(r.lv,r.zmk,r.aid,m)!=null)first=i;});
     let cum=0,cumP=0,rows='',overAt='';
-    M.forEach((m,i)=>{const p=this.actPlan(r.lv,r.zmk,r.aid,m),d=this.actDoneMonth(r.lv,r.zmk,r.aid,m);if(p==null&&d==null&&m!==cur)return;
+    const _adm=this.rwsIsAdmin();M.forEach((m,i)=>{const p=this.actPlan(r.lv,r.zmk,r.aid,m),d=this.actDoneMonth(r.lv,r.zmk,r.aid,m);if(p==null&&d==null&&m!==cur&&!_adm)return;
       cum+=(+d||0);cumP+=(+p||0);const over=r.total>0&&cum>r.total+0.5,early=first>=0&&i<first&&(+d||0)>0,big=p!=null&&(+d||0)>(+p||0)*1.5&&(+d||0)>0;
       if(over&&!overAt)overAt=m;
       const note=[early?'before plan start':'',over?'total exceeded':'',big?'done ≫ plan':''].filter(Boolean).join(' · ');
       rows+='<tr style="'+(over||early?'background:color-mix(in srgb,var(--crit) 10%,transparent)':'')+'"><td style="padding:3px 8px;font-weight:700">'+esc(m)+(m===cur?' <span style="color:var(--faint);font-weight:500">(now)</span>':'')+'</td>'
-        +'<td style="padding:3px 8px;text-align:right">'+(p==null?'—':f(p))+'</td>'
+        +'<td style="padding:3px 8px;text-align:right">'+(_adm?'<input type="number" step="any" min="0" class="qMonPlan" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-a="'+esc(r.aid)+'" data-m="'+esc(m)+'" value="'+(p==null?'':p)+'" placeholder="—" title="Plan for '+esc(m)+' (admin)" style="font:inherit;font-size:12px;padding:2px 5px;border:1px solid var(--line);border-radius:4px;width:86px;background:var(--panel);color:inherit;text-align:right">':(p==null?'—':f(p)))+'</td>'
         +'<td style="padding:3px 8px"><input type="number" step="any" min="0" class="qMonDone" data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-a="'+esc(r.aid)+'" data-m="'+esc(m)+'" value="'+(d==null?'':d)+'" placeholder="—" style="font:inherit;font-size:12px;padding:2px 5px;border:1px solid var(--line);border-radius:4px;width:86px;background:var(--panel);color:inherit"></td>'
         +'<td style="padding:3px 8px;text-align:right">'+f(cumP)+'</td><td style="padding:3px 8px;text-align:right;font-weight:700'+(over?';color:var(--crit)':'')+'">'+f(cum)+'</td>'
         +'<td style="padding:3px 8px;text-align:right">'+(r.total>0?Math.round(cum/r.total*100)+'%':'—')+'</td><td style="padding:3px 8px;color:var(--crit);font-size:11px">'+esc(note)+'</td></tr>';});
@@ -5935,7 +5935,7 @@ class Component extends DCLogic {
     rows.slice(0,600).forEach(r=>{const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-a="'+esc(r.aid)+'"',last=r.hist.length?r.hist[r.hist.length-1]:null,late=r.st!=='done'&&r.pe&&r.pe<this.todayISOStr();
       h+='<tr>'+(ALLLV?'<td style="'+TD+'"><b>'+esc(r.lv)+'</b></td>':'')
         +'<td style="'+TD+';font-weight:700;white-space:nowrap">'+esc(r.label)+' <a href="#" class="qMon" data-k="'+esc(r.lv+'||'+r.zmk+'||'+r.aid)+'" title="Plan and done month by month" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600">'+((st.open||{})[r.lv+'||'+r.zmk+'||'+r.aid]?'▾ months':'▸ months')+'</a></td><td style="'+TD+'">'+esc(r.zone)+'</td><td style="'+TD+';color:var(--dim)">'+esc(r.cat)+'</td>'
-        +(MON?'<td style="'+TD+';white-space:nowrap">'+f(this.actPlan(r.lv,r.zmk,r.aid,MON)||0)+' <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
+        +(MON?'<td style="'+TD+';white-space:nowrap">'+(_adm?'<input type="number" step="any" min="0" class="qMonPlan" '+d+' data-m="'+esc(MON)+'" value="'+(this.actPlan(r.lv,r.zmk,r.aid,MON)==null?'':this.actPlan(r.lv,r.zmk,r.aid,MON))+'" placeholder="—" title="Plan for '+esc(MON)+' (admin)" style="'+IN+';width:80px">':f(this.actPlan(r.lv,r.zmk,r.aid,MON)||0))+' <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
           +'<td style="'+TD+';white-space:nowrap"><input type="number" step="any" min="0" class="qMonDone" '+d+' data-m="'+esc(MON)+'" value="'+(this.actDoneMonth(r.lv,r.zmk,r.aid,MON)==null?'':this.actDoneMonth(r.lv,r.zmk,r.aid,MON))+'" placeholder="0" title="Done in '+esc(MON)+'" style="'+IN+';width:80px"> <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>':'')
         +'<td style="'+TD+';white-space:nowrap">'+(_adm?'<input type="number" step="any" class="qTot" '+d+' value="'+(r.typed?r.total:'')+'" placeholder="'+(r.total>0?f(r.total):'—')+'" style="'+IN+';width:90px">':f(r.total))+' <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+(r.typed?' · typed':(r.drawing>0?' · drawing':''))+'</span></td>'
         +'<td style="'+TD+';white-space:nowrap"><input type="number" step="any" min="0" class="qDone" '+d+' value="'+(r.done||'')+'" placeholder="0" style="'+IN+';width:90px"> <span style="color:var(--faint);font-size:11px">'+esc(r.unit)+'</span></td>'
@@ -5955,6 +5955,7 @@ class Component extends DCLogic {
     root.querySelector('#rgAct').onchange=e=>{st.act=e.target.value;st.type=st.act==='__all'?'qty':'qty:'+st.act;re();};
     root.querySelectorAll('.rgRefresh').forEach(b=>b.onclick=()=>this._rgRefresh(b));
     root.querySelectorAll('.qMon').forEach(b=>b.onclick=e=>{e.preventDefault();const k=b.dataset.k;st.open=st.open||{};st.open[k]=!st.open[k];re();});
+    root.querySelectorAll('.qMonPlan').forEach(i=>i.onchange=e=>{const t=e.target;this.setActPlan(t.dataset.lv,t.dataset.zmk,t.dataset.a,t.dataset.m,t.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();re();});
     root.querySelectorAll('.qMonDone').forEach(i=>i.onchange=e=>{const t=e.target;this.setActDoneMonth(t.dataset.lv,t.dataset.zmk,t.dataset.a,t.dataset.m,t.value);this.buildMetrics&&this.buildMetrics();this.render&&this.render();re();});
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
     {const mb=root.querySelector('#rgMon');if(mb)mb.onchange=e=>{st.mon=e.target.value;re();};}
