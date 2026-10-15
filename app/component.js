@@ -2735,10 +2735,8 @@ class Component extends DCLogic {
        zones and the C sub-zones back in. */
     let out=Object.values(by);if(cat==='MA'&&lv==='L1'){const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
       if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P',crit:this._subCrit(mk,e)});}));}return out;}
-  /* Marine L1 sub-zones (C bottom slab, P podium) are critical when flagged themselves, or when the ZC zone they sit in is critical —
-     otherwise their work fell under Non-Critical even inside a critical ZC zone. */
-  _subCrit(mk,e){const ov=this._critOv||{};if(ov['L1|'+mk])return true;const pts=(e&&e.pts)||[];const c=(e&&e.lp)||(pts.length?[pts.reduce((n,p)=>n+p[0],0)/pts.length,pts.reduce((n,p)=>n+p[1],0)/pts.length]:null);if(!c)return false;
-    const zc=(((this.DATA.levels.L1||{}).zones)||[]).find(z=>(z.cat||'NB')==='MA'&&z.ring&&z.ring.length>2&&this.ptIn(z.ring,c[0],c[1]));return !!(zc&&zc.crit);}
+  /* Marine L1 sub-zones (C bottom slab, P podium) are critical when ticked Critical in their own panel. */
+  _subCrit(mk,e){return !!(this._critOv||{})['L1|'+mk];}   /* ticked in the sub-zone's own panel */
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
   /* m² Report activities use the full applicable zone area as their denominator.
      This includes not-yet-scheduled zones and keeps Marine Top/Bottom/Podium scopes separate. */
@@ -7395,7 +7393,7 @@ class Component extends DCLogic {
     if(kind==='ZC'){
       const seen={};(this.DATA.levels.L1.zones||[]).forEach(z=>{if((z.cat||'NB')!=='MA')return;const k=this.zid(z);if(!seen[k]){seen[k]=1;zones.push(z);}});
     }else{
-      zones=(this.SUBZONES.L1[kind]||[]).map(e=>{const cols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?(this._marineCol[e.label]||[]):[],mk='L1|'+e.label,stairs=kind==='P'?this._stairItemsFor('L1',mk):[];return {mk,label:e.label,cat:'MA',area:e.a||0,cols,piles:[],beams:[],lifts:[],stairs,cores:[],sub:[],counts:{columns:cols.length,stair:stairs.length,pilecap:0,mainbeam:0,steelbeam:0},_pod:kind==='P',_mslab:kind==='C'};});
+      zones=(this.SUBZONES.L1[kind]||[]).map(e=>{const cols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?(this._marineCol[e.label]||[]):[],mk='L1|'+e.label,stairs=kind==='P'?this._stairItemsFor('L1',mk):[];return {mk,label:e.label,cat:'MA',area:e.a||0,cols,piles:[],beams:[],lifts:[],stairs,cores:[],sub:[],counts:{columns:cols.length,stair:stairs.length,pilecap:0,mainbeam:0,steelbeam:0},_pod:kind==='P',_mslab:kind==='C',crit:!!(this._critOv||{})['L1|'+mk]};});
     }
     return {kind,label:{ZC:'Top slab',C:'Bottom slab',P:'Podium'}[kind],zones};
   }
@@ -8539,6 +8537,8 @@ class Component extends DCLogic {
   selectZone(z,sub){
     this._rememberOpenSections();
     this._subOpen=sub||null;   // 细分(C/P)时保留上下文, 正常分区置空
+    /* Bottom-slab (C) and Podium (P) sub-zones carry their own Critical flag. */
+    if(sub&&z&&z.mk)z.crit=!!(this._critOv||{})[this.curLevel+'|'+this.zid(z)];
     const c=z.counts,ct=this.CAT[z.cat]||this.CAT.NB,p=z._p||{pct:0,status:'todo',seq:'-',start:0,end:0};
     const st=this.STATUS[p.status];
     const lv=this.curLevel;
@@ -8588,7 +8588,7 @@ class Component extends DCLogic {
      `<div class="zsticky"><span class="back" id="back"><span class="bkarrow">‹</span> Back</span><span class="zst-info"><b>${this.esc(z.label)}</b><span class="zst-sep">·</span>editing <span class="zst-m">${this.esc(this._actMonth)}</span></span></div>
       <div class="detail"><h3>${this.esc(z.label)} ${z.crit?'<span class="badge" style="font-size:9px;padding:1px 6px;border-radius:10px;background:var(--crit);color:#fff">CRITICAL</span>':''}<span style="margin-left:auto;font-size:13px;font-weight:800;color:var(${st.v})">${st.label}</span></h3>
       <div class="g"><span class="cat" style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:9.5px;font-weight:700;color:#fff;background:${ct.c}">${ct.label}</span> · ${z.grp&&z.grp!=='Ungrouped'?'Pour group: '+this.esc(z.grp):'Family: '+this.esc(z.fam)} · ${this.curLevel}</div>
-      ${this.rwsIsAdmin()&&!this._subOpen?`<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:${z.crit?'var(--crit)':'var(--dim)'};margin:2px 0 8px;cursor:pointer;user-select:none"><input type="checkbox" id="critChk" ${z.crit?'checked':''} style="width:15px;height:15px;accent-color:var(--crit);cursor:pointer">Critical zone <span style="font-weight:500;color:var(--faint)">· auto-saved</span></label>`:(z.crit?'<div style="font-size:11.5px;font-weight:700;color:var(--crit);margin:2px 0 8px">◆ Critical zone</div>':'')}
+      ${this.rwsIsAdmin()?`<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:${z.crit?'var(--crit)':'var(--dim)'};margin:2px 0 8px;cursor:pointer;user-select:none"><input type="checkbox" id="critChk" ${z.crit?'checked':''} style="width:15px;height:15px;accent-color:var(--crit);cursor:pointer">Critical zone <span style="font-weight:500;color:var(--faint)">· auto-saved</span></label>`:(z.crit?'<div style="font-size:11.5px;font-weight:700;color:var(--crit);margin:2px 0 8px">◆ Critical zone</div>':'')}
       ${subHtml}
       ${_slabColourCtl}
       <div class="progblock">
@@ -8621,7 +8621,7 @@ class Component extends DCLogic {
     const _aggMode=this.root.querySelector('.admin-agg-mode');if(_aggMode)_aggMode.addEventListener('click',()=>{if(this._adminAggLevel!==lv){this._adminAggLevel=lv;this._adminAggSet=new Set();this._adminAggObjs=new Map();}this._adminAggMode=!this._adminAggMode;if(this._adminAggMode&&this._adminAggSet&&!this._adminAggSet.size)this._adminAggToggle(lv,z);this.render();this.selectZone(z,sub);this.paintSel();});
     const _aggClear=this.root.querySelector('.admin-agg-clear');if(_aggClear)_aggClear.addEventListener('click',()=>{this._adminAggMode=false;this._adminAggSet=new Set();this._adminAggObjs=new Map();this._adminAggLevel=lv;this.render();this.selectZone(z,sub);this.paintSel();});
     this.root.querySelector('#back').addEventListener('click',()=>{this._discardOpenSections(lv,z);this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
-    const ck=this.root.querySelector('#critChk');if(ck)ck.addEventListener('change',()=>{const _vb={...this.vb};this.setCrit(this.curLevel,z,ck.checked);this.render();this.vb=_vb;this._vbLevel=this.curLevel;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();this.selectZone(z);this.paintSel();});
+    const ck=this.root.querySelector('#critChk');if(ck)ck.addEventListener('change',()=>{const _vb={...this.vb},_so=this._subOpen;this.setCrit(this.curLevel,z,ck.checked);if(_so)z.crit=ck.checked;this.render();this.vb=_vb;this._vbLevel=this.curLevel;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();this.selectZone(z,_so||undefined);this.paintSel();});
     const _scb=this.root.querySelector('#slabColourDone');if(_scb)_scb.addEventListener('click',()=>this.setSlabCompleteOverride(lv,z,_scb.dataset.clear?'':this._actMonth));
     const sv=this.root.querySelector('#in_save');
     if(sv)sv.addEventListener('click',()=>{
