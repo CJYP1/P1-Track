@@ -2861,7 +2861,7 @@ class Component extends DCLogic {
   }
   /* Catch-Up and Actual share one authoritative full-level denominator. */
   _reportCommonTotal(levels,aid,cat,filter,A,P){const fixed=this._reportScopeTotal(levels,aid,cat,filter);if(fixed!=null)return fixed;const area=this._reportAreaTotal(levels,aid,cat,filter);if(area!=null)return Math.max(0,Math.round(area));const el=this._reportElemTotal(levels,aid,cat,filter);if(el!=null)return el;
-    const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));if(this._elemAct(aid)&&at>0)return at;return Math.max(at,pt);}
+    const at=Math.max(0,Math.round(Number(A&&A.total)||0)),pt=Math.max(0,Math.round(Number(P&&P.total)||0));/* The scope (typed / drawing totals) is the denominator.  Monthly plans that add up to more than the scope no longer inflate it — the register flags them instead. */if(at>0)return at;return pt;}
   /* Work sequence used to order Report and Monthly Summary rows (Marine L1: Piling → Cyclical Works →
      Precast Beam → RC Works → Top Slab → Column → Core/Lift/Stair Wall). */
   _actSeq(aid){const O=['earth','exc','demo_wall','demo','piling','act_cyclical','pcbeam','rc','slab_top','slab_pile','pile','col','ls','act_corewall','act_wall','mbeam','cbeam','sbeam','slab','temp_stair','mep_acmv','mep_fps','mep_elec','mep_bms'];const i=O.indexOf(aid);return i<0?99:i;}
@@ -5888,6 +5888,7 @@ class Component extends DCLogic {
           const pct=total>0?Math.round(done/total*100):null,stt=total>0&&done>=total?'done':(done>0?'wip':'todo');
           const drawing=this._areaAid(aid)?(Number(z.area)||0):0,iss=[];
           if(total>0&&done>total)iss.push('Done exceeds total by '+this.fmt(Math.round(done-total))+' '+unit);
+          {const ps=M.reduce((n,m)=>n+(+this.actPlan(L,zmk,aid,m)||0),0);if(total>0&&ps>total+0.5)iss.push('Monthly plans add up to '+this.fmt(Math.round(ps))+' — '+this.fmt(Math.round(ps-total))+' '+unit+' more than the total');}
           if(early>0)iss.push('Done before plan start: '+this.fmt(Math.round(early))+' '+unit);
           if(!(total>0)&&anyD)iss.push('Done but no total');
           if(typed!=null&&drawing>0&&Math.abs(typed-drawing)>Math.max(1,drawing*0.01))iss.push('Total differs from drawing ('+this.fmt(drawing)+' m²)');
