@@ -8303,12 +8303,18 @@ class Component extends DCLogic {
     let ps='',pe='';aids.forEach(aid=>{const d=this._actDateOf(lv,zmk,aid)||{};if(d.start&&(!ps||d.start<ps))ps=d.start;if(d.end&&(!pe||d.end>pe))pe=d.end;});
     out.ps=ps;out.pe=pe;
     return out;}
+  /* Site dates (S) can be typed by admin and by NB / EB / MA accounts for their own zones. */
+  _psaCan(lv,zmk){return this.rwsIsAdmin()||this.rwsScopeOk(lv,zmk);}
+  /* Change log kept with each cell: [{f:'ss'|'se', v, by, t}] (newest last). */
+  _psaHist(lv,zmk,act,f){const h=((((this._psaOv(lv)[zmk]||{})[act])||{}).h)||[];return f?h.filter(x=>x.f===f):h;}
   _psaSet(lv,zmk,act,f,v){
-    if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can edit P/S/A dates.');return;}
+    if(!this._psaCan(lv,zmk)){this.rwsDeny('Outside your assigned zones.');return;}
     v=String(v||'').trim();
     const O=this._psaOv(lv),z=O[zmk]=O[zmk]||{},a=z[act]=z[act]||{};
     const s=this._psaSeedCell(lv,zmk,act)[f]||'';
+    const was=this._psaGet(lv,zmk,act)[f]||'';
     if(v===s)delete a[f];else a[f]=v;
+    if(v!==was)a.h=(a.h||[]).concat([{f,v,from:was,by:this._updUser(),t:Date.now()}]).slice(-40);
     if(!Object.keys(a).length)delete z[act];if(!Object.keys(z).length)delete O[zmk];
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')(typeof rwsSyncKVDeferred==='function'?rwsSyncKVDeferred:rwsSyncKV)('settings','psa:'+lv,O,lv,null);}
@@ -8386,8 +8392,11 @@ class Component extends DCLogic {
       const zs=all.filter(z=>(this._psaZone==='all'||z.label===this._psaZone)&&(!this._psaOnly||this._psaHas(z.lv,z.zmk)));
       const multiLv=this._psaLv==='all';
       const IN='font:inherit;font-size:11.5px;padding:2px 4px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:inherit;width:122px';
-      const cell=(z,a,f,v,ovr)=>(admin&&(f==='ss'||f==='se'))?`<input type="date" class="psa-in" data-lv="${esc(z.lv)}" data-z="${esc(z.zmk)}" data-a="${a}" data-f="${f}" value="${esc(v)}" style="${IN}${ovr?';border-color:#c8102e;font-weight:800':''}" title="${ovr?'typed here (overrides the source)':'from the source schedule'}">`
-        :`<span style="${ovr?'font-weight:800':''}">${esc(this._psaD(v))||'—'}</span>`;
+      const _hist=(z,a,f)=>{if(f!=='ss'&&f!=='se')return '';const h=this._psaHist(z.lv,z.zmk,a,f);if(!h.length)return '';const l=h[h.length-1],dt=new Date(l.t),ds=String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+String(dt.getFullYear()).slice(2)+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+        const tip=h.slice().reverse().map(x=>{const d=new Date(x.t);return d.toLocaleString()+' · '+(x.by||'')+' · '+(this._psaD(x.from)||'—')+' → '+(this._psaD(x.v)||'—');}).join('\n');
+        return `<div style="font-size:9.5px;color:var(--faint);white-space:nowrap;margin-top:1px" title="${esc(tip)}">✎ ${esc(ds)} · ${esc(l.by||'')}${h.length>1?' ('+h.length+')':''}</div>`;};
+      const cell=(z,a,f,v,ovr)=>((this._psaCan(z.lv,z.zmk)&&(f==='ss'||f==='se'))?`<input type="date" class="psa-in" data-lv="${esc(z.lv)}" data-z="${esc(z.zmk)}" data-a="${a}" data-f="${f}" value="${esc(v)}" style="${IN}${ovr?';border-color:#c8102e;font-weight:800':''}" title="${ovr?'typed here (overrides the source)':'from the source schedule'}">`
+        :`<span style="${ovr?'font-weight:800':''}">${esc(this._psaD(v))||'—'}</span>`)+_hist(z,a,f);
       const acts=this._psaActs();let rows='';
       zs.forEach(z=>{acts.forEach(([a,lab],i)=>{const g=this._psaGet(z.lv,z.zmk,a),A=this._psaActual(z.lv,z.zmk,a);
           const at=A.as?`${A.kind==='date'?this._psaD(A.as):A.as} → ${A.fin?(A.kind==='date'?this._psaD(A.ae):A.ae):'…'}`:'—';
