@@ -1335,7 +1335,7 @@ class Component extends DCLogic {
         /* Every activity still open in the area is listed (scope not yet done), even with no plan or work in these months. */
         if(!plan&&!prevPlan&&!prevDone&&!done&&!earlyRemain&&!(cg.balance>0)&&!(Number.isFinite(_t)&&_t>0&&_all<_t))return;
         const unit=_u,path=_p,key=lv+'||'+a.id+'||'+unit,r=by[path][key]||(by[path][key]={lv,id:a.id,label:a.label,unit,plan:0,prevPlan:0,prevDone:0,earlyRemain:0,done:0,owe:0,cum:0,total:0,zones:new Set()});
-        r.plan+=plan;r.prevPlan+=prevPlan;r.prevDone+=prevDone;r.earlyRemain+=earlyRemain;r.done+=done;r.owe+=Math.max(0,Number(cg.balance)||0);r.zones.add(lv+'||'+zmk);
+        r.plan+=plan;r.prevPlan+=prevPlan;r.prevDone+=prevDone;r.earlyRemain+=earlyRemain;r.done+=done;r.owe+=Math.max(0,(Number.isFinite(_t)&&_t>0)?Math.min(Number(cg.balance)||0,_t-M.slice(0,mi+1).reduce((n,m)=>n+DM(m),0)):(Number(cg.balance)||0));   /* owed never more than what is left of the total */r.zones.add(lv+'||'+zmk);
         /* Total done to date (every month up to and including this one) and the zone's full scope. */
 
       });});});
@@ -8515,7 +8515,10 @@ class Component extends DCLogic {
         const _anyDone=(this.ACT_MONTHS||[]).some(mm=>{const d=this.actDoneMonth(lv,zmk,a.id,mm);return d!=null&&d>0;});
         if(_vis!=='show' && !_anyPlan && !_anyDone && cg.balance<=0) return ''; }
       const _u=a.unit||this._actUnit(a.id),_ub=_u?`<span class="actunit">${this.esc(_u)}</span>`:'';
-      const _balTxt=cg.balance>0?('<b style="color:var(--crit)">owe '+this.fmt(cg.balance)+'</b>'):(cg.balance<0?('<b style="color:var(--done)">ahead '+this.fmt(-cg.balance)+'</b>'):'<b style="color:var(--done)">on track</b>');
+      /* Owe can never be more than what is left of the zone's total: once the total is done the zone is complete,
+         even when the monthly plans add up to more than the total (that excess is flagged instead). */
+      const _left=(total!=null&&total>0)?Math.max(0,total-(cumThrough||0)):null,_owe=(_left!=null)?Math.min(cg.balance,_left):cg.balance,_xs=(_left!=null&&cg.balance>_left)?(cg.balance-_left):0;
+      const _balTxt=(_left===0&&cg.balance>=0)?('<b style="color:var(--done)">complete</b>'+(_xs>0?' <span style="color:var(--crit);font-size:10px" title="The monthly plans add up to more than the total — lower the plan or raise the total">· plans exceed total by '+this.fmt(_xs)+'</span>':'')):_owe>0?('<b style="color:var(--crit)">owe '+this.fmt(_owe)+'</b>'+(_xs>0?' <span style="color:var(--crit);font-size:10px" title="The monthly plans add up to more than the total">· plans exceed total by '+this.fmt(_xs)+'</span>':'')):(cg.balance<0?('<b style="color:var(--done)">ahead '+this.fmt(-cg.balance)+'</b>'):'<b style="color:var(--done)">on track</b>');
       const carryLine=cg.hasData?`<div class="actsub actcarry"><span class="am2" title="Backlog carried in from earlier months = cumulative plan − cumulative done">Backlog in</span> <b>${this.fmt(cg.carryIn)}</b>${_ub}<span class="asep">|</span><span class="am2" title="What to do this month = this-month plan">Target</span> <b>${this.fmt(cg.required)}</b>${_ub}<span class="asep">|</span><span class="am2">Balance</span> ${_balTxt}${_ub}${(cg.carryIn>0&&cg.done>0)?`<span class="acum" title="Of what you did this month: cleared old backlog + this-month share">did ${this.fmt(cg.done)} = ${this.fmt(cg.cleared)} backlog + ${this.fmt(cg.current)} this-mo</span>`:''}</div>`:'';
       /* 条 = 累计完成 ÷ 总量(含"Before Apr'26"), 早做完的量会一直带到后面月份, 不会因为当月没做就变回未完成 */
       /* 有总量→累计÷总量; 无总量但有当月计划→当月done÷计划; 两者都没有→不猜百分比(显示 —), 但活动仍会列出、Done 值可见 */
