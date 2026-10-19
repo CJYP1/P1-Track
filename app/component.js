@@ -836,7 +836,8 @@ class Component extends DCLogic {
   /* 每个活动的资源(工人数): C=木工, R=铁工。借用 manpower store, 键 lv||zmk||aid||c / ||r(4段, 与每区人数2段键不冲突) */
   actRes(lv,zmk,aid,which){const v=(this._manpower||{})[lv+'||'+zmk+'||'+aid+'||'+which];return (v==null?null:v);}
   _elemPourKey(lv,zmk,aid,type,id){return lv+'||'+zmk+'||'+aid+'||pour_elem||'+type+'||'+encodeURIComponent(String(id||''));}
-  elemPourPct(lv,zmk,aid,type,id){const v=(this._manpower||{})[this._elemPourKey(lv,zmk,aid,type,id)];return v==null?null:Math.max(0,Math.min(100,Math.round(Number(v)||0)));}
+  /* Complete wins: an element marked done counts 100% whatever % was typed. */
+  elemPourPct(lv,zmk,aid,type,id){if(this.elemStatus(lv+'||'+zmk+'||'+type+'||'+id)==='done')return 100;const v=(this._manpower||{})[this._elemPourKey(lv,zmk,aid,type,id)];return v==null?null:Math.max(0,Math.min(100,Math.round(Number(v)||0)));}
   actPourStats(lv,zmk,aid){
     const T=({col:['col'],pile:['pile'],mbeam:['beam'],cbeam:['cbeam']})[aid]||['core','lift','stair'];
     const refs=this._activityElemRefs(lv,zmk,aid).filter(r=>T.indexOf(r.type)>=0),vals=[];let typed=0;
