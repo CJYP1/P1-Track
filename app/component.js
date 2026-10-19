@@ -1756,7 +1756,7 @@ class Component extends DCLogic {
       } else {
         const u=this.latestUpdate(z.mk);
         if(u){
-          const pct=(u.pct!=null?u.pct:(u.status==='done'?100:u.status==='wip'?50:0));
+          const pct=(u.status==='done')?100:(u.pct!=null?u.pct:(u.status==='wip'?50:0));   /* Complete wins over the typed % */
           z._p={...z._base,pct,status:(u.status||this.statusFor(pct)),manual:true,source:'zone',es:null,udate:u.date,note:u.note||''};
         } else {
           z._p={...z._base,pct:0,status:'todo',manual:false,source:'none',es:null,udate:null,note:''};
@@ -8671,8 +8671,8 @@ class Component extends DCLogic {
     const _scb=this.root.querySelector('#slabColourDone');if(_scb)_scb.addEventListener('click',()=>this.setSlabCompleteOverride(lv,z,_scb.dataset.clear?'':this._actMonth));
     const sv=this.root.querySelector('#in_save');
     if(sv)sv.addEventListener('click',()=>{
-      const pct=this.clamp(Math.round(+this.root.querySelector('#in_pct').value||0),0,100);
       const status=this.root.querySelector('#in_status').value;
+      const pct=status==='done'?100:this.clamp(Math.round(+this.root.querySelector('#in_pct').value||0),0,100);   /* Complete = 100% */
       const date=this.root.querySelector('#in_date').value||new Date().toISOString().slice(0,10);
       const note=this.root.querySelector('#in_note').value.trim();
       const crew=this.root.querySelector('#in_crew').value.trim();
