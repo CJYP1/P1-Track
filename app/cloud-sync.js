@@ -129,6 +129,7 @@ function rwsNotifyFail(r, what){
 }
 async function rwsSyncKV(store, key, value, level, zoneMk){
   if (rwsSnapBlocked()) return { ok:false, readonly:true };
+  if (store !== 'settings' && store !== 'act_cmt' && rwsOutOfScope(level, zoneMk)) { try{console.info('[rws] skipped (outside your area):', store, key);}catch(e){} return { ok:false, skipped:true }; }
   const s = rwsGetSession(); if (!s) return { ok:false };
   const args = { p_token:s.token, p_store:store, p_k:key, p_value:(value==null?null:value), p_level:level||null, p_zone_mk:zoneMk||null };
   const r = await rwsCall('rws_set_kv', args);
@@ -145,8 +146,12 @@ async function rwsGetState(token){
   if (!r.ok) throw new Error(r.error && r.error.message ? r.error.message : 'failed to load state');
   return r.data;
 }
+/* Never send a write for a zone this account is not assigned to: the server would refuse it anyway.
+   Edits the user makes are already checked on the page; this stops background re-homing from nagging. */
+function rwsOutOfScope(lv, zmk){ try{ const a=window.__rwsApp; return !!(a && a._canSyncKey && lv && zmk && !a._canSyncKey(lv+'||'+zmk)); }catch(e){ return false; } }
 async function rwsSyncElementStatus(elementKey, status){
   if (rwsSnapBlocked()) return { ok:false, readonly:true };
+  { const p=String(elementKey||'').split('||'); if (rwsOutOfScope(p[0],p[1])) { try{console.info('[rws] skipped (outside your area):', elementKey);}catch(e){} return { ok:false, skipped:true }; } }
   const s = rwsGetSession(); if (!s) return { ok:false };
   const args = { p_token:s.token, p_element_key:elementKey, p_status:status };
   const r = await rwsCall('rws_update_element', args);

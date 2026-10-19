@@ -5138,7 +5138,9 @@ class Component extends DCLogic {
   _elemMoveKey(lv,type,id){return lv+'||'+type+'||'+this._colKey(id);}
   /* Only push a change to the cloud for keys this account may write; a rebuild that re-homes someone
      else's element (a move made by admin) just updates the local copy — the admin's own save is the real one. */
-  _canSyncKey(key){if(this.rwsIsAdmin&&this.rwsIsAdmin())return true;const p=String(key||'').split('||');return !!(p[0]&&p[1]&&this.rwsScopeOk&&this.rwsScopeOk(p[0],p[1]));}
+  _canSyncKey(key){if(this.rwsIsAdmin&&this.rwsIsAdmin())return true;const p=String(key||'').split('||');if(!(p[0]&&p[1]))return true;if(this.rwsScopeOk&&this.rwsScopeOk(p[0],p[1]))return true;
+    /* same fallback as the server: an L1 key it does not know belongs to Marine; anything else unknown — let the server decide */
+    const c=this.zoneCat&&this.zoneCat(p[0],p[1]);if(c==null)return p[0]==='L1'?this.rwsHasScope('MA'):true;return false;}
   _migrateElemKey(oldKey,newKey){
     if(oldKey===newKey)return;const _sync=this._canSyncKey(oldKey)&&this._canSyncKey(newKey);
     if(this.elem&&this.elem[oldKey]!=null){if(this.elem[newKey]==null)this.elem[newKey]=this.elem[oldKey];delete this.elem[oldKey];
