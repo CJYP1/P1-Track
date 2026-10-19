@@ -595,10 +595,10 @@ class Component extends DCLogic {
     /* LW7 continues through L2 inside NB zone 2.1CIST.  Its shape is drawn on
        L1 and projected upward, so geometry on the source floor cannot resolve
        the correct L2 owner.  Keep this structural ownership explicit. */
-    if(lv==='L2'&&name==='LW7'){
-      const L=this.DATA&&this.DATA.levels&&this.DATA.levels.L2;
-      const z=L&&((L.zones||[]).find(x=>(x.mk||x.lid)==='L2|2.1CIST')||(L.zones||[]).find(x=>x.label==='2.1CIST'));
-      if(z)return {lv:'L2',zmk:z.mk||z.lid,label:z.label,z};
+    if((lv==='L2'||lv==='L3'||lv==='L4')&&name==='LW7'){   /* same owner on every level it climbs through */
+      const L=this.DATA&&this.DATA.levels&&this.DATA.levels[lv];
+      const z=L&&((L.zones||[]).find(x=>(x.mk||x.lid)===lv+'|2.1CIST')||(L.zones||[]).find(x=>x.label==='2.1CIST'));
+      if(z)return {lv,zmk:z.mk||z.lid,label:z.label,z};
     }
     const fixed={LW10:'P12',LW9:'P5-2',CW01:'P11'},label=fixed[name];
     if(lv==='L1'&&this.SUBZONES&&this.SUBZONES.L1&&this.SUBZONES.L1.P){const P=this.SUBZONES.L1.P;let i=label?P.findIndex(e=>e.label===label):-1;if(i<0&&w.pts&&w.pts.length){const cx=w.pts.reduce((a,p)=>a+p[0],0)/w.pts.length,cy=w.pts.reduce((a,p)=>a+p[1],0)/w.pts.length;i=P.findIndex(e=>e.pts&&this.ptIn(e.pts,cx,cy));}if(i>=0)return {lv,zmk:'L1|'+P[i].label,label:P[i].label,sub:{kind:'P',i}};}
@@ -5637,6 +5637,10 @@ class Component extends DCLogic {
   /* L1 columns can sit in Marine's podium ledger (_marineCol, by P zone) or in a map zone.  A move
      between the two (or between P zones) is kept in elemMove like any other (L1||col||mark → target)
      and re-applied whenever the ledger or the zones are rebuilt. */
+  _rgFloorsCell(r){const esc=s=>this.esc(s),O=this.DATA.order||[],ov=this._elemRangeOv()[this._colKey(r.id)],rg=this._linksFloorRange({id:r.id},r.lv),nm=o=>O.find(l=>this._floorOrd(l)===o)||'';
+    const f=ov?ov.f:(rg?nm(rg[0]):''),t=ov?ov.t:(rg?nm(rg[1]):''),sel=(cls,v)=>'<select class="'+cls+'" data-id="'+esc(r.id)+'" style="font:inherit;font-size:12px;padding:2px 4px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:inherit">'+'<option value="">—</option>'+O.map(l=>'<option'+(l===v?' selected':'')+'>'+l+'</option>').join('')+'</select>';
+    if(!this.rwsIsAdmin())return esc(f&&t?(f+' → '+t):'—');
+    return '<span title="From = first level of the wall; To = the level whose underside it reaches (the levels below count it, the To level only shows it)">'+sel('rgFlF',f)+' → '+sel('rgFlT',t)+(ov?' <a href="#" class="rgFlX" data-id="'+esc(r.id)+'" title="Back to the floors from the drawing" style="font-size:11px;color:var(--faint)">↺</a>':'')+'</span>';}
   _l1SubZoneOpts(){const Z=(((this.DATA.levels.L1||{}).zones)||[]).map(z=>z.label||z.mk),S=this._subLabels();return Z.concat(S.filter(x=>Z.indexOf(x)<0));}
   _l1ColZoneOpts(){const P=this._podLabels(),Z=(((this.DATA.levels.L1||{}).zones)||[]).filter(z=>!((z.cat||'NB')==='MA'&&!z._pod&&!z._mslabMA)).map(z=>z.label||z.mk);return P.concat(Z.filter(x=>P.indexOf(x)<0));}
   _moveElemData(lv,fromZmk,toZmk,type,id){
@@ -5832,7 +5836,7 @@ class Component extends DCLogic {
         +bad.slice(0,12).map(x=>esc((ALLLV?x.lv+' ':'')+x.zone)+' <b>'+x.els+'</b> listed / '+x.reg+' on drawing').join(' · ')+(bad.length>12?' …':'')
         +'<div style="color:var(--dim);font-size:11px;margin-top:2px">Add the missing ones or untick Keep on the extras, so the list is the count you want.</div></div>';})();
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
-      +(ALLLV?TH('Level'):'')+TH('Mark')+TH('Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('% updated')+TH('Cast date')+TH('Plan finish')+TH('Check')+TH('')+'</tr></thead><tbody>';
+      +(ALLLV?TH('Level'):'')+TH('Mark')+TH(['core','lift','stair'].indexOf(st.type)>=0?'Floors':'Size')+TH('Zone')+TH('Area')+TH('Keep')+TH('Status')+TH('%')+TH('% updated')+TH('Cast date')+TH('Plan finish')+TH('Check')+TH('')+'</tr></thead><tbody>';
     if(!rows.length)h+='<tr><td colspan="13" style="padding:26px;text-align:center;color:var(--dim)">No elements here — add one with the box above.</td></tr>';
     rows.forEach(r=>{
       const d='data-lv="'+esc(r.lv)+'" data-zmk="'+esc(r.zmk)+'" data-type="'+esc(r.custom?r.code:r.type)+'" data-id="'+esc(r.id)+'"'+(r.custom?' data-custom="1"':'');
@@ -5844,7 +5848,7 @@ class Component extends DCLogic {
             ?' <select class="rgKind" '+d+' title="Change the type: changed on every level, with ticks, cast dates and pour % carried over" style="'+IN+';width:auto;margin-left:4px">'
               +[['core','Core Wall'],['lift','Lift'],['stair','Staircase']].map(([v,l])=>'<option value="'+v+'"'+(v===r.type?' selected':'')+'>'+l+'</option>').join('')+'</select>':'')
           +'</td>'
-        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+esc(r.sz||'—')+'</td>'
+        +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+(['core','lift','stair'].indexOf(r.type)>=0&&!r.custom?this._rgFloorsCell(r):esc(r.sz||'—'))+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
           +(((r.pod&&r.type==='col')||(r.lv==='L1'&&z0Sub(r)))&&!r.custom?'<select class="rgZone" '+d+' style="'+IN+'">'+(r.type==='col'?this._l1ColZoneOpts():this._l1SubZoneOpts()).map(l=>opt(l,r.zone)).join('')+'</select> <span style="font-size:10px;color:var(--faint)">Podium</span>':'')
           +(((r.pod&&r.type==='col')||(r.lv==='L1'&&z0Sub(r)))&&!r.custom?'':(r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+((r.lv==='L1'&&r.type==='col')?this._l1ColZoneOpts():(r.lv==='L1'&&['stair','core','lift'].indexOf(r.type)>=0)?this._l1SubZoneOpts():(ALLLV?_lvZones(r.lv):zones).map(z=>z.label||z.mk)).map(l=>opt(l,r.zone)).join('')+'</select>'))+'</td>'
@@ -5887,6 +5891,8 @@ class Component extends DCLogic {
     root.querySelector('#rgCat').onchange=e=>{st.cat=e.target.value;re();};
     {const bb=root.querySelector('#rgBad');if(bb)bb.onchange=e=>{st.bad=e.target.checked;re();};}
     {const sd=root.querySelector('#rgShowDrop');if(sd)sd.onchange=e=>{st.showDrop=e.target.checked;re();};}
+    root.querySelectorAll('.rgFlF,.rgFlT').forEach(el=>el.onchange=e=>{const td=e.target.closest('td'),f=td.querySelector('.rgFlF').value,t=td.querySelector('.rgFlT').value;if(f&&t)this._setElemRange(e.target.dataset.id,f,t);re();});
+    root.querySelectorAll('.rgFlX').forEach(el=>el.onclick=e=>{e.preventDefault();this._setElemRange(e.target.dataset.id,'','');re();});
     {const qi=root.querySelector('#rgQ');qi.oninput=e=>{st.q=e.target.value;};
      qi.onchange=()=>re();qi.onkeydown=e=>{if(e.key==='Enter')re();};}
     {const ab=root.querySelector('#rgAdd');if(ab)ab.onclick=()=>{
@@ -7777,7 +7783,17 @@ class Component extends DCLogic {
     this.__rangeCache=this.__rangeCache||{};
     if(Object.prototype.hasOwnProperty.call(this.__rangeCache,_ck))return this.__rangeCache[_ck];
     const _out=this._linksFloorRangeRaw(w,lv);this.__rangeCache[_ck]=_out;return _out;}
+  /* Floor range typed in the register for a core / lift / stair mark: {f:'L1', t:'L4'}.  "To" is the level
+     whose underside the wall reaches: the levels below it count the work, the "to" level only shows the mark. */
+  _elemRangeOv(){const c=this._appCfg=this._appCfg||{};return c.elemRange=c.elemRange||{};}
+  _setElemRange(id,f,t){if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the floors of a wall.');return;}
+    const R=this._elemRangeOv(),k=this._colKey(id);if(!f||!t)delete R[k];else R[k]={f,t};
+    try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
+    if(typeof rwsSyncKV==='function')rwsSyncKV('settings','elemRange',R,null,null);
+    this.__rangeCache=null;try{this._reconcileZoneCores&&this._reconcileZoneCores();this._reconcileZoneStairs&&this._reconcileZoneStairs();}catch(e){}
+    this._applyElemMoves&&this._applyElemMoves();this.buildMetrics&&this.buildMetrics();this.render();this._toast(id+': '+(f&&t?f+' → underside of '+t:'floors from the drawing'));}
   _linksFloorRangeRaw(w,lv){
+    {const _raw=this._lw8Name?this._lw8Name(w.id||((w.link&&w.link.id)||'')):(w.id||''),ov=this._elemRangeOv()[this._colKey(_raw)]||this._elemRangeOv()[this._colKey(this._shapeLabel(w)||'')];if(ov){const a=this._floorOrd(ov.f),b=this._floorOrd(ov.t);if(a!=null&&b!=null)return [Math.min(a,b),Math.max(a,b)];}}
     /* Name first: scanning every level's lists for this mark is position-independent, so the range
        cannot change just because the outline was drawn a little off its zone.  Only when the mark
        matches nothing do we fall back to whatever the outline currently links to. */
