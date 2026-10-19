@@ -57,7 +57,7 @@ function rwsQueuePush(fn, args){ const q=rwsQueueList(); q.push({id:Date.now()+'
 function rwsQueueSize(){ return rwsQueueList().length; }
 let _rwsFlushing = false;
 async function rwsQueueFlush(){
-  if (_rwsFlushing) return; _rwsFlushing = true; let lastResult=null;
+  if (_rwsFlushing) return; _rwsFlushing = true; let lastResult=null, lastWhat=null;
   try{
     /* The queue is read fresh from storage on every round.  Holding one copy for the whole loop
        meant an edit queued while a send was in flight was wiped when that copy was written back. */
@@ -77,7 +77,7 @@ async function rwsQueueFlush(){
       }
       const r = await rwsCall(item.fn, item.args); lastResult=r;
       if (r.offline) { break; }
-      if (!r.ok) console.warn('[rws] dropping queued edit, server rejected it:', item, r.error);
+      if (!r.ok) { console.warn('[rws] dropping queued edit, server rejected it:', item, r.error); lastWhat = item.args ? ((item.args.p_store||item.fn)+' '+(item.args.p_k||item.args.p_element_key||'')+(item.args.p_zone_mk?' ['+item.args.p_zone_mk+']':'')) : item.fn; }
       /* Take out what was sent — unless it was replaced by a newer value while it was on its way,
          in which case the newer value stays and goes on the next round. */
       q = rwsQueueList();
@@ -85,7 +85,7 @@ async function rwsQueueFlush(){
       if (j >= 0 && same(q[j].args, queued)) { q.splice(j, 1); rwsQueueSave(q); }
     }
   } finally { _rwsFlushing = false; }
-  rwsNotifyFail(lastResult); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
+  rwsNotifyFail(lastResult, lastWhat); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
 }
 window.addEventListener('online', rwsQueueFlush);
 setInterval(rwsQueueFlush, 20000);
@@ -113,7 +113,7 @@ window.addEventListener('pagehide', () => { try{ rwsQueueFlush(); }catch(e){} })
 document.addEventListener('visibilitychange', () => { if (document.hidden) { try{ rwsQueueFlush(); }catch(e){} } });
 /* 同步被后端拒绝(非离线)时提示一下 —— 以前是静默失败, 用户以为存了其实没进云端 */
 let _rwsLastFailMsg = '', _rwsLastFailAt = 0;
-function rwsNotifyFail(r){
+function rwsNotifyFail(r, what){
   if (r && !r.ok && !r.offline && window.__rwsApp && window.__rwsApp._toast){
     var m = (r.error && r.error.message) ? r.error.message : 'change not saved to cloud';
     var now = Date.now();
@@ -121,7 +121,10 @@ function rwsNotifyFail(r){
        the shared zone permission, show one useful warning instead of stacking identical toasts. */
     if (m === _rwsLastFailMsg && now - _rwsLastFailAt < 2500) return;
     _rwsLastFailMsg = m; _rwsLastFailAt = now;
-    window.__rwsApp._toast('⚠ Not saved: ' + m);
+    /* Say WHAT was refused (store / key / zone) so a permission problem can be traced to one zone. */
+    var w = what ? String(what).replace(/\|\|/g,' · ').slice(0,90) : '';
+    try{ console.warn('[rws] not saved', m, what || ''); }catch(e){}
+    window.__rwsApp._toast('⚠ Not saved: ' + m + (w ? ' — ' + w : ''));
   }
 }
 async function rwsSyncKV(store, key, value, level, zoneMk){
@@ -130,7 +133,7 @@ async function rwsSyncKV(store, key, value, level, zoneMk){
   const args = { p_token:s.token, p_store:store, p_k:key, p_value:(value==null?null:value), p_level:level||null, p_zone_mk:zoneMk||null };
   const r = await rwsCall('rws_set_kv', args);
   if (!r.ok && r.offline) rwsQueuePush('rws_set_kv', args);
-  rwsNotifyFail(r); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
+  rwsNotifyFail(r, store + ' ' + key + (zoneMk ? ' [' + zoneMk + ']' : '')); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
   return r;
 }
 async function rwsAddCat(code,label){const s=rwsGetSession();if(!s)return{ok:false};const a={p_token:s.token,p_code:code,p_label:label};const r=await rwsCall('rws_add_cat',a);if(!r.ok&&r.offline)rwsQueuePush('rws_add_cat',a);rwsNotifyFail(r);if(window.__rwsApp)window.__rwsApp.rwsOnQueueChange();return r;}
@@ -148,7 +151,7 @@ async function rwsSyncElementStatus(elementKey, status){
   const args = { p_token:s.token, p_element_key:elementKey, p_status:status };
   const r = await rwsCall('rws_update_element', args);
   if (!r.ok && r.offline) rwsQueuePush('rws_update_element', args);
-  rwsNotifyFail(r); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
+  rwsNotifyFail(r, 'element ' + elementKey); if (window.__rwsApp) window.__rwsApp.rwsOnQueueChange();
   return r;
 }
 async function rwsSyncSlabQty(qtyKey, level, zoneMk, qty){
