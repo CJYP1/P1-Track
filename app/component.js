@@ -5850,7 +5850,7 @@ class Component extends DCLogic {
           +'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim);white-space:nowrap">'+(['core','lift','stair'].indexOf(r.type)>=0&&!r.custom?this._rgFloorsCell(r):esc(r.sz||'—'))+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'
-          +(((r.pod&&r.type==='col')||(r.lv==='L1'&&z0Sub(r)))&&!r.custom?'<select class="rgZone" '+d+' style="'+IN+'">'+(r.type==='col'?this._l1ColZoneOpts():this._l1SubZoneOpts()).map(l=>opt(l,r.zone)).join('')+'</select> <span style="font-size:10px;color:var(--faint)">Podium</span>':'')
+          +(((r.pod&&r.type==='col')||(r.lv==='L1'&&z0Sub(r)))&&!r.custom?'<select class="rgZone" '+d+' style="'+IN+'">'+(r.type==='col'?this._l1ColZoneOpts():this._l1SubZoneOpts()).map(l=>opt(l,r.zone)).join('')+'</select>'+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'')
           +(((r.pod&&r.type==='col')||(r.lv==='L1'&&z0Sub(r)))&&!r.custom?'':(r.pod||r.custom?esc(r.zone)+(r.pod?' <span style="font-size:10px;color:var(--faint)">Podium</span>':''):'<select class="rgZone" '+d+' style="'+IN+'">'+((r.lv==='L1'&&r.type==='col')?this._l1ColZoneOpts():(r.lv==='L1'&&['stair','core','lift'].indexOf(r.type)>=0)?this._l1SubZoneOpts():(ALLLV?_lvZones(r.lv):zones).map(z=>z.label||z.mk)).map(l=>opt(l,r.zone)).join('')+'</select>'))+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line);color:var(--dim)">'+esc(r.cat)+'</td>'
         +'<td style="padding:5px 8px;border-bottom:1px solid var(--line)">'+(r.custom?'<span style="color:var(--faint)">—</span>':'<input type="checkbox" class="rgKeep" '+d+(r.keep==='Y'?' checked':'')+'>')
