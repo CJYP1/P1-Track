@@ -5136,13 +5136,16 @@ class Component extends DCLogic {
      the column rebuild, and the status and date travel with the element. */
   _elemMoves(){const c=this._appCfg=this._appCfg||{};return c.elemMove=c.elemMove||{};}
   _elemMoveKey(lv,type,id){return lv+'||'+type+'||'+this._colKey(id);}
+  /* Only push a change to the cloud for keys this account may write; a rebuild that re-homes someone
+     else's element (a move made by admin) just updates the local copy — the admin's own save is the real one. */
+  _canSyncKey(key){if(this.rwsIsAdmin&&this.rwsIsAdmin())return true;const p=String(key||'').split('||');return !!(p[0]&&p[1]&&this.rwsScopeOk&&this.rwsScopeOk(p[0],p[1]));}
   _migrateElemKey(oldKey,newKey){
-    if(oldKey===newKey)return;
+    if(oldKey===newKey)return;const _sync=this._canSyncKey(oldKey)&&this._canSyncKey(newKey);
     if(this.elem&&this.elem[oldKey]!=null){if(this.elem[newKey]==null)this.elem[newKey]=this.elem[oldKey];delete this.elem[oldKey];
-      if(typeof rwsSyncElementStatus==='function'){try{rwsSyncElementStatus(newKey,this.elem[newKey]);rwsSyncElementStatus(oldKey,'todo');}catch(e){}}}
+      if(_sync&&typeof rwsSyncElementStatus==='function'){try{rwsSyncElementStatus(newKey,this.elem[newKey]);rwsSyncElementStatus(oldKey,'todo');}catch(e){}}}
     if(this._elemDate&&this._elemDate[oldKey]!=null){const d=this._elemDate[oldKey];
       if(this._elemDate[newKey]==null)this._elemDate[newKey]=d;delete this._elemDate[oldKey];
-      if(typeof rwsSyncKV==='function'){const p=newKey.split('||');try{rwsSyncKV('elem_date',newKey,d,p[0],p[1]);rwsSyncKV('elem_date',oldKey,null,null,null);}catch(e){}}}
+      if(_sync&&typeof rwsSyncKV==='function'){const p=newKey.split('||'),o=oldKey.split('||');try{rwsSyncKV('elem_date',newKey,d,p[0],p[1]);rwsSyncKV('elem_date',oldKey,null,o[0],o[1]);}catch(e){}}}
   }
   _applyElemMoves(){
     const mv=this._elemMoves();if(!Object.keys(mv).length)return;
@@ -5648,7 +5651,7 @@ class Component extends DCLogic {
     const ck=this._colKey(id),MP=this._manpower||{};let d=false;
     Object.keys(MP).forEach(m=>{const q=m.split('||');if(q[0]!==lv||q[1]!==fromZmk||q[3]!=='pour_elem'||q[4]!==type)return;let eid;try{eid=decodeURIComponent(q[5]);}catch(e){eid=q[5];}if(this._colKey(eid)!==ck)return;
       const nk=[lv,toZmk].concat(q.slice(2)).join('||');if(MP[nk]==null)MP[nk]=MP[m];delete MP[m];d=true;
-      if(typeof rwsSyncKV==='function'){try{rwsSyncKV('manpower',nk,MP[nk],lv,toZmk);rwsSyncKV('manpower',m,null,lv,fromZmk);}catch(e){}}});
+      if(this._canSyncKey(lv+'||'+toZmk)&&this._canSyncKey(lv+'||'+fromZmk)&&typeof rwsSyncKV==='function'){try{rwsSyncKV('manpower',nk,MP[nk],lv,toZmk);rwsSyncKV('manpower',m,null,lv,fromZmk);}catch(e){}}});
     if(d){try{localStorage.setItem('rws_manpower',JSON.stringify(MP));}catch(e){}}
   }
   _applyPodMoves(){
