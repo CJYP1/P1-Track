@@ -2717,7 +2717,7 @@ class Component extends DCLogic {
   _monAllowed(m){if(!m)return true;const V=this.visMonths();return V.indexOf(m)>=0||m==="Before Apr'26";}
   _castCut(info){if(!info||this._monAllowed(info.month))return info;
     return {aid:info.aid,done:false,date:null,start:null,end:null,month:null,hidden:true};}
-  _mapZoneCastInfo(lv,z){return this._castCut(lv==='L1'&&z&&z.cat==='MA'&&!z._mslabMA&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z));}
+  _mapZoneCastInfo(lv,z){z=this._layerZone(z);return this._castCut(lv==='L1'&&z&&z.cat==='MA'&&!z._mslabMA&&z.ring?this._marineCastInfo(lv,z):this._zoneCastInfo(lv,z));}
   _castSlabsOn(){ return this._castShowSlabs!==false; }
   _castColumnsOn(){ return this._castShowColumns!==false; }
   _zoneCastColor(z){ if(!this._castSlabsOn())return '#efeaec'; const info=this._mapZoneCastInfo(this.curLevel,z); if(info.done)return '#111111'; if(!info.date)return '#efe7e7'; return this._castPal()[info.month]||'#9aa6b6'; }
@@ -6649,7 +6649,9 @@ class Component extends DCLogic {
     if(!m)return false;
     return this._zoneWorksIn(this.curLevel,z.mk||z.lid,m);
   }
-  zoneFill(z){
+  /* Top slab layer on L1: M-SLAB 3–6 are judged by their Top Slab only (not the bottom slab / RC). */
+  _layerZone(z){return (z&&this.curLevel==='L1'&&this.showSubZC&&!this.showSubC&&this._isMslabTopZone&&this._isMslabTopZone(z))?{...z,_topLayer:true}:z;}
+  zoneFill(z){z=this._layerZone(z);
     if(this._resourceMode){const r=this._resourceEntry(this.curLevel,z.mk||z.lid);return r?(r.team.color||'#3157d5'):'#d9dee7';}
     if(this.showDelay)return '#f3f4f6';
     if(this.showRpVsAc){const rp=this._rpAugPct(this.curLevel,z);if(rp==null)return '#eef1f5';return this._rpActualPct(this.curLevel,z)>=rp?'#bfe7ce':'#f4c5cd';}
@@ -6725,7 +6727,7 @@ class Component extends DCLogic {
       let planst='';
       /* Resource mode sets its own flat opacity above; the plan / cast-date shading must not
          override it, or two zones of the same Team come out in different shades. */
-      if(!this._resourceMode&&vis&&this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,z,this.planMonth()); op=st.colored?0.62:0.92; }
+      if(!this._resourceMode&&vis&&this.colorMode==='plan'){ const st=this._zoneMonthState(this.curLevel,this._layerZone(z),this.planMonth()); op=st.colored?0.62:0.92; }
       if(!this._resourceMode&&vis&&this.colorMode==='castdate'){ if(!this._castSlabsOn()){op=0.28;} else {const _ci=this._zoneCastInfo(this.curLevel,z); if(_ci.done)op=0.5;} }   /* 浇筑完成的板: 半透明黑, 跟按月上色的板区分 */
       const _maL1=(this.curLevel==='L1'&&z.cat==='MA'&&!z._mslabMA);   // L1 Marine 父区(ZC): ZC 层关只留边界线; 开则保持正常蓝色填充
       if(_maL1&&!this.showSubZC)op=0;
