@@ -706,16 +706,22 @@ class Component extends DCLogic {
 
   applyCritOv(){const ov=this._critOv||{};this.DATA.order.forEach(lv=>this.DATA.levels[lv].zones.forEach(z=>{z.crit=!!ov[lv+'|'+this.zid(z)];}));this._critPlanSet=null;}
   setCrit(lv,z,on){const k=lv+'|'+this.zid(z);if(on)this._critOv[k]=true;else delete this._critOv[k];try{localStorage.setItem('rws_crit_ov',JSON.stringify(this._critOv));}catch(e){}this.applyCritOv();this._critPlanSet=null;if(typeof rwsSyncKV==='function')rwsSyncKV('crit',k,(on?true:null),null,null);}
-  /* Slab completed colour.  Plain key lv||zmk = the whole slab (every mark made before 22 Oct, and every non-ZC zone).
-     On a Marine L1 ZC zone a new mark is Top slab only and is kept under lv||zmk||top. */
-  _isZCZone(lv,z){return lv==='L1'&&z&&(z.cat||'NB')==='MA'&&!z._mslabMA&&!z._mslab&&!z._pod;}
-  _slabWholeMonth(lv,z){const S=(this._appCfg&&this._appCfg.slabComplete)||{};return S[lv+'||'+(z.mk||z.lid)]||null;}
-  _slabTopMonth(lv,z){const S=(this._appCfg&&this._appCfg.slabComplete)||{};return this._isZCZone(lv,z)?(S[lv+'||'+(z.mk||z.lid)+'||top']||null):null;}
-  _slabCompleteOverrideMonth(lv,z){return this._slabWholeMonth(lv,z)||this._slabTopMonth(lv,z);}
-  setSlabCompleteOverride(lv,z,month){
+  /* Slab completed colour.  Marine L1 keeps Top slab and Bottom slab apart:
+       ZC zone  lv||zmk (older marks) or lv||zmk||top  = its Top slab;  lv||zmk||bottom = every C sub-zone under it;
+       C sub-zone lv||L1|Cx = that bottom-slab part.  Every other zone: lv||zmk = its slab. */
+  _isZCZone(lv,z){return lv==='L1'&&z&&(z.cat||'NB')==='MA'&&!z._mslabMA&&!z._mslab&&!z._pod&&!/^L1\|[CP]/.test(String(z.mk||''))||(lv==='L1'&&z&&z._zcSub);}
+  _scS(){return (this._appCfg&&this._appCfg.slabComplete)||{};}
+  _slabWholeMonth(lv,z){return this._isZCZone(lv,z)?null:(this._scS()[lv+'||'+(z.mk||z.lid)]||null);}
+  _slabTopMonth(lv,z){if(!this._isZCZone(lv,z))return null;const S=this._scS(),k=lv+'||'+(z.mk||z.lid);return S[k+'||top']||S[k]||null;}
+  _slabBottomMonth(lv,z){if(!this._isZCZone(lv,z))return null;return this._scS()[lv+'||'+(z.mk||z.lid)+'||bottom']||null;}
+  _slabCParentBottom(lv,z){if(lv!=='L1'||!z||!z._mslab)return null;const lab=String(z.label||String(z.mk||'').replace(/^L1\|/,'')),par=((this.SUBLINKS||{}).c2zc||{})[lab];if(!par)return null;
+    const pz=(((this.DATA.levels.L1||{}).zones)||[]).find(x=>x.label===par);return pz?(this._scS()['L1||'+(pz.mk||pz.lid)+'||bottom']||null):null;}
+  _slabCompleteOverrideMonth(lv,z){if(this._isZCZone(lv,z))return this._slabTopMonth(lv,z);return this._scS()[lv+'||'+(z.mk||z.lid)]||this._slabCParentBottom(lv,z)||null;}
+  setSlabCompleteOverride(lv,z,month,part){
     if(!this.rwsIsAdmin()){this.rwsDeny('Only admin can change the slab colour status.');return;}
     const k0=lv+'||'+(z.mk||z.lid);this._appCfg=this._appCfg||{};const all=this._appCfg.slabComplete=this._appCfg.slabComplete||{};
-    if(month){all[this._isZCZone(lv,z)?k0+'||top':k0]=month;}else{delete all[k0];delete all[k0+'||top'];}
+    const zc=this._isZCZone(lv,z),pt=part==='bottom'?'bottom':'top';
+    if(month){all[zc?k0+'||'+pt:k0]=month;}else if(zc){delete all[k0+'||'+pt];if(pt==='top')delete all[k0];}else delete all[k0];
     try{localStorage.setItem('rws_app_cfg',JSON.stringify(this._appCfg));}catch(e){}
     if(typeof rwsSyncKV==='function')rwsSyncKV('settings','slabComplete',all,null,null);
     this._actRerender(z);
@@ -2701,7 +2707,6 @@ class Component extends DCLogic {
   _marineCastInfo(lv,z){const lab=String(z&&z.label||''),labs=[lab],L=this.SUBLINKS||{};
     /* An old (whole-slab) mark on a ZC zone completes the whole zone; a new Top-slab mark completes only the top —
        the combined zone then also needs its bottom-slab (C) sub-zones, each with its own mark. */
-    {const wm=this._slabWholeMonth(lv,z);if(wm)return {aid:'slab_colour_override',done:true,date:null,start:null,end:null,month:wm,override:true};}
     Object.keys(L.c2zc||{}).forEach(c=>{if(L.c2zc[c]===lab)labs.push(c);});Object.keys(L.p2zone||{}).forEach(p=>{if((L.p2zone[p]||[]).indexOf(lab)>=0)labs.push(p);});
     const inf=labs.map(x=>this._zoneCastInfo(lv,x===lab?z:{mk:lv+'|'+x,label:x,cat:'MA',_mslab:/^C/i.test(x)})).filter(x=>x.start||x.end||x.date||x.override);if(!inf.length)return this._zoneCastInfo(lv,z);
     const starts=inf.map(x=>x.start).filter(Boolean).sort(),ends=inf.map(x=>x.end).filter(Boolean).sort(),start=starts[0]||null,end=ends[ends.length-1]||null,date=end||start;return {aid:'marine',done:inf.every(x=>x.done),date,start,end,month:this._dateToActMonth(date)};}
@@ -8675,8 +8680,13 @@ class Component extends DCLogic {
     const dPct=last?last.pct:p.pct, dStatus=last&&last.status?last.status:p.status, dNote=last?last.note||'':'', dDate=last?last.date:todayISO;
     const _slabColourMonth=this._slabCompleteOverrideMonth(lv,z);
     /* Always visible to admin at the top of every Zone, including combined/sub-zone views. */
-    const _scPart=(lv==='L1'&&(z.cat||'NB')==='MA'&&!z._mslabMA)?(z._mslab?'BOTTOM SLAB':(z._pod?'':'TOP SLAB')):'SLAB',_scNote=_scPart==='TOP SLAB'?'Top slab only · the Bottom slab (C) sub-zones are marked in the Bottom slab layer':(_scPart==='BOTTOM SLAB'?'This bottom-slab sub-zone only · the Top slab is marked on its ZC zone':'Colour-only status · does not create a Slab activity, Plan or Done');
-    const _slabColourCtl=(this.rwsIsAdmin()&&_scPart)?`<div style="display:grid;grid-template-columns:1fr;gap:7px;border:2px solid ${_slabColourMonth?'#5f6368':'#6474df'};background:${_slabColourMonth?'rgba(95,99,104,.10)':'rgba(100,116,223,.07)'};border-radius:10px;padding:9px 11px;margin:7px 0 10px"><div><div style="font-size:11px;font-weight:900;color:${_slabColourMonth?'#5f6368':'#5060c9'}">${_scPart} COMPLETED COLOUR</div><div style="font-size:9px;color:var(--faint);margin-top:2px">${_scNote}</div></div><div style="display:flex;align-items:center;justify-content:space-between;gap:7px;flex-wrap:wrap">${_slabColourMonth?`<b style="font-size:10.5px;color:#5f6368">${(_scPart==='TOP SLAB'&&!this._slabWholeMonth(lv,z))?'Top slab completed':(_scPart==='TOP SLAB'?'Completed · whole slab':'Completed')} · ${this.esc(_slabColourMonth)}</b><button class="hbtn" id="slabColourDone" data-clear="1" style="padding:5px 10px;font-size:10px">Remove</button>`:`<span style="font-size:10px;color:var(--dim)">Not marked</span><button class="hbtn" id="slabColourDone" style="padding:5px 10px;font-size:10px;font-weight:900;background:#6474df;color:#fff;border-color:#6474df">Mark completed in ${this.esc(this._actMonth)}</button>`}</div></div>`:'';
+    /* Marine L1 ZC zone: Top slab and Bottom slab are marked apart (the layer you are on is listed first). */
+    const _scZC=this._isZCZone(lv,z),_scMS=lv==='L1'&&(z.cat||'NB')==='MA'&&!z._mslabMA,_scPart=_scMS?(z._mslab?'BOTTOM SLAB':(z._pod?'':'TOP SLAB')):'SLAB';
+    const _scRow=(lab,m,part,note)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:7px;flex-wrap:wrap;padding:5px 0;border-top:1px dashed var(--line)"><div><b style="font-size:10.5px;color:${m?'#5f6368':'#5060c9'}">${lab}</b>${note?`<div style="font-size:9px;color:var(--faint)">${note}</div>`:''}</div>${m?`<span><b style="font-size:10.5px;color:#5f6368">Completed · ${this.esc(m)}</b> <button class="hbtn slabColourDone" data-part="${part}" data-clear="1" style="padding:4px 9px;font-size:10px">Remove</button></span>`:`<span><span style="font-size:10px;color:var(--dim)">Not marked</span> <button class="hbtn slabColourDone" data-part="${part}" style="padding:4px 9px;font-size:10px;font-weight:900;background:#6474df;color:#fff;border-color:#6474df">Mark completed in ${this.esc(this._actMonth)}</button></span>`}</div>`;
+    let _scRows='';
+    if(_scZC){const top=_scRow('Top slab',this._slabTopMonth(lv,z),'top',''),bot=_scRow('Bottom slab',this._slabBottomMonth(lv,z),'bottom','every C sub-zone under this zone (each C can also be marked on its own)');_scRows=(this.showSubC&&!this.showSubZC)?bot+top:top+bot;}
+    else if(_scPart){const pm=this._slabCParentBottom(lv,z);_scRows=_scRow(_scPart==='SLAB'?'Slab':(_scPart==='BOTTOM SLAB'?'Bottom slab · this sub-zone':'Top slab'),this._scS()[lv+'||'+(z.mk||z.lid)]||null,'own',pm?'already complete through its ZC zone ('+this.esc(pm)+')':'');}
+    const _slabColourCtl=(this.rwsIsAdmin()&&_scRows)?`<div style="border:2px solid #6474df;background:rgba(100,116,223,.07);border-radius:10px;padding:9px 11px;margin:7px 0 10px"><div style="font-size:11px;font-weight:900;color:#5060c9">SLAB COMPLETED COLOUR</div><div style="font-size:9px;color:var(--faint);margin:2px 0 4px">Colour-only status · does not create a Slab activity, Plan or Done${_scMS?' · Marine L1: Top slab and Bottom slab are separate':''}</div>${_scRows}</div>`:'';
     const opt=(v,l)=>`<option value="${v}" ${dStatus===v?'selected':''}>${l}</option>`;
     const histHtml=hist.length?`<div class="updhist"><div class="uh">Update history · ${hist.length}</div>${hist.slice().reverse().map(u=>`<div class="ur"><b>${this.esc(u.date||'')}</b><span>${u.pct}% · ${this.STATUS[u.status]?this.STATUS[u.status].label:''}${u.note?' · '+this.esc(u.note):''}</span></div>`).join('')}</div>`:'';
     const formHtml=`<div class="updform">
@@ -8729,7 +8739,7 @@ class Component extends DCLogic {
     const _aggClear=this.root.querySelector('.admin-agg-clear');if(_aggClear)_aggClear.addEventListener('click',()=>{this._adminAggMode=false;this._adminAggSet=new Set();this._adminAggObjs=new Map();this._adminAggLevel=lv;this.render();this.selectZone(z,sub);this.paintSel();});
     this.root.querySelector('#back').addEventListener('click',()=>{this._discardOpenSections(lv,z);this._subOpen=null;this.selKey=null;this.paintSel();this.paintTimelineSel();this.buildList();});
     const ck=this.root.querySelector('#critChk');if(ck)ck.addEventListener('change',()=>{const _vb={...this.vb},_so=this._subOpen;this.setCrit(this.curLevel,z,ck.checked);if(_so)z.crit=ck.checked;this.render();this.vb=_vb;this._vbLevel=this.curLevel;if(this.svg)this.svg.setAttribute('viewBox',`${_vb.x} ${_vb.y} ${_vb.w} ${_vb.h}`);if(this.colLOD)this.colLOD();this.selectZone(z,_so||undefined);this.paintSel();});
-    const _scb=this.root.querySelector('#slabColourDone');if(_scb)_scb.addEventListener('click',()=>this.setSlabCompleteOverride(lv,z,_scb.dataset.clear?'':this._actMonth));
+    this.root.querySelectorAll('.slabColourDone').forEach(_scb=>_scb.addEventListener('click',()=>this.setSlabCompleteOverride(lv,z,_scb.dataset.clear?'':this._actMonth,_scb.dataset.part)));
     const sv=this.root.querySelector('#in_save');
     if(sv)sv.addEventListener('click',()=>{
       const status=this.root.querySelector('#in_status').value;
