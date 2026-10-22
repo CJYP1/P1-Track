@@ -24,7 +24,7 @@ window.CW_GROUPS = {
   "LW7":  { lifts:["P1-CL4","P1-CL3"], stairs:[], f:"L1", t:"L3" },
   "LW9":  { lifts:["P1-CL1","P1-CL2"], stairs:[], f:"L2", t:"L3" },
   "LW10": { lifts:["P1-FL7"], stairs:["P1-ST-07/50"], f:"L1", t:"L4" }   /* lift P1-FL7 and stair P1-ST-07/50 both stop at L4 */,
-  "CW12": { lifts:["P1-PL9","P1-PL-9","PL-PL9","P1-PL10","P1-PL-10","PL-PL10"], stairs:[] }   /* P1-PL9 and P1-PL10 sit inside CW12 (site, 22 Oct 26); floors from the drawing / register */
+  "CW12": { lifts:["P1-PL9","P1-PL-9","PL-PL9","P1-PL10","P1-PL-10","PL-PL10"], stairs:[], f:"B2", t:"L2" }   /* P1-PL9 / P1-PL10 sit inside CW12 (site, 22 Oct 26). Walls B2-L1: t = L2 = the level whose underside it reaches, so B2..L1 count it and L2 only shows it */
 };
 /* 别名: 你习惯都写 "CW", 但数据里 lift-wall 是 "LW" —— CW6/7/9/10 当作 LW6/7/9/10 */
 ["6","7","9","10"].forEach(function(n){ window.CW_GROUPS["CW"+n]=window.CW_GROUPS["LW"+n]; });
