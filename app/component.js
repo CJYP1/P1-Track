@@ -614,7 +614,7 @@ class Component extends DCLogic {
     return null;}
   _coreItemsFor(lv,zmk){const R=(this._appCfg&&this._appCfg.elemRetype)||{};return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]).filter(x=>{const id=typeof x==='string'?x:x.id;const to=R['core||'+this._colKey(id)];return !to||to==='core';});}
   _reconcileZoneCores(){this.__rangeCache=null;this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
-        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();this._mergeRenamedWalls&&this._mergeRenamedWalls();this._applyElemRename&&this._applyElemRename();this._applySubMoves&&this._applySubMoves('core');}catch(_e){}}
+        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();this._mergeRenamedWalls&&this._mergeRenamedWalls();this._applyElemRename&&this._applyElemRename();this._applySubMoves&&this._applySubMoves('core');this._applyGroupAdds&&this._applyGroupAdds();}catch(_e){}}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -1855,6 +1855,18 @@ class Component extends DCLogic {
   /* Activities whose monthly Done is derived from an element checklist (in sync with the list below) */
   _elemAct(id){return {col:{types:['col'],sec:'col',label:'columns'},pile:{types:['pile'],sec:'pile',label:'pile caps'},mbeam:{types:['beam'],sec:'beam',label:'steel main beams'},cbeam:{types:['cbeam'],sec:'cbeam',label:'cast s main beams'},ls:{types:['core','lift','stair'],sec:'lift',label:'core/lift/stair items'},act_corewall:{types:['core'],sec:'core',label:'core walls'}}[id]||null;}
   _zoneElemList(z,tp){return ({col:z.cols,pile:z.piles,beam:z.beams,cbeam:z.beams,lift:z.lifts,stair:z.stairs,core:z.cores})[tp]||[];}
+  /* Core groups that list members to add (CW_GROUPS[k].add): wherever that core sits on a level, its listed lifts
+     are put in the same zone if the level does not hold them yet — they are inside the core, so they count with it. */
+  _applyGroupAdds(){const G=(typeof window!=='undefined'&&window.CW_GROUPS)||{},keys=Object.keys(G).filter(k=>G[k]&&Array.isArray(G[k].add)&&G[k].add.length);if(!keys.length)return;
+    const idOf=x=>typeof x==='string'?x:(x&&x.id);
+    (this.DATA.order||[]).forEach(lv=>{const zones=((this.DATA.levels[lv]||{}).zones)||[],sub=((this._coreZoneItems||{})[lv])||{};
+      zones.forEach(z=>{if(Array.isArray(z.lifts)&&z.lifts.some(x=>x&&x._grpAdd))z.lifts=z.lifts.filter(x=>!(x&&x._grpAdd));});
+      const has=id=>zones.some(z=>['lifts','stairs','cores'].some(k=>(z[k]||[]).some(x=>this._idSameGroup(idOf(x),id))));
+      keys.forEach(k=>{
+        let home=zones.find(z=>(z.cores||[]).some(x=>this._idSameGroup(idOf(x),k)));
+        if(!home){const mk=Object.keys(sub).find(m=>(sub[m]||[]).some(x=>this._idSameGroup(idOf(x),k)));if(mk)home=zones.find(z=>(z.mk||z.lid)===mk);}
+        if(!home)return;
+        G[k].add.forEach(id=>{if(!has(id))(home.lifts=home.lifts||[]).push({id,_grpAdd:k});});});});}
   _cwGroupKeys(id){const G=(typeof window!=='undefined'&&window.CW_GROUPS)||{},out=[];for(const k in G){const g=G[k]||{},all=[k,...(g.lifts||[]),...(g.stairs||[]),...(g.cores||[])];if(all.some(x=>this._idSameGroup(x,id)))out.push(k);}return out;}
   _lsMemberCore(z,id){if(!z)return '';const lg=new Set(this._cwGroupKeys(id));if(!lg.size)return '';for(const x of (z.cores||[])){const cid=typeof x==='string'?x:x.id;if(this._cwGroupKeys(cid).some(k=>lg.has(k)))return String(cid||'');}
     /* A wall that was moved into the lift or stair list keeps the lifts inside it: LW6 as a Lift
