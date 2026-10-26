@@ -6039,7 +6039,13 @@ class Component extends DCLogic {
         +'<td style="'+TD+'"><input type="date" class="qDate" '+d+' value="'+esc(this.todayISOStr())+'" style="'+IN+'"></td>'
         +'<td style="'+TD+';font-weight:800">'+(r.pct==null?'—':r.pct+'%')+'</td>'
         +'<td style="'+TD+'">'+esc(({todo:'Not started',wip:'In progress',done:'Done'})[r.st]||r.st)+'</td>'
-        +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+(last?'<a href="#" class="qHist" '+d+' title="'+esc((last.by?'by '+last.by+' · ':'')+'click for the history')+'" style="color:var(--accent);text-decoration:none">'+esc(fd(last.d))+(r.hist.length>1?' <span style="color:var(--faint)">('+r.hist.length+')</span>':'')+'</a>':'<span style="color:var(--faint)">—</span>')+'</td>'
+        +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+(()=>{/* latest of: a Done-to-date entry here, or any change to this activity (Activities card, monthly done, plan) */
+          const U=(this._actUpd||{})[r.lv+'||'+r.zmk+'||'+r.aid],ud=U&&U.t?(()=>{const t=new Date(U.t),p2=n=>String(n).padStart(2,'0');return t.getFullYear()+'-'+p2(t.getMonth()+1)+'-'+p2(t.getDate());})():null;
+          const useU=ud&&(!last||ud>String(last.d||'')),dd=useU?ud:(last&&last.d),by=useU?(U.u||''):(last&&last.by)||'';
+          if(!dd)return '<span style="color:var(--faint)">—</span>';
+          const tip=(by?'by '+by+' · ':'')+(useU?'last change to this activity':'Done-to-date entry')+(last?' · click for the history':'');
+          const txt=esc(fd(dd))+(last&&r.hist.length>1?' <span style="color:var(--faint)">('+r.hist.length+')</span>':'');
+          return last?'<a href="#" class="qHist" '+d+' title="'+esc(tip)+'" style="color:var(--accent);text-decoration:none">'+txt+'</a>':'<span title="'+esc(tip)+'">'+txt+'</span>';})()+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap">'+esc(fd(r.ps))+'</td>'
         +'<td style="'+TD+';font-size:12px;white-space:nowrap'+(late?';color:var(--crit);font-weight:700':'')+'">'+esc(fd(r.pe))+'</td>'
         +'<td style="'+TD+';font-size:11px;color:var(--crit);max-width:190px">'+(r.iss.length?r.iss.map(esc).join('<br>'):'<span style="color:#2e7d4f">✓</span>')+'</td></tr>';
