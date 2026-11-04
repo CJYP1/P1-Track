@@ -9505,14 +9505,30 @@ class Component extends DCLogic {
     catch(e){if(!silent)this._toast&&this._toast('Snapshot failed');}
     return false;}
   async rwsMaybeWeeklySnapshot(){if(!this.rwsIsAdmin())return;/* A weekly check does not need asking every 30 seconds: once an hour is plenty. */if(this._rwsSnapChkAt&&Date.now()-this._rwsSnapChkAt<3600000)return;this._rwsSnapChkAt=Date.now();try{const r=await rwsSnapshotList();const list=(r&&r.ok&&Array.isArray(r.data))?r.data:[];const latest=list.length?new Date(list[0].taken_at).getTime():0;if(Date.now()-latest>=7*24*3600*1000)await this.rwsSaveSnapshot('Weekly auto',true);}catch(e){}}
-  _applyStateForView(st){st=st||{};
-    if(st.settings){const _ld=(this._appCfg&&this._appCfg.zoneDelay)||null,_lr=(this._appCfg&&this._appCfg.resourcePlans)||null;this._appCfg={...(st.settings||{})};this._appCfg.zoneDelay=this._mergePendingDelay(_ld,this._appCfg.zoneDelay);this._appCfg.resourcePlans=this._keepPendingResource(_lr,this._appCfg.resourcePlans);try{this._adoptPlacedCols();}catch(_e){}try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();}catch(_e2){console.error('reconcile after pull',_e2);}}try{this._migrateLW8();}catch(_e){}
-    this._actDoneM={...(st.act_done_m||{})};this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
+  /* History view: load the snapshot as the whole system stood that day — the same stores the live
+     pull loads (plans, totals, dates, settings, element ticks, % updates, manpower, added items),
+     each one replaced outright by the snapshot's copy on top of the built-in programme only.
+     Nothing is written to this browser's cache: leaving history reloads the live state. */
+  _applyStateForView(st){st=st||{};const own=k=>Object.prototype.hasOwnProperty.call(st,k),B=this._onlineBase||{};
+    if(own('settings')){this._appCfg={...(st.settings||{})};try{this._adoptPlacedCols();}catch(_e){}try{this._colIdxCacheLv=null;this._colIdxCache=null;this._zxIdx=null;this._reconcileZoneCols();this.buildMetrics&&this.buildMetrics();}catch(_e2){console.error('reconcile snapshot',_e2);}}
+    try{this._migrateLW8();}catch(_e){}
+    this.elem={...(st.elements||{})};this._elemDate={...(st.elem_date||{})};
+    this._zpOv={...(st.slab_qty||{})};this._qtyOv={...(st.qty_ov||{})};this._zpPlanOv={...(st.plan_qty_ov||{})};
+    try{this.applyQtyOv&&this.applyQtyOv();}catch(_e){}this.zpApplyOv&&this.zpApplyOv();
+    this._editedKeys={...(st.edited||{})};
+    this._actTotal={...(B.actTotal||{}),...(st.act_total||{})};this._actPlan={...(B.actPlan||{}),...(st.act_plan||{})};
+    this._actDoneM={...(st.act_done_m||{})};this._actHidden={...(st.act_hidden||{})};
     this._critOv={...(st.crit||{})};this._critPlanSet=null;this.applyCritOv&&this.applyCritOv();
-    this._zpOv={...(st.slab_qty||{})};this.zpApplyOv&&this.zpApplyOv();
-    if(st.act_plan)this._actPlan={...(this._actPlan||{}),...st.act_plan};if(st.act_total)this._actTotal={...(this._actTotal||{}),...st.act_total};
+    if(own('act_def'))this._actDefs=Object.keys(st.act_def||{}).map(id=>{const v=st.act_def[id]||{};const o={id,label:v.label||id,unit:v.unit||''};if(v.phase)o.phase=v.phase;return o;});
+    this._zdate={...(B.zdate||{}),...(st.zdate||{})};this._actDate={...(B.actDate||{}),...(st.act_date||{})};this._colMonth={...(B.colMonth||{}),...(st.col_month||{})};
+    this._actCmt={...(st.act_cmt||{})};this._actUpd={...(st.act_upd||{})};this._manpower={...(st.manpower||{})};
+    try{const _m=this.mergeSlabDemolish&&this.mergeSlabDemolish();}catch(_e){}
+    try{this._reconcileZoneStairs();}catch(_e){}try{this._reconcileZoneCores();}catch(_e){}
+    if(Array.isArray(st.custom_cats)){const seen={};this._catAdd=[];st.custom_cats.forEach(c=>{if(c&&c.code&&!seen[c.code]){seen[c.code]=1;this._catAdd.push({code:c.code,label:c.label});}});}
+    if(Array.isArray(st.custom_items)){this._elemAdd={};const _G=(st.settings&&st.settings.customGone)||{};st.custom_items.forEach(it=>{if(!it)return;const k=it.level+'||'+it.zone_mk+'||'+it.type;if(_G[k+'||'+it.elem_id])return;(this._elemAdd[k]=this._elemAdd[k]||[]).push(it.elem_id);});}
     this.updates={};(st.zone_updates||[]).forEach(row=>{const mk=row.zone_mk;if(!mk)return;const arr=this.updates[mk]=this.updates[mk]||[];const ts=row.created_at?new Date(row.created_at).getTime():Date.now();arr.push({pct:row.pct,status:row.status,date:row.update_date,note:row.note,crew:row.crew,level:row.level,zone:row.zone_label,ts});});
-    Object.keys(this.updates).forEach(mk=>this.updates[mk].sort((a,b)=>(a.ts||0)-(b.ts||0)));this.applyUpdates&&this.applyUpdates();}
+    Object.keys(this.updates).forEach(mk=>this.updates[mk].sort((a,b)=>(a.ts||0)-(b.ts||0)));this.applyUpdates&&this.applyUpdates();
+    this.__rangeCache=null;this._qtyActCache=null;}
   _snapZoneDiff(lv,z){
     if(!this._snapView||!this._snapLive)return '';
     const zmk=z.mk||z.lid, M=this.ACT_MONTHS||[];
@@ -9528,7 +9544,7 @@ class Component extends DCLogic {
     this._snapLive={done:{...(this._actDoneM||{})},slab:{...(this._zpOv||{})}};   /* 先存一份"现在"的完成量, 用于逐区对比 */
     if(this._livePollId){clearInterval(this._livePollId);this._livePollId=null;}
     this._applyStateForView(snap.data||{});this._snapBanner(true);
-    this.buildRail&&this.buildRail();this.buildTimeline&&this.buildTimeline();this.render&&this.render();
+    this.buildRail&&this.buildRail();this.buildTimeline&&this.buildTimeline();this.render&&this.render();try{this.refreshSched&&this.refreshSched();}catch(_e){}try{this._resourceMode&&this._renderResourcePanel&&this._renderResourcePanel();}catch(_e){}try{this._refreshOpenReport&&this._refreshOpenReport();}catch(_e){}
     if(this.selKey){const z=this.DATA.levels[this.curLevel].zones.find(x=>this.zid(x)===this.selKey);if(z)this.selectZone(z);}
     const m=document.getElementById('__snapHist');if(m)m.remove();}
   rwsExitSnapshot(){this._snapView=null;this._snapBanner(false);try{location.reload();}catch(e){this.rwsAfterLogin&&this.rwsAfterLogin();}}
