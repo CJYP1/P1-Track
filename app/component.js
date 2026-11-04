@@ -752,7 +752,7 @@ class Component extends DCLogic {
   /* ---------- zone activities: per-month plan / actual (Total + Planned/Done by month) ---------- */
   actCurLabel(){const MB=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     /* "now" = 真实当前月(在计划月份范围内就用它); 超出范围再退回数据里的 ZP.current */
-    const n=new Date();const real=MB[n.getMonth()]+"'"+String(n.getFullYear()).slice(2);
+    const n=this._nowDate();const real=MB[n.getMonth()]+"'"+String(n.getFullYear()).slice(2);
     if(this.ACT_MONTHS&&this.ACT_MONTHS.indexOf(real)>=0)return real;
     const AB={January:'Jan',February:'Feb',March:'Mar',April:'Apr',May:'May',June:'Jun',July:'Jul',August:'Aug',September:'Sep',October:'Oct',November:'Nov',December:'Dec'};const p=((this.ZP&&this.ZP.current)||'July 2026').split(' ');return (AB[p[0]]||p[0])+"'"+String(p[1]||'2026').slice(2);}
   actDefaultMonth(){const c=this.actCurLabel();return this.ACT_MONTHS.indexOf(c)>=0?c:this.ACT_MONTHS[this.ACT_MONTHS.length-1];}
@@ -1845,7 +1845,9 @@ class Component extends DCLogic {
   saveElemDate(){try{localStorage.setItem('rws_elem_date',JSON.stringify(this._elemDate||{}));}catch(e){}}
   elemDate(key){return (this._elemDate||{})[key]||'';}
   setElemDate(key,iso){this._elemDate=this._elemDate||{};if(iso)this._elemDate[key]=iso;else delete this._elemDate[key];this.saveElemDate();const _p=key.split('||');rwsSyncKV('elem_date',key,(iso||null),_p[0],_p[1]);}
-  todayISOStr(){return new Date().toISOString().slice(0,10);}
+  /* While a history snapshot is open, "today" is the day the snapshot was taken, so every behind / outstanding / current-month figure is worked out as it stood that day. */
+  _nowDate(){const sv=this._snapView;if(sv&&sv.taken_at){const d=new Date(sv.taken_at);if(!isNaN(d))return d;}return new Date();}
+  todayISOStr(){const sv=this._snapView;if(sv&&sv.taken_at)return String(sv.taken_at).slice(0,10);return new Date().toISOString().slice(0,10);}
   /* Map a YYYY-MM-DD completion date to one of the activity month buckets */
   dateToActMonth(iso){const M=this.ACT_MONTHS;if(!iso)return M[M.length-1];const y=+iso.slice(0,4),mo=+iso.slice(5,7);const val=y*12+mo;const aprVal=2026*12+4;if(val<aprVal)return "Before Apr'26";const nm=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const lab=nm[mo]+"'"+String(y).slice(2);
     /* Any month the Activity list actually carries maps to itself; only dates past the end of
@@ -2483,7 +2485,7 @@ class Component extends DCLogic {
   /* Delay 数据接口（后续可直接导入）:
      this._appCfg.zoneDelay = {"L1||L1|ZC1":12, "L2||L2|2.1CIS":5}
      正数 = 延误天数，地图显示 −12 days。项目总体已延期，因此不接受“提前/负延误”。 */
-  _rpDelayClock(){const P=["Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26","Jan '27","Feb '27","Mar '27","Apr '27","May '27"],now=new Date(),mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()];let asOf=mn+" '"+String(now.getFullYear()).slice(2);if(P.indexOf(asOf)<0)asOf="Jul '26";const idx=Math.max(0,P.indexOf(asOf));return {idx,daysElapsed:(idx+1)*30.44};}
+  _rpDelayClock(){const P=["Apr '26","May '26","Jun '26","Jul '26","Aug '26","Sep '26","Oct '26","Nov '26","Dec '26","Jan '27","Feb '27","Mar '27","Apr '27","May '27"],now=this._nowDate(),mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()];let asOf=mn+" '"+String(now.getFullYear()).slice(2);if(P.indexOf(asOf)<0)asOf="Jul '26";const idx=Math.max(0,P.indexOf(asOf));return {idx,daysElapsed:(idx+1)*30.44};}
   /* Delay 从 2026-06-30 的 0 days 重新起算。每个分区按自己的 Jul→本月累计 Plan/Actual 单独计算：
      欠天数 = 有计划月份原定可减少的天数 × 累计未完成比例。Aug'26 理论最大仅 6+7=13 天。 */
   _rpZoneDelayDays(lv,z){if(!z)return null;const zmk=z.mk||z.lid||'',clk=this._rpDelayClock(),gain=[2,7,6,6,7,7,10,10,10,9,9,9,8,8];let pT=0,dT=0,gT=0;
@@ -2542,14 +2544,14 @@ class Component extends DCLogic {
      Plan-to-date prorates the current month's plan by today's calendar progress; actual is cumulative through today.
      The average activity shortfall is converted to equivalent schedule days from that activity's first planned month.
      Actual above plan can clear backlog, but can never turn an already delayed project into “ahead”. */
-  _delayQtyStats(lv,z){if(!z)return null;const zmk=z.mk||z.lid||'',M=this.ACT_MONTHS||[],now=new Date(),lab=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+"'"+String(now.getFullYear()).slice(2),mi=M.indexOf(lab);if(mi<0)return null;const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),monthFrac=Math.max(0,Math.min(1,now.getDate()/dim)),parseMonth=s=>{const m=String(s||'').match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'(\d{2})$/);if(!m)return null;const mons={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};return new Date(Date.UTC(2000+(+m[2]),mons[m[1]],1));},asOf=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()),DAY=86400000,items=[];
+  _delayQtyStats(lv,z){if(!z)return null;const zmk=z.mk||z.lid||'',M=this.ACT_MONTHS||[],now=this._nowDate(),lab=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+"'"+String(now.getFullYear()).slice(2),mi=M.indexOf(lab);if(mi<0)return null;const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),monthFrac=Math.max(0,Math.min(1,now.getDate()/dim)),parseMonth=s=>{const m=String(s||'').match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'(\d{2})$/);if(!m)return null;const mons={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};return new Date(Date.UTC(2000+(+m[2]),mons[m[1]],1));},asOf=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()),DAY=86400000,items=[];
     (this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{let ptd=0,done=0,first=null;for(let i=0;i<=mi;i++){const p=Number(this.actPlan(lv,zmk,a.id,M[i])||0),d=Number(this.actDoneMonth(lv,zmk,a.id,M[i])||0);if(p>0&&!first)first=parseMonth(M[i]);ptd+=p*(i===mi?monthFrac:1);done+=d;}if(ptd<=0||!first)return;const ratio=done/ptd,shortfall=Math.max(0,1-ratio),span=Math.max(1,Math.round((asOf-first.getTime())/DAY)+1),days=span*shortfall;items.push({aid:a.id,label:a.label,plan:ptd,done,ratio,days});});
     if(!items.length)return null;const avgDays=items.reduce((n,x)=>n+x.days,0)/items.length,avgRatio=items.reduce((n,x)=>n+Math.min(1,x.ratio),0)/items.length;return {days:Math.max(0,Math.round(avgDays)),progressPct:Math.max(0,Math.min(100,Math.round(avgRatio*100))),behindPct:Math.max(0,Math.round((1-avgRatio)*100)),activities:items.length,items};}
   /* Whole-project recovery after the 26-Aug programme-delay baseline.
      Sep'26 is the first full measurement month after that baseline.  Quantities are summed
      only inside their own unit, then the unit performance ratios are averaged, so m²/m³/nos
      are never added together.  More than 100% earns recovery days; less than 100% adds delay. */
-  _delayProjectStats(){const M=this.ACT_MONTHS||[],start=M.indexOf("Sep'26"),now=new Date(),cur=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+"'"+String(now.getFullYear()).slice(2),mi=M.indexOf(cur);if(start<0||mi<start)return null;const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),frac=Math.max(0,Math.min(1,now.getDate()/dim)),byUnit={},seen=new Set();
+  _delayProjectStats(){const M=this.ACT_MONTHS||[],start=M.indexOf("Sep'26"),now=this._nowDate(),cur=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]+"'"+String(now.getFullYear()).slice(2),mi=M.indexOf(cur);if(start<0||mi<start)return null;const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),frac=Math.max(0,Math.min(1,now.getDate()/dim)),byUnit={},seen=new Set();
     ['EB','NB','MA'].forEach(cat=>(this.DATA.order||[]).forEach(lv=>this._reportZones(lv,cat).forEach(z=>{const zmk=z.mk||z.lid,zk=lv+'||'+zmk;if(seen.has(zk))return;seen.add(zk);(this._actList(lv,z)||[]).filter(a=>(a.custom||this._actApplies(a.id,lv,z))&&!this.actHidden(lv,zmk,a.id)).forEach(a=>{let plan=0,done=0;for(let i=start;i<=mi;i++){plan+=Number(this.actPlan(lv,zmk,a.id,M[i])||0)*(i===mi?frac:1);done+=Number(this.actDoneMonth(lv,zmk,a.id,M[i])||0);}if(plan<=0&&done<=0)return;const unit=a.unit||this._actUnit(a.id)||'items',g=byUnit[unit]||(byUnit[unit]={unit,plan:0,done:0});g.plan+=plan;g.done+=done;});})));
     const groups=Object.values(byUnit).filter(g=>g.plan>0);if(!groups.length)return null;groups.forEach(g=>g.ratio=g.done/g.plan);const ratio=groups.reduce((n,g)=>n+Math.max(0,Math.min(2,g.ratio)),0)/groups.length,startDate=Date.UTC(2026,8,1),today=Date.UTC(now.getFullYear(),now.getMonth(),now.getDate()),elapsed=Math.max(1,Math.round((today-startDate)/86400000)+1),adjustDays=Math.round(elapsed*(1-ratio));return {ratio,progressPct:Math.round(ratio*100),elapsed,adjustDays,recoveredDays:Math.max(0,-adjustDays),addedDelayDays:Math.max(0,adjustDays),groups};}
   _delayBaseStats(lv,z){const programme=this._p6ZoneDelayDays(lv,z),project=this._delayProjectStats(),base=Number.isFinite(programme)?Math.max(0,Math.round(programme)):0,adjust=project?project.adjustDays:0,days=(Number.isFinite(programme)||project)?Math.max(0,base+adjust):null;return {days,programme:Number.isFinite(programme)?base:null,project,adjust};}
@@ -2780,7 +2782,7 @@ class Component extends DCLogic {
     /* The whole level's slab with the CIS zones taken out. */
     if(filter==='nocis')return !_isCis();
     return true;}
-  _reportToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+  _reportToday(){const d=this._nowDate(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
   _reportDateLabel(iso){const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?(+m[3])+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2]-1]+' '+m[1].slice(2):String(iso||'');}
   _reportMonthBounds(label){if(label==="Before Apr'26")return {s:Date.UTC(2000,0,1),e:Date.UTC(2026,2,31)};const m=String(label||'').match(/^([A-Z][a-z]{2})'(\d{2})$/);if(!m)return null;const mi=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);if(mi<0)return null;const y=2000+(+m[2]);return {s:Date.UTC(y,mi,1),e:Date.UTC(y,mi+1,0)};}
   _reportPlanFraction(month,start,end,asOf){const b=this._reportMonthBounds(month);if(!b)return 0;let s=b.s,e=b.e;const ds=Date.parse(String(start||'')+'T00:00:00Z'),de=Date.parse(String(end||'')+'T00:00:00Z'),now=Date.parse(asOf+'T00:00:00Z');if(Number.isFinite(ds))s=Math.max(s,ds);if(Number.isFinite(de))e=Math.min(e,de);if(e<s||now<s)return 0;if(now>=e)return 1;return Math.max(0,Math.min(1,(now-s+86400000)/(e-s+86400000)));}
