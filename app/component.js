@@ -164,7 +164,7 @@ class Component extends DCLogic {
   _actApplies(aid,lv,z){if(z&&z._topOnly)return aid==='slab_top';const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
-    if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA'&&!(z&&z._mslabMA))return false; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
+    if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA'&&!(z&&z._mslabMA))return this._l1MaLooseCols(z).length>0; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
     if(aid==='slab_pile')return false;   /* merged into 'slab' everywhere */
     switch(aid){case 'slab_top':return lv==='L1'&&(z&&z._mslabMA?this._mslabTop(z):cat==='MA');   /* Top Slab: Marine L1, plus the M-SLAB 3–6 panels (reported under Marine) */
       case 'pile':return lv==='B2';case 'sbeam':return !base;case 'exc':return cat==='NB'&&(lv==='B2'||lv==='B1');case 'demo':return cat==='EB'&&(lv==='B2'||lv==='B1'||lv==='L1');case 'demo_wall':return cat==='EB'&&(lv==='B2'||lv==='B1');default:return true;}}
@@ -1885,9 +1885,13 @@ class Component extends DCLogic {
       if(this._cwGroupKeys(cid).some(k=>lg.has(k)))return String(cid||'');}
     return '';}
   _zoneHasElems(lv,zmk,types){const z=(this.DATA.levels[lv]?this.DATA.levels[lv].zones:[]).find(x=>(x.mk||x.lid)===zmk);if(!z)return false;return types.some(tp=>this._zoneElemList(z,tp).length>0);}
+  /* Marine L1 columns are counted in the Podium P zones.  A column moved onto a Marine map zone itself
+     (WF-1C53 → M-SLAB 5) is in no P zone, so it used to drop out of every count; it now counts where it is. */
+  _l1MaPColSet(){const S=new Set();Object.values(this._marineCol||{}).forEach(arr=>(arr||[]).forEach(c=>S.add(this._colKey(typeof c==='string'?c:c&&c.id))));return S;}
+  _l1MaLooseCols(z){if(!z||z._pod)return [];const P=this._l1MaPColSet();return (z.cols||[]).filter(c=>!P.has(this._colKey(typeof c==='string'?c:c&&c.id)));}
   _activityElemRefs(lv,zmk,aid,z0){const out=[],seen=new Set(),push=(type,id,key,custom)=>{id=String(id||'').trim();if(!id||seen.has(key))return;seen.add(key);out.push({type,id,key,custom:!!custom});};let z=z0||((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
-    if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:[],stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
-    const ea=this._elemAct(aid);if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;/* Unticked 计入 in the register = out of every count.  Columns leave their zone list when dropped; beams, pile caps, lifts and stairs stay listed, so they are skipped here — otherwise the Report kept dividing by them (L2 NB steel beams: 46 instead of 43). */if(this._elemDropped&&this._elemDropped(lv,zmk,tp,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
+    if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',_pod:/^P/i.test(lab),cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:[],stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
+    const ea=this._elemAct(aid),_maP=(aid==='col'&&lv==='L1'&&z&&(z.cat||'NB')==='MA'&&!z._pod&&!z._mslabMA&&((this.DATA.levels.L1||{}).zones||[]).includes(z))?this._l1MaPColSet():null;if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_maP&&tp==='col'&&_maP.has(this._colKey(id)))return;if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;/* Unticked 计入 in the register = out of every count.  Columns leave their zone list when dropped; beams, pile caps, lifts and stairs stay listed, so they are skipped here — otherwise the Report kept dividing by them (L2 NB steel beams: 46 instead of 43). */if(this._elemDropped&&this._elemDropped(lv,zmk,tp,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
     if(this._actUnit(aid)==='nos')Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||'),code=p[2];if(p[0]!==lv||p[1]!==zmk||this._catAct({code})!==aid)return;this.customItemsFor(lv,zmk,code).forEach(id=>push(code,id,lv+'||'+zmk+'||'+code+'||'+id,true));});return out;}
   /* Zone overall % = average of each applicable activity's cumulative done/total.
      Activities with no data at all (total<=0 and nothing done) do NOT participate. */
