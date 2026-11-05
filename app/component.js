@@ -2109,6 +2109,7 @@ class Component extends DCLogic {
       try{this._migrateLW8&&this._migrateLW8();}catch(_e){console.error('rename migrate',_e);}
       try{this._migrateDotIds&&this._migrateDotIds();}catch(_e){console.error('dot migrate',_e);}
       try{const _s=this._seedPlacedCols&&this._seedPlacedCols();if(_s)this._toast('Added '+_s+' hand-placed column'+(_s===1?'':'s')+' to the cloud \u2014 everyone can see them now.');}catch(_e){console.error('col seed',_e);}
+      try{this._dedupeMovedElemRecords&&this._dedupeMovedElemRecords();}catch(_e){console.error('dedupe moved records',_e);}
       try{const _n=this._wipeReportOverrides&&this._wipeReportOverrides();if(_n)this._toast('Cleared '+_n+' typed Report figure'+(_n===1?'':'s')+' \u2014 the Area Report is live only now.');}catch(_e){console.error('report wipe',_e);}
       this.applyUpdates(); this.buildRail(); this.buildTimeline(); this.render(); this.refreshUpdBadge();
       /* The Construction Schedule is its own page: without this it kept showing whatever was on it
@@ -5185,6 +5186,28 @@ class Component extends DCLogic {
       if(this._elemDate[newKey]==null)this._elemDate[newKey]=d;delete this._elemDate[oldKey];
       if(_sync&&typeof rwsSyncKV==='function'){const p=newKey.split('||'),o=oldKey.split('||');try{rwsSyncKV('elem_date',newKey,d,p[0],p[1]);rwsSyncKV('elem_date',oldKey,null,o[0],o[1]);}catch(e){}}}
   }
+  /* One element, one record.  Moving an element used to leave its old record behind when the cloud
+     write was refused (WF-1C53: done under SLAB101 and under M-SLAB 5, so 14 ticks for 13 columns).
+     A record whose zone no longer lists that element, while another zone on the same level does,
+     is folded into the current zone: kept there if the current zone has none, otherwise dropped
+     (the current zone's record wins; its date is filled from the old one only if it has none). */
+  _dedupeMovedElemRecords(){
+    if(this._snapView||window.__RWS_LOCKED_VIEW||!this.elem)return 0;
+    const TP=['col','pile','beam','lift','stair','core'],where={},put=(lv,zmk,tp,id)=>{if(!id)return;const k=lv+'|'+tp+'|'+this._colKey(id);(where[k]=where[k]||new Set()).add(String(zmk));};
+    (this.DATA.order||[]).forEach(lv=>{((this.DATA.levels[lv]||{}).zones||[]).forEach(z=>TP.forEach(tp=>(this._zoneElemList(z,tp)||[]).forEach(x=>put(lv,z.mk||z.lid,tp,typeof x==='string'?x:x&&x.id))));
+      const SS=(this._stairZoneItems||{})[lv]||{},CS=(this._coreZoneItems||{})[lv]||{};Object.keys(SS).forEach(m=>(SS[m]||[]).forEach(x=>put(lv,m,'stair',typeof x==='string'?x:x&&x.id)));Object.keys(CS).forEach(m=>(CS[m]||[]).forEach(x=>put(lv,m,'core',typeof x==='string'?x:x&&x.id)));});
+    Object.keys(this._marineCol||{}).forEach(P=>(this._marineCol[P]||[]).forEach(x=>put('L1','L1|'+P,'col',typeof x==='string'?x:x&&x.id)));
+    const admin=this.rwsIsAdmin&&this.rwsIsAdmin();let n=0;
+    const keys=new Set([...Object.keys(this.elem||{}),...Object.keys(this._elemDate||{})]);
+    keys.forEach(k=>{const q=k.split('||');if(q.length!==4||TP.indexOf(q[2])<0)return;const W=where[q[0]+'|'+q[2]+'|'+this._colKey(q[3])];if(!W||!W.size||W.has(q[1])||W.size!==1)return;
+      const to=[...W][0],nk=q[0]+'||'+to+'||'+q[2]+'||'+q[3],sync=admin&&this._canSyncKey(k)&&this._canSyncKey(nk);
+      const hasNew=this.elem[nk]!=null&&this.elem[nk]!=='todo';
+      if(!hasNew&&this.elem[k]!=null){this.elem[nk]=this.elem[k];if(sync&&typeof rwsSyncElementStatus==='function'){try{rwsSyncElementStatus(nk,this.elem[nk]);}catch(e){}}}
+      if(this._elemDate&&this._elemDate[k]!=null&&(this._elemDate[nk]==null||!hasNew)){if(this._elemDate[nk]==null||!hasNew){this._elemDate[nk]=hasNew&&this._elemDate[nk]!=null?this._elemDate[nk]:this._elemDate[k];}if(sync&&typeof rwsSyncKV==='function'){const p=nk.split('||');try{rwsSyncKV('elem_date',nk,this._elemDate[nk],p[0],p[1]);}catch(e){}}}
+      if(this.elem[k]!=null){delete this.elem[k];if(sync&&typeof rwsSyncElementStatus==='function'){try{rwsSyncElementStatus(k,'todo');}catch(e){}}}
+      if(this._elemDate&&this._elemDate[k]!=null){delete this._elemDate[k];if(sync&&typeof rwsSyncKV==='function'){try{rwsSyncKV('elem_date',k,null,q[0],q[1]);}catch(e){}}}
+      n++;});
+    return n;}
   _applyElemMoves(){
     const mv=this._elemMoves();if(!Object.keys(mv).length)return;
     let touched=false;
