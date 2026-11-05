@@ -630,7 +630,11 @@ class Component extends DCLogic {
         zones.forEach(z=>{base[z.mk||z.lid]=(z.stairs||[]).map(x=>typeof x==='string'?x:{...x});});
       }
       const base=this._baseZoneStairs[lv];
-      zones.forEach(z=>{z.stairs=(base[z.mk||z.lid]||[]).map(x=>typeof x==='string'?x:{...x});});
+      /* The drawing schedule lists some stairs on levels above their own floors (P1-ST-14/15, L1-L3, was
+         listed on L4 too).  A stair is kept only on the levels inside its floor range — the register
+         override first, then its own From/To. */
+      const _ord=this._floorOrd(lv),_inRange=x=>{if(typeof x==='string'||_ord==null)return true;const r=this._linksFloorRange({id:x.id},lv);if(!r)return true;return _ord>=r[0]-1e-6&&_ord<=r[1]+1e-6;};
+      zones.forEach(z=>{z.stairs=(base[z.mk||z.lid]||[]).filter(_inRange).map(x=>typeof x==='string'?x:{...x});});
       this._stairZoneItems[lv]={};
     });
     const store=(((this._appCfg||{}).lifts)||{}),assign=[];
