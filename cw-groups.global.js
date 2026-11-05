@@ -24,6 +24,7 @@ window.CW_GROUPS = {
   "LW7":  { lifts:["P1-CL4","P1-CL3"], stairs:[], f:"L1", t:"L3" },
   "LW9":  { lifts:["P1-CL1","P1-CL2"], stairs:[], f:"L2", t:"L3" },
   "LW10": { lifts:["P1-FL7"], stairs:["P1-ST-07/50"], f:"L1", t:"L4" }   /* lift P1-FL7 and stair P1-ST-07/50 both stop at L4 */,
+  "CW11": { lifts:["P1-FL6","P1-FL-6","P1-EL7","SL-EL7","PL-EL7","P1-FL6/EL7"], stairs:[], f:"B2", t:"L1" }   /* P1-FL6/EL7 sit inside CW11 (formerly CWB3.3) (site, 5 Nov 26); same B2-L1 range as the lifts */,
   "CW12": { lifts:["P1-PL9","P1-PL-9","PL-PL9","P1-PL10","P1-PL-10","PL-PL10"], stairs:[], add:["P1-PL9","P1-PL10"], f:"B1", t:"L2" }   /* P1-PL9 / P1-PL10 sit inside CW12 (site, 22 Oct 26). Walls B1-L1: t = L2 = the level whose underside it reaches, so B1..L1 count it and L2 only shows it */
 };
 /* 别名: 你习惯都写 "CW", 但数据里 lift-wall 是 "LW" —— CW6/7/9/10 当作 LW6/7/9/10 */
@@ -32,6 +33,7 @@ window.CW_GROUPS = {
    lift core stops at L4M, so it stays its own group.  Both the old "(LW8)" and the new "(ST3)"
    spellings are listed so records saved under either name keep matching. */
 window.CW_GROUPS["ST3"]={ lifts:[], stairs:["P1-ST-03B (ST3)","P1-ST-03/3B (ST3)","P1-ST-03 (ST3)","P1-ST-03B (LW8)","P1-ST-03/3B (LW8)","P1-ST-03 (LW8)"], f:"B2", t:"L17" };
+window.CW_GROUPS["CWB3.3"]=window.CW_GROUPS["CW11"];   /* old name of CW11 */
 window.CW_GROUPS["LW8"]=window.CW_GROUPS["ST3"];   /* legacy name → same group */
 window.CW_GROUPS["CW8"]=window.CW_GROUPS["CW08"];   /* legacy spellings of the same core */
 window.CW_GROUPS["Lift 1/2"]=window.CW_GROUPS["CW08"];
