@@ -161,7 +161,11 @@ class Component extends DCLogic {
     return d==null?this.lsAll(c):d;
   }
   _mslabTop(z){return /^M-?SLAB\s*[3-6]$/i.test(String((z&&z.label)||'').trim());}
-  _actApplies(aid,lv,z){if(z&&z._topOnly)return aid==='slab_top';const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
+  _actApplies(aid,lv,z){if(z&&z._topOnly){if(aid==='slab_top')return true;
+      /* M-SLAB panels report only their Top Slab — but a staircase / core / column that sits in one (P1-ST-47B in M-SLAB 6, WF-1C53 in M-SLAB 5) belongs to no other zone, so it is counted here instead of nowhere. */
+      if(aid==='ls'||aid==='act_corewall')return this._activityElemRefs(lv,z.mk||z.lid,aid,z).length>0;
+      if(aid==='col')return this._l1MaLooseCols(z).length>0;
+      return false;}const cat=(z&&z.cat)||'NB';const base=(lv==='B2'||lv==='B1'||lv==='B1M');
     /* Marine 的柱子/柱帽 → 只在 Podium 子区录入统计, bottom/top slab(ZC/C)不显示; 地图柱子点位不受影响 */
     if(aid==='act_colcorbel')return false;   /* Column Corbel 已从整个系统停用（保留历史数据但不展示/不汇总） */
     if(aid==='col'){ if(z&&z._pod)return true; if(lv==='L1'&&cat==='MA'&&!(z&&z._mslabMA))return this._l1MaLooseCols(z).length>0; return true; }   /* 只在 L1 把 marine 柱子移到 Podium; L2/L3/L4 的 marine 柱子照常保留 */
@@ -1907,7 +1911,7 @@ class Component extends DCLogic {
     let best=L[0].zm,br=-1;L.forEach(e=>{const r=rank(lv+'||'+e.zm+'||'+tp+'||'+e.id);if(r>br){br=r;best=e.zm;}});return best;}
   _activityElemRefs(lv,zmk,aid,z0){const out=[],seen=new Set(),push=(type,id,key,custom)=>{id=String(id||'').trim();if(!id||seen.has(key))return;seen.add(key);out.push({type,id,key,custom:!!custom});};let z=z0||((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
     if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',_pod:/^P/i.test(lab),cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:this._liftItemsFor(lv,zmk),stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
-    const ea=this._elemAct(aid),_maP=(aid==='col'&&lv==='L1'&&z&&(z.cat||'NB')==='MA'&&!z._pod&&!z._mslabMA&&((this.DATA.levels.L1||{}).zones||[]).includes(z))?this._l1MaPColSet():null;if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_maP&&tp==='col'&&_maP.has(this._colKey(id)))return;if(tp==='lift'||tp==='stair'||tp==='core'){const pz=this._lsPrimaryZone(lv,tp,id);if(pz&&pz!==String(zmk))return;}if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;/* Unticked 计入 in the register = out of every count.  Columns leave their zone list when dropped; beams, pile caps, lifts and stairs stay listed, so they are skipped here — otherwise the Report kept dividing by them (L2 NB steel beams: 46 instead of 43). */if(this._elemDropped&&this._elemDropped(lv,zmk,tp,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
+    const ea=this._elemAct(aid),_maP=(aid==='col'&&lv==='L1'&&z&&(z.cat||'NB')==='MA'&&!z._pod)?this._l1MaPColSet():null;if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_maP&&tp==='col'&&_maP.has(this._colKey(id)))return;if(tp==='lift'||tp==='stair'||tp==='core'){const pz=this._lsPrimaryZone(lv,tp,id);if(pz&&pz!==String(zmk))return;}if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;/* Unticked 计入 in the register = out of every count.  Columns leave their zone list when dropped; beams, pile caps, lifts and stairs stay listed, so they are skipped here — otherwise the Report kept dividing by them (L2 NB steel beams: 46 instead of 43). */if(this._elemDropped&&this._elemDropped(lv,zmk,tp,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
     if(this._actUnit(aid)==='nos')Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||'),code=p[2];if(p[0]!==lv||p[1]!==zmk||this._catAct({code})!==aid)return;this.customItemsFor(lv,zmk,code).forEach(id=>push(code,id,lv+'||'+zmk+'||'+code+'||'+id,true));});return out;}
   /* Zone overall % = average of each applicable activity's cumulative done/total.
      Activities with no data at all (total<=0 and nothing done) do NOT participate. */
