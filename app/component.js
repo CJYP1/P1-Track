@@ -590,7 +590,14 @@ class Component extends DCLogic {
     }
     return z?{lv,zmk,label:z.label,z}:null;
   }
-  _stairItemsFor(lv,zmk){return (((this._stairZoneItems||{})[lv]||{})[zmk]||[]);}
+  /* A core wall set to another kind in the register (LW10 → Staircase) left the core list of a Marine
+     sub-zone but was never put in its stair / lift list, so on L1 it vanished from the register and
+     every count.  Sub-zone items of the new kind now include it. */
+  _subRetyped(lv,zmk,kind){const R=(this._appCfg&&this._appCfg.elemRetype)||{};return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]).filter(x=>{const id=typeof x==='string'?x:x&&x.id;return R['core||'+this._colKey(id)]===kind;}).map(x=>typeof x==='string'?{id:x,retyped:'core'}:{...x,retyped:'core'});}
+  _stairItemsFor(lv,zmk){const base=(((this._stairZoneItems||{})[lv]||{})[zmk]||[]),ex=this._subRetyped(lv,zmk,'stair').filter(x=>!base.some(y=>this._colKey(typeof y==='string'?y:y.id)===this._colKey(x.id)));return ex.length?base.concat(ex):base;}
+  _liftItemsFor(lv,zmk){return this._subRetyped(lv,zmk,'lift');}
+  /* Status / date of a sub-zone core set to another kind follow it to the new kind's key (L1|P12 LW10: core → stair). */
+  _migrateSubRetyped(){if(this._snapView||!this.elem)return;Object.keys(this._coreZoneItems||{}).forEach(lv=>Object.keys(this._coreZoneItems[lv]||{}).forEach(zmk=>['stair','lift'].forEach(kind=>this._subRetyped(lv,zmk,kind).forEach(x=>{const o=lv+'||'+zmk+'||core||'+x.id,n=lv+'||'+zmk+'||'+kind+'||'+x.id;if((this.elem[o]!=null||(this._elemDate||{})[o]!=null)&&this.elem[n]==null)this._migrateElemKey(o,n);}))));}
   _coreTarget(lv,w){if(!w)return null;const name=String(w.id||'').trim().toUpperCase();
     /* LW7 continues through L2 inside NB zone 2.1CIST.  Its shape is drawn on
        L1 and projected upward, so geometry on the source floor cannot resolve
@@ -614,7 +621,7 @@ class Component extends DCLogic {
     return null;}
   _coreItemsFor(lv,zmk){const R=(this._appCfg&&this._appCfg.elemRetype)||{};return (((this._coreZoneItems||{})[lv]||{})[zmk]||[]).filter(x=>{const id=typeof x==='string'?x:x.id;const to=R['core||'+this._colKey(id)];return !to||to==='core';});}
   _reconcileZoneCores(){this.__rangeCache=null;this._coreZoneItems={};const store=(((this._appCfg||{}).coreWalls)||{});Object.keys(store).forEach(srcLv=>(store[srcLv]||[]).forEach(w=>{const id=String(w&&w.id||'').trim();if(!id)return;const rng=this._linksFloorRange(w,srcLv);(this.DATA.order||[]).forEach(lv=>{const ord=this._floorOrd(lv),show=(rng&&ord!=null)?(ord>=rng[0]-1e-6&&ord<=rng[1]+1e-6):(lv===srcLv);if(!show)return;if(rng&&ord!=null&&rng[1]>rng[0]&&Math.abs(ord-rng[1])<1e-6)return;   /* tops out here: marked on the map only */
-        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();this._mergeRenamedWalls&&this._mergeRenamedWalls();this._applyElemRename&&this._applyElemRename();this._applySubMoves&&this._applySubMoves('core');this._applyGroupAdds&&this._applyGroupAdds();}catch(_e){}}
+        const target=this._coreTarget(lv,w);if(!target)return;const byLv=this._coreZoneItems[lv]=this._coreZoneItems[lv]||{},dst=byLv[target.zmk]=byLv[target.zmk]||[];if(!dst.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))dst.push({id,_drawnCoreShape:true});if(target.z){target.z.cores=target.z.cores||[];if(!target.z.cores.some(x=>this._idSameGroup(typeof x==='string'?x:x.id,id)))target.z.cores.push({id,_drawnCoreShape:true});}});}));/* A wall drawn on the map is pushed into the core list here, after the register's kind override was applied, so the override is applied once more: LW6 changed to Lift must not come back as a core. */try{this._applyElemRetype&&this._applyElemRetype();this._mergeRenamedWalls&&this._mergeRenamedWalls();this._applyElemRename&&this._applyElemRename();this._applySubMoves&&this._applySubMoves('core');this._applyGroupAdds&&this._applyGroupAdds();this._migrateSubRetyped&&this._migrateSubRetyped();}catch(_e){}}
   /* Staircase 图形(settings.lifts)和 zone-data 以前是两套清单。保留一份原始
      stair 台账，每次都从原始台账重建，再以【当前显示楼层】的 HTML 边界归区。
      跨层显示的楼梯因此会分别挂到 L2/L3/L4 本层，不再沿来源链接跳回 L1。 */
@@ -1890,7 +1897,7 @@ class Component extends DCLogic {
   _l1MaPColSet(){const S=new Set();Object.values(this._marineCol||{}).forEach(arr=>(arr||[]).forEach(c=>S.add(this._colKey(typeof c==='string'?c:c&&c.id))));return S;}
   _l1MaLooseCols(z){if(!z||z._pod)return [];const P=this._l1MaPColSet();return (z.cols||[]).filter(c=>!P.has(this._colKey(typeof c==='string'?c:c&&c.id)));}
   _activityElemRefs(lv,zmk,aid,z0){const out=[],seen=new Set(),push=(type,id,key,custom)=>{id=String(id||'').trim();if(!id||seen.has(key))return;seen.add(key);out.push({type,id,key,custom:!!custom});};let z=z0||((this.DATA.levels[lv]&&this.DATA.levels[lv].zones)||[]).find(x=>(x.mk||x.lid)===zmk);
-    if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',_pod:/^P/i.test(lab),cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:[],stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
+    if(!z&&lv==='L1'&&String(zmk).indexOf('L1|')===0){const lab=String(zmk).slice(3);z={mk:zmk,label:lab,cat:'MA',_pod:/^P/i.test(lab),cols:(this._marineCol&&this._marineCol[lab])||[],piles:[],beams:[],lifts:this._liftItemsFor(lv,zmk),stairs:this._stairItemsFor(lv,zmk),cores:this._coreItemsFor(lv,zmk)};}
     const ea=this._elemAct(aid),_maP=(aid==='col'&&lv==='L1'&&z&&(z.cat||'NB')==='MA'&&!z._pod&&!z._mslabMA&&((this.DATA.levels.L1||{}).zones||[]).includes(z))?this._l1MaPColSet():null;if(ea&&!(aid==='pile'&&this._pileHiddenForEB(lv,zmk))&&z)ea.types.forEach(tp=>this._zoneElemList(z,tp).forEach(x=>{const id=typeof x==='string'?x:x.id;if(_maP&&tp==='col'&&_maP.has(this._colKey(id)))return;if(aid==='ls'&&(tp==='lift'||tp==='stair')&&this._lsMemberCore(z,id))return;/* Unticked 计入 in the register = out of every count.  Columns leave their zone list when dropped; beams, pile caps, lifts and stairs stay listed, so they are skipped here — otherwise the Report kept dividing by them (L2 NB steel beams: 46 instead of 43). */if(this._elemDropped&&this._elemDropped(lv,zmk,tp,id))return;push(tp,id,this.ekey(lv,z,tp,id),false);}));
     if(this._actUnit(aid)==='nos')Object.keys(this._elemAdd||{}).forEach(k=>{const p=k.split('||'),code=p[2];if(p[0]!==lv||p[1]!==zmk||this._catAct({code})!==aid)return;this.customItemsFor(lv,zmk,code).forEach(id=>push(code,id,lv+'||'+zmk+'||'+code+'||'+id,true));});return out;}
   /* Zone overall % = average of each applicable activity's cumulative done/total.
@@ -2802,7 +2809,7 @@ class Component extends DCLogic {
       /* M-SLAB counts for Marine through its Top Slab only (3–6); its other works are not Marine's. */
       out=out.filter(z=>!z._mslabMA||this._mslabTop(z)).map(z=>z._mslabMA?{...z,_topOnly:true}:z);
       const _all=this._maL1PodOnly!==true;   /* Marine L1 now reports every job: Top Slab + Piling on the ZC zones, Bottom Slab on the C sub-zones, Podium on the P sub-zones.  _maL1PodOnly=true = Podium only. */
-      if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P',crit:this._subCrit(mk,e)});}));}return out;}
+      if(!_all)out=[];const S=this.SUBZONES&&this.SUBZONES.L1;(_all?['C','P']:['P']).forEach(k=>(S&&S[k]||[]).forEach(e=>{const mk='L1|'+e.label;if(by[mk])return;out.push({mk,label:e.label,cat:'MA',area:e.a||0,cols:k==='P'?((this._marineCol&&this._marineCol[e.label])||[]):[],piles:[],beams:[],lifts:k==='P'?this._liftItemsFor(lv,mk):[],stairs:k==='P'?this._stairItemsFor(lv,mk):[],cores:k==='P'?this._coreItemsFor(lv,mk):[],counts:{},_mslab:k==='C',_pod:k==='P',crit:this._subCrit(mk,e)});}));}return out;}
   /* Marine L1 sub-zones (C bottom slab, P podium) are critical when ticked Critical in their own panel. */
   _subCrit(mk,e){return !!(this._critOv||{})['L1|'+mk];}   /* ticked in the sub-zone's own panel */
   _reportAidApplies(lv,z,aid){return (this._actList(lv,z)||[]).some(a=>a.id===aid&&(a.custom||this._actApplies(a.id,lv,z)));}
@@ -5469,6 +5476,7 @@ class Component extends DCLogic {
      /* stairs / core walls / lifts that sit in a Marine P or C sub-zone */
      ['P','C'].forEach(kd=>((S&&S[kd])||[]).forEach(e=>{const zmk='L1|'+e.label,z={mk:zmk,label:e.label,cat:'MA',_pod:kd==='P',_sub:true};
        this._stairItemsFor('L1',zmk).forEach(x=>{const id=typeof x==='string'?x:(x&&x.id);if(id)add('L1',z,zmk,'stair','Stair',id);});
+       this._liftItemsFor('L1',zmk).forEach(x=>{const id=typeof x==='string'?x:(x&&x.id);if(id)add('L1',z,zmk,'lift','Lift',id);});
        (this._coreItemsFor?this._coreItemsFor('L1',zmk):[]).forEach(x=>{const id=typeof x==='string'?x:(x&&x.id);if(id)add('L1',z,zmk,'core','Core Wall',id);});}));}
     /* Items added with "+ … List" in the zone panel live in their own store (_elemAdd), keyed by the
        activity's item category (cst~mbeam …).  They were missing from the register. */
@@ -7536,7 +7544,7 @@ class Component extends DCLogic {
     if(kind==='ZC'){
       const seen={};(this.DATA.levels.L1.zones||[]).forEach(z=>{if((z.cat||'NB')!=='MA')return;const k=this.zid(z);if(!seen[k]){seen[k]=1;zones.push(z);}});
     }else{
-      zones=(this.SUBZONES.L1[kind]||[]).map(e=>{const cols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?(this._marineCol[e.label]||[]):[],mk='L1|'+e.label,stairs=kind==='P'?this._stairItemsFor('L1',mk):[];return {mk,label:e.label,cat:'MA',area:e.a||0,cols,piles:[],beams:[],lifts:[],stairs,cores:[],sub:[],counts:{columns:cols.length,stair:stairs.length,pilecap:0,mainbeam:0,steelbeam:0},_pod:kind==='P',_mslab:kind==='C',crit:!!(this._critOv||{})['L1|'+mk]};});
+      zones=(this.SUBZONES.L1[kind]||[]).map(e=>{const cols=(kind==='P'&&this._marineCol&&this._marineCol[e.label])?(this._marineCol[e.label]||[]):[],mk='L1|'+e.label,stairs=kind==='P'?this._stairItemsFor('L1',mk):[];return {mk,label:e.label,cat:'MA',area:e.a||0,cols,piles:[],beams:[],lifts:kind==='P'?this._liftItemsFor('L1',mk):[],stairs,cores:[],sub:[],counts:{columns:cols.length,stair:stairs.length,pilecap:0,mainbeam:0,steelbeam:0},_pod:kind==='P',_mslab:kind==='C',crit:!!(this._critOv||{})['L1|'+mk]};});
     }
     return {kind,label:{ZC:'Top slab',C:'Bottom slab',P:'Podium'}[kind],zones};
   }
